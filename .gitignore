@@ -1,0 +1,16 @@
+helm-creds.yaml
+starburstdata.license
+kubeconfig_*
+.demosvc.swp
+.commit.swp
+.demosvc.py.swp
+.gitignore.swp
+__pycache__
+aws/.terraform*
+aws/terraform.tfstate*
+aws/variables*
+azure/.terraform*
+azure/terraform.tfstate*
+azure/variables*
+*.swp
+*.info

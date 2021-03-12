@@ -1,0 +1,69 @@
+# Your email. Used to generate a unique code to mark your resources.
+Email: rob.anderson@starburstdata.com
+
+#
+# The region (location) you're running in. You can list either AWS or Azure
+# names here. The script infers which cloud you want to build in based on which
+# region you select.
+#
+Region: francecentral # Paris, France
+#Region: eu-west-3 # Paris, France
+#Region: eu-west-2 # London, UK
+#Region: us-east-2 # Columbus, OH, USA
+
+# Pick any CIDR that isn't taken (and make sure to avoid those of the default
+# VPC and/or the VPC hosting the VPN server). I recommend choosing something in
+# 10.x.0.0/16. Your pods are going to be drawing from these ranges, so you'll
+# need a bigger IP space than you might think.
+# Rob 10.10/16; Andrei 10.20/16; Tony 10.30/16; Richard 10.40/16; Andy 10.50/16
+MyCIDR: 10.10.0.0/16
+
+# number of nodes in K8S cluster
+NodeCount: 4
+
+# instance types for AWS and Azure
+AWSInstanceType: r5.8xlarge
+AzureVMType: Standard_E16-8ds_v4
+AzureBastionVMType: Standard_B2ms
+
+# Name of your license file (./${LicenseName}.license)
+LicenseName: starburstdata
+
+#
+# Helm repo information
+#
+HelmRepo: starburstdata
+HelmRegistry: harbor.starburstdata.net/starburstdata
+HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
+#############
+# IMPORTANT #
+#############
+# NB: Your helm repo credentials are stored in a separate file called
+# ./helm-creds.yaml. You must create and fill out that file in this format:
+# HelmRepoUser: username
+# HelmRepoPassword: password
+
+#
+# The following two maps don't need to be updated _unless_ you are adding a new
+# region for the first time, for either AWS or Azure.
+#
+
+#
+# AWS only: The instance ID of the VPN for your AWS region. We need the VPN in
+# order to automatically set up routes between your home workstation and the
+# pods and services.
+#
+AWSVPNInstanceIDs:
+  us-east-2: i-0cbff040f87447a43 # Columbus, OH, USA
+  eu-west-2: i-0ce1f0ecff09ab49d # London, UK
+  eu-west-3: i-009c2815f1ebee222 # Paris, France
+
+#
+# Azure only: As above, but this time for Azure. The azure provider in terraform
+# can't look up VMs by ID, so instead here we'll list the resource group and
+# name of the vnet of the VPN.
+#
+AzureVPNVnetNames:
+  francecentral:                 # Paris, France
+    resourceGroup: vpn
+    name: OpenVPNVNet

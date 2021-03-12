@@ -1,0 +1,93 @@
+registryCredentials:
+  enabled: true
+  registry: {{HelmRegistry}}
+  username: {{HelmRepoUser}}
+  password: {{HelmRepoPassword}}
+
+starburstPlatformLicense: {{LicenseName}}
+
+expose:
+  type: loadBalancer
+  loadBalancer:
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+
+coordinator:
+  etcFiles:
+    properties:
+      access-control.properties: |
+        access-control.name = ranger
+        ranger.authentication-type = BASIC
+        ranger.presto-plugin-username = presto_service
+        ranger.presto-plugin-password = RangerPassword1
+        ranger.service-name = starburst-enterprise-presto
+        ranger.policy-rest-url = http://ranger:6080
+        ranger.policy-refresh-interval = 10s
+      config.properties: |
+        # These are the values we want to add that are non-default
+        insights.persistence-enabled = true
+        insights.metrics-persistence-enabled = true
+        insights.jdbc.url = jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
+        insights.jdbc.user = {{evtlog_user}}
+        insights.jdbc.password = {{DBPassword}}
+        insights.authorized-users = .*
+        # The following just sets non-default values that are already in the
+        # starburst-presto helm chart. Because we're setting config.properties,
+        # we have to set _all_ of the values in config.properties in the
+        # values.yaml file.
+        node-scheduler.include-coordinator=false
+        discovery-server.enabled=true
+        discovery.uri=http://localhost:8080
+      event-listener.properties: |
+        event-listener.name = event-logger
+        jdbc.url = jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
+        jdbc.user = {{evtlog_user}}
+        jdbc.password = {{DBPassword}}
+  resources:
+    requests:
+      memory: {{coordinator_mem}}
+      cpu: {{coordinator_cpu}}
+    limits:
+      memory: {{coordinator_mem}}
+      cpu: {{coordinator_cpu}}
+
+worker:
+  count: {{workerCount}}
+  resources:
+    requests:
+      memory: {{worker_mem}}
+      cpu: {{worker_cpu}}
+    limits:
+      memory: {{worker_mem}}
+      cpu: {{worker_cpu}}
+
+catalogs:
+  hive: |-
+    connector.name=hive-hadoop2
+    hive.metastore.uri=thrift://hive:9083
+    hive.azure.abfs-storage-account={{StorageAccount | default("Acct-1f-Blank", true)}}
+    hive.azure.abfs-access-key={{adls_access_key | default("Creds-1f-Blank", true)}}
+    hive.non-managed-table-creates-enabled=true
+    hive.non-managed-table-writes-enabled=true
+    hive.security=allow-all
+    hive.file-status-cache-tables=*
+    hive.file-status-cache-expire-time=60m
+  mysql: |
+    connector.name=mysql
+    connection-url=jdbc:mysql://{{mariadb_address}}:{{mariadb_port}}/
+    connection-user={{mariadb_user}}
+    connection-password={{DBPassword}}
+    allow-drop-table=true
+  postgresql: |
+    connector.name=postgresql
+    connection-url=jdbc:postgresql://{{postgres_address}}:{{postgres_port}}/{{DBName}}
+    connection-user={{postgres_user}}
+    connection-password={{DBPassword}}
+    allow-drop-table=true
+  postgresqlel: |
+    connector.name=postgresql
+    connection-url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
+    connection-user={{evtlog_user}}
+    connection-password={{DBPassword}}
+    allow-drop-table=true
+

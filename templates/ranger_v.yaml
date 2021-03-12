@@ -1,0 +1,43 @@
+registryCredentials:
+  enabled: true
+  registry: {{HelmRegistry}}
+  username: {{HelmRepoUser}}
+  password: {{HelmRepoPassword}}
+
+expose:
+  type: loadBalancer
+  loadBalancer:
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+
+admin:
+  resources:
+    requests:
+      memory: {{ranger_admin_mem}}
+      cpu: {{ranger_admin_cpu}}
+    limits:
+      memory: {{ranger_admin_mem}}
+      cpu: {{ranger_admin_cpu}}
+
+usersync:
+  enabled: false
+
+database:
+  type: "internal"
+  internal:
+    resources:
+      requests:
+        memory: {{ranger_db_mem}}
+        cpu: {{ranger_db_cpu}}
+      limits:
+        memory: {{ranger_db_mem}}
+        cpu: {{ranger_db_cpu}}
+
+datasources:
+  - name: starburst-enterprise-presto
+    host: presto
+    port: 8080
+    username: presto_service
+    password: RangerPassword1
+
+initFile: files/initFile.sh
