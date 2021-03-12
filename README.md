@@ -2,10 +2,13 @@
 
 ## Important
 
-**NB: Before you run bigbang.py:** Make sure you update:
+**NB: Before you run bigbang.py:** Make sure you do the following:
 
-- my-vars.yaml, to specify your new setup
-- helm-creds.yaml, to provide your login credentials for the helm repo
+- update my-vars.yaml, to specify your new setup
+- write helm-creds.yaml, to provide your login credentials for the helm repo—see
+  my-vars.yaml file for description of what to put in there
+- add a Starburst license file, which you can get from your friendly local
+  Starburst Solutions Architect!
 
 ## Usage
 

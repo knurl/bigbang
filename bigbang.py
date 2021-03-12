@@ -480,9 +480,9 @@ def loadDatabases():
 def installLicense():
     r = runTry(f"{kubens} get secrets {repo}".split())
     if r.returncode != 0: runStdout(f"{kubens} create secret generic {repo} "
-                f"--from-file {license}".split())
+                f"--from-file {licensef}".split())
 
-    announce(f"license file {license} is installed as secret")
+    announce(f"license file {licensef} is installed as secret")
 
 def helmTry(cmd: str) -> subprocess.CompletedProcess:
     return runTry(["helm"] + cmd.split())
