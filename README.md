@@ -62,8 +62,7 @@ is done, you'll have access to an executable called `brew`:
 You now should install these required Homebrew packages, like this:
 
 ```
-brew install awscli aws-iam-authenticator helm kubectl eksctl \
-    libyaml socat terraform
+brew install awscli aws-iam-authenticator helm kubectl libyaml socat terraform
 ```
 
 ### Python
