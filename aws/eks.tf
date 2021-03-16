@@ -1,26 +1,26 @@
 module "eks" {
-  source          = "terraform-aws-modules/eks/aws"
-  cluster_name    = var.cluster_name
-  cluster_version = "1.19"
-  version         = "13.2.1"
-  subnets         = module.vpc.private_subnets
+  source                      = "terraform-aws-modules/eks/aws"
+  cluster_name                = var.cluster_name
+  cluster_version             = "1.19"
+  version                     = "13.2.1"
+  subnets                     = module.vpc.private_subnets
 
-  tags = var.tags
+  tags                        = merge(var.tags, {Name = var.cluster_name})
 
-  vpc_id = module.vpc.vpc_id
+  vpc_id                      = module.vpc.vpc_id
 
-  worker_groups = [
+  worker_groups               = [
     {
-      name                 = "worker-group"
-      instance_type        = var.instance_type
-      asg_min_size         = var.node_count
-      asg_desired_capacity = var.node_count
-      asg_max_size         = var.node_count
+      name                    = "worker-group"
+      instance_type           = var.instance_type
+      asg_min_size            = var.node_count
+      asg_desired_capacity    = var.node_count
+      asg_max_size            = var.node_count
     }
   ]
 
-  workers_group_defaults = {
-  	root_volume_type = "gp2"
+  workers_group_defaults      = {
+  	root_volume_type          = "gp2"
   }
 
   workers_additional_policies = [

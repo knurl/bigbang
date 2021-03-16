@@ -1,25 +1,25 @@
 data "aws_availability_zones" "available" {}
 
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
-  version = "2.71.0"
+  source               = "terraform-aws-modules/vpc/aws"
+  version              = "2.71.0"
 
-  name = "${var.cluster_name}-vpc"
-  cidr = var.my_cidr
+  name                 = "${var.cluster_name}-vpc"
+  cidr                 = var.my_cidr
 
   create_database_subnet_group = true
-  azs  = data.aws_availability_zones.available.names
-  private_subnets = [for k in ["prv_a", "prv_b", "prv_c"]: module.subnet_addrs.network_cidr_blocks[k]]
-  public_subnets = [for k in ["pub_a", "pub_b", "pub_c"]: module.subnet_addrs.network_cidr_blocks[k]]
-  database_subnets = [for k in ["db_a", "db_b", "db_c"]: module.subnet_addrs.network_cidr_blocks[k]]
+  azs                  = data.aws_availability_zones.available.names
+  private_subnets      = [for k in ["prv_a", "prv_b", "prv_c"]: module.subnet_addrs.network_cidr_blocks[k]]
+  public_subnets       = [for k in ["pub_a", "pub_b", "pub_c"]: module.subnet_addrs.network_cidr_blocks[k]]
+  database_subnets     = [for k in ["db_a", "db_b", "db_c"]: module.subnet_addrs.network_cidr_blocks[k]]
 
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  enable_nat_gateway = true
-  single_nat_gateway = true
+  enable_nat_gateway   = true
+  single_nat_gateway   = true
 
-  tags = var.tags
+  tags                 = merge(var.tags, {Name = module.vpc.name})
 
   # Required to allow ELBs on the private subnets
   private_subnet_tags = {
@@ -44,7 +44,7 @@ resource "aws_vpc_peering_connection" "vpc_peer" {
   peer_vpc_id = data.aws_subnet.sn_ingress.vpc_id
   vpc_id      = module.vpc.vpc_id
   auto_accept = true
-  tags        = var.tags
+  tags        = merge(var.tags, {Name = "vpc_peer"})
 
   accepter {
     allow_remote_vpc_dns_resolution = true

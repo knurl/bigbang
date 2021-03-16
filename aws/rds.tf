@@ -6,43 +6,43 @@
 resource "aws_security_group" "rds_sg" {
   name                   = "rds_sg"
   vpc_id                 = module.vpc.vpc_id
-  tags                   = var.tags
+  tags                   = merge(var.tags, {Name = "rds_sg"})
   revoke_rules_on_delete = true
 
   # Any protocol or port, as long as it comes from the VPN's subnet (which are
   # private addresses). Generally this will be the way users connect in through
   # the VPN, from home.
   ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [data.aws_subnet.sn_ingress.cidr_block]
+    from_port            = 0
+    to_port              = 0
+    protocol             = "-1"
+    cidr_blocks          = [data.aws_subnet.sn_ingress.cidr_block]
   }
 
   # Any protocol or port, as long as it comes from one of the worker nodes in
   # our Kubernetes cluster, where we'll be running Presto.
   ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = module.vpc.private_subnets_cidr_blocks
+    from_port            = 0
+    to_port              = 0
+    protocol             = "-1"
+    cidr_blocks          = module.vpc.private_subnets_cidr_blocks
   }
 }
 
 # for the event logger
 resource "aws_db_instance" "evtlog" {
   identifier               = var.evtlog_server_name
-  engine               		 = "postgres"
-  allocated_storage    		 = 20
-  instance_class       		 = "db.m5.xlarge"
-  name                 		 = var.db_name_el
-  username             		 = var.db_user
-  password             		 = var.db_password
-  skip_final_snapshot  		 = true
+  engine                   = "postgres"
+  allocated_storage        = 20
+  instance_class           = "db.m5.xlarge"
+  name                     = var.db_name_el
+  username                 = var.db_user
+  password                 = var.db_password
+  skip_final_snapshot      = true
   delete_automated_backups = true
-  db_subnet_group_name 		 = module.vpc.database_subnet_group
+  db_subnet_group_name     = module.vpc.database_subnet_group
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
-  tags 										 = var.tags
+  tags                     = merge(var.tags, {Name = var.evtlog_server_name})
 }
 
 resource "aws_db_instance" "postgres" {
@@ -57,7 +57,7 @@ resource "aws_db_instance" "postgres" {
   delete_automated_backups = true
   db_subnet_group_name 		 = module.vpc.database_subnet_group
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
-  tags 										 = var.tags
+  tags                     = merge(var.tags, {Name = var.postgres_server_name})
 }
 
 resource "aws_db_instance" "mariadb" {
@@ -72,5 +72,5 @@ resource "aws_db_instance" "mariadb" {
   delete_automated_backups = true
   db_subnet_group_name 		 = module.vpc.database_subnet_group
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
-  tags 										 = var.tags
+  tags                     = merge(var.tags, {Name = var.mariadb_server_name})
 }

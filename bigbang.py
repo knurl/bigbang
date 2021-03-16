@@ -293,6 +293,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
             "BucketName":        bucket,
             "StorageAccount":    storageacct,
             "ShortName":         shortname,
+            "Target":            target,
             "UserName":          username
             }
 
@@ -515,11 +516,17 @@ def helm(cmd: str) -> None:
 def helmGet(cmd: str) -> str:
     return runCollect(["helm"] + cmd.split())
 
-def ensureHelmRepoSetUp():
+def ensureHelmRepoSetUp(repo: str) -> None:
     if (r := helmTry("version")).returncode != 0:
-        sys.exit("Unable to run helm. Is helm installed and working? Failing out.")
+        sys.exit("Unable to run helm. Is it installed? Failing out.")
 
-    repos = (x["name"] for x in json.loads(r.stdout))
+    try:
+        j = helmGet("repo list -o=json")
+    except CalledProcessError as e:
+        print("Could not determine list of installed repos")
+        raise
+
+    repos = [x["name"] for x in json.loads(j)]
     if repo not in repos:
         try:
             helm(f"repo add --username {repouser} --password "
@@ -680,7 +687,7 @@ def planWorkerSize() -> dict:
 def helmInstallAll(kv):
     helmCreateNamespace()
     installLicense()
-    ensureHelmRepoSetUp()
+    ensureHelmRepoSetUp(repo)
     env = planWorkerSize()
     env.update(kv)
     installed = False
