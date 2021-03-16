@@ -55,7 +55,7 @@ HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
 #
 AWSVPNInstanceIDs:
   us-east-2: i-0cbff040f87447a43 # Columbus, OH, USA
-  eu-west-2: i-0ce1f0ecff09ab49d # London, UK
+  eu-west-2: i-00f6ad9c9696317c1 # London, UK
   eu-west-3: i-009c2815f1ebee222 # Paris, France
 
 #
