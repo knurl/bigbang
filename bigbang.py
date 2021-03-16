@@ -520,23 +520,23 @@ def ensureHelmRepoSetUp(repo: str) -> None:
     if (r := helmTry("version")).returncode != 0:
         sys.exit("Unable to run helm. Is it installed? Failing out.")
 
+    # There is a bug in helm repo list, wherein it inconsistently returns
+    # nonzero error codes when there are no repos installed. So just try to
+    # fast-path the common case where the repo is already installed, and
+    # otherwise try to install.
+    if (r := helmTry("repo list -o=json")).returncode == 0:
+        repos = [x["name"] for x in json.loads(r.stdout)]
+        if repo in repos:
+            announce(f"Verified repo {repo} already set up")
+            return
+
     try:
-        j = helmGet("repo list -o=json")
+        helm(f"repo add --username {repouser} --password "
+            f"{repopass} {repo} {repoloc}")
     except CalledProcessError as e:
-        print("Could not determine list of installed repos")
+        print("Could not install (or verify installation of) "
+                f"{repo} at {repoloc}")
         raise
-
-    repos = [x["name"] for x in json.loads(j)]
-    if repo not in repos:
-        try:
-            helm(f"repo add --username {repouser} --password "
-                f"{repopass} {repo} {repoloc}")
-        except CalledProcessError as e:
-            print("Could not install (or verify installation of) "
-                    f"{repo} at {repoloc}")
-            raise
-
-    announce(f"Verified {repo} set up as helm repo")
 
 def helmGetNamespaces() -> list:
     n = []
