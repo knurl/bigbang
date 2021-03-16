@@ -516,8 +516,8 @@ def helmGet(cmd: str) -> str:
     return runCollect(["helm"] + cmd.split())
 
 def ensureHelmRepoSetUp():
-    if (r := helmTry("repo list -o=json")).returncode != 0:
-        sys.exit("Helm not installed.")
+    if (r := helmTry("version")).returncode != 0:
+        sys.exit("Unable to run helm. Is helm installed and working? Failing out.")
 
     repos = (x["name"] for x in json.loads(r.stdout))
     if repo not in repos:
