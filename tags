@@ -4,116 +4,128 @@
 !_TAG_PROGRAM_NAME	Exuberant Ctags	//
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.8	//
-ApiError	demosvc.py	/^class ApiError(Exception):$/;"	c
-announce	demosvc.py	/^def announce(s):$/;"	f
-announceBox	demosvc.py	/^def announceBox(s):$/;"	f
-announceLoud	demosvc.py	/^def announceLoud(s):$/;"	f
-announcePresto	demosvc.py	/^def announcePresto(s):$/;"	f
-avoidcat	demosvc.py	/^avoidcat    = [tpchcat, syscat, evtlogcat]$/;"	v
-awsGetCreds	demosvc.py	/^def awsGetCreds():$/;"	f
-awsvpns	demosvc.py	/^    awsvpns      = myvars["AWSVPNInstanceIDs"]$/;"	v
-azuredns	demosvc.py	/^azuredns    = "168.63.129.16"$/;"	v
-azurevpns	demosvc.py	/^    azurevpns    = myvars["AzureVPNVnetNames"]$/;"	v
-bucket	demosvc.py	/^bucket = shortname + "bk"$/;"	v
-charts	demosvc.py	/^charts = {}$/;"	v
-choices	demosvc.py	/^        choices = ["start", "stop", "restart", "status", "install", "uninstall",$/;"	v
-clustname	demosvc.py	/^clustname = shortname + "cl"$/;"	v
-code	demosvc.py	/^code = username[:codelen]$/;"	v
-codelen	demosvc.py	/^codelen = min(3, len(username))$/;"	v
-command	demosvc.py	/^command = ns.command$/;"	v
-copySchemaTables	demosvc.py	/^def copySchemaTables(srcCatalog: str, srcSchema: str,$/;"	f
-dbevtlog	demosvc.py	/^dbevtlog    = "evtlog" # event logger PostgreSQL instance$/;"	v
-dbports	demosvc.py	/^dbports     = { "mariadb": 3306, "postgres": 5432 }$/;"	v
-dbpwd	demosvc.py	/^dbpwd       = "a029fjg!>dfgBiO8"$/;"	v
-dbschema	demosvc.py	/^dbschema    = "fdd"$/;"	v
-dbuser	demosvc.py	/^dbuser      = "fdd"$/;"	v
-email	demosvc.py	/^    email        = myvars["Email"]$/;"	v
-emailparts	demosvc.py	/^emailparts = email.split('@')$/;"	v
-emptyNodes	demosvc.py	/^emptyNodes = ns.empty_nodes$/;"	v
-ensureClusterIsStarted	demosvc.py	/^def ensureClusterIsStarted(skipClusterStart: bool) -> dict:$/;"	f
-ensureHelmRepoSetUp	demosvc.py	/^def ensureHelmRepoSetUp():$/;"	f
-eraseBucketContents	demosvc.py	/^def eraseBucketContents():$/;"	f
-evtlogcat	demosvc.py	/^evtlogcat   = "postgresqlel"$/;"	v
-forwarder	demosvc.py	/^forwarder   = where("azure\/forwarderSetup.sh")$/;"	v
-generateDatabaseUsers	demosvc.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
-getClusterState	demosvc.py	/^def getClusterState() -> Tuple[bool, bool]:$/;"	f
-getMinNodeResources	demosvc.py	/^def getMinNodeResources() -> tuple:$/;"	f
-getOutputVars	demosvc.py	/^def getOutputVars() -> dict:$/;"	f
-getVpnInstanceId	demosvc.py	/^def getVpnInstanceId() -> str:$/;"	f
-getVpnVnet	demosvc.py	/^def getVpnVnet() -> dict:$/;"	f
-helm	demosvc.py	/^def helm(cmd: str) -> None:$/;"	f
-helmCreateNamespace	demosvc.py	/^def helmCreateNamespace() -> None:$/;"	f
-helmDeleteNamespace	demosvc.py	/^def helmDeleteNamespace() -> None:$/;"	f
-helmGet	demosvc.py	/^def helmGet(cmd: str) -> str:$/;"	f
-helmGetNamespaces	demosvc.py	/^def helmGetNamespaces() -> list:$/;"	f
-helmGetReleases	demosvc.py	/^def helmGetReleases() -> list:$/;"	f
-helmInstallAll	demosvc.py	/^def helmInstallAll(kv):$/;"	f
-helmInstallRelease	demosvc.py	/^def helmInstallRelease(module: str, kv = {}) -> bool:$/;"	f
-helmIsReleaseInstalled	demosvc.py	/^def helmIsReleaseInstalled(module: str) -> bool:$/;"	f
-helmTry	demosvc.py	/^def helmTry(cmd: str) -> subprocess.CompletedProcess:$/;"	f
-helmUninstallAll	demosvc.py	/^def helmUninstallAll():$/;"	f
-helmUninstallRelease	demosvc.py	/^def helmUninstallRelease(release: str) -> None:$/;"	f
-helmcreds	demosvc.py	/^        helmcreds = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
-helmcredsbf	demosvc.py	/^helmcredsbf = "helm-creds.yaml"$/;"	v
-helmcredsf	demosvc.py	/^helmcredsf  = where("helm-creds.yaml")$/;"	v
-helmns	demosvc.py	/^helmns      = f"--namespace {namespace}"$/;"	v
-help	demosvc.py	/^        help="Skip checking to see if cluster needs to be started")$/;"	v
-help	demosvc.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
-hivecat	demosvc.py	/^hivecat     = "hive"$/;"	v
-hlen	demosvc.py	/^hlen = 3$/;"	v
-hnum	demosvc.py	/^hnum = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**hlen$/;"	v
-installLicense	demosvc.py	/^def installLicense():$/;"	f
-ipntwk	demosvc.py	/^    ipntwk = ipaddress.ip_network(mySubnetCidr)$/;"	v
-issuePrestoCommand	demosvc.py	/^def issuePrestoCommand(command: str, verbose = False) -> list:$/;"	f
-kube	demosvc.py	/^kube        = "kubectl"$/;"	v
-kubeconfig	demosvc.py	/^kubeconfig  = os.path.expanduser("~\/.kube\/config")$/;"	v
-kubens	demosvc.py	/^kubens      = f"kubectl --namespace {namespace}"$/;"	v
-license	demosvc.py	/^    license      = myvars["LicenseName"]$/;"	v
-licensebf	demosvc.py	/^licensebf = f"{license}.license"$/;"	v
-licensef	demosvc.py	/^licensef = where(licensebf)$/;"	v
-loadDatabases	demosvc.py	/^def loadDatabases():$/;"	f
-modules	demosvc.py	/^modules = ["hive", "ranger", "presto"]$/;"	v
-myDir	demosvc.py	/^def myDir():$/;"	f
-mySubnetCidr	demosvc.py	/^    mySubnetCidr = myvars["MyCIDR"]$/;"	v
-myvarsbf	demosvc.py	/^myvarsbf = "my-vars.yaml"$/;"	v
-myvarsf	demosvc.py	/^myvarsf  = where("my-vars.yaml")$/;"	v
-namespace	demosvc.py	/^namespace   = "starburst"$/;"	v
-nodeCount	demosvc.py	/^    nodeCount    = myvars["NodeCount"]$/;"	v
-normaliseCPU	demosvc.py	/^def normaliseCPU(cpu) -> int:$/;"	f
-normaliseMem	demosvc.py	/^def normaliseMem(mem) -> int:$/;"	f
-ns	demosvc.py	/^ns = p.parse_args()$/;"	v
-p	demosvc.py	/^p = argparse.ArgumentParser(description=$/;"	v
-parameteriseTemplate	demosvc.py	/^def parameteriseTemplate(template, targetDir, varsDict):$/;"	f
-planWorkerSize	demosvc.py	/^def planWorkerSize() -> dict:$/;"	f
-region	demosvc.py	/^    region       = myvars["Region"]$/;"	v
-releases	demosvc.py	/^releases = {}$/;"	v
-repo	demosvc.py	/^    repo         = myvars["HelmRepo"]$/;"	v
-repoloc	demosvc.py	/^    repoloc      = myvars["HelmRepoLocation"]$/;"	v
-repopass	demosvc.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
-repouser	demosvc.py	/^    repouser     = helmcreds["HelmRepoUser"]$/;"	v
-retry	demosvc.py	/^def retry(f, maxretries: int, err: str) -> requests.Response:$/;"	f
-run	run.py	/^def run(args, checkRC = True, verbose = True):$/;"	f
+ApiError	bigbang.py	/^class ApiError(Exception):$/;"	c
+announce	bigbang.py	/^def announce(s):$/;"	f
+announceBox	bigbang.py	/^def announceBox(s):$/;"	f
+announceLoud	bigbang.py	/^def announceLoud(s):$/;"	f
+announcePresto	bigbang.py	/^def announcePresto(s):$/;"	f
+avoidcat	bigbang.py	/^avoidcat    = [tpchcat, syscat, evtlogcat]$/;"	v
+awsGetCreds	bigbang.py	/^def awsGetCreds():$/;"	f
+awsconfig	bigbang.py	/^awsconfig = os.path.expanduser("~\/.aws\/config")$/;"	v
+awscreds	bigbang.py	/^awscreds = os.path.expanduser("~\/.aws\/credentials")$/;"	v
+awsdir	bigbang.py	/^awsdir = os.path.expanduser("~\/.aws")$/;"	v
+awsregion	bigbang.py	/^    awsregion = runCollect("aws configure get region".split())$/;"	v
+awsvpnlabel	bigbang.py	/^awsvpnlabel = "AWSVPNInstanceIDs"$/;"	v
+awsvpns	bigbang.py	/^    awsvpns      = myvars[awsvpnlabel]$/;"	v
+azuredns	bigbang.py	/^azuredns    = "168.63.129.16"$/;"	v
+azurevpns	bigbang.py	/^    azurevpns    = myvars["AzureVPNVnetNames"]$/;"	v
+bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
+charts	bigbang.py	/^charts = {}$/;"	v
+checkCLISetup	bigbang.py	/^def checkCLISetup() -> None:$/;"	f
+checkRSAKey	bigbang.py	/^def checkRSAKey() -> None:$/;"	f
+choices	bigbang.py	/^        choices = ["start", "stop", "restart", "status", "pfstart", "pfstop",$/;"	v
+clustname	bigbang.py	/^clustname = shortname + "cl"$/;"	v
+code	bigbang.py	/^code = username[:codelen]$/;"	v
+codelen	bigbang.py	/^codelen = min(3, len(username))$/;"	v
+command	bigbang.py	/^command = ns.command$/;"	v
+copySchemaTables	bigbang.py	/^def copySchemaTables(srcCatalog: str, srcSchema: str,$/;"	f
+dbevtlog	bigbang.py	/^dbevtlog    = "evtlog" # event logger PostgreSQL instance$/;"	v
+dbports	bigbang.py	/^dbports     = { "mariadb": 3306, "postgres": 5432 }$/;"	v
+dbpwd	bigbang.py	/^dbpwd       = "a029fjg!>dfgBiO8"$/;"	v
+dbschema	bigbang.py	/^dbschema    = "fdd"$/;"	v
+dbuser	bigbang.py	/^dbuser      = "fdd"$/;"	v
+email	bigbang.py	/^    email        = myvars["Email"]$/;"	v
+emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
+emptyNodes	bigbang.py	/^emptyNodes = ns.empty_nodes$/;"	v
+ensureClusterIsStarted	bigbang.py	/^def ensureClusterIsStarted(skipClusterStart: bool) -> dict:$/;"	f
+ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp():$/;"	f
+eraseBucketContents	bigbang.py	/^def eraseBucketContents():$/;"	f
+evtlogcat	bigbang.py	/^evtlogcat   = "postgresqlel"$/;"	v
+forwarder	bigbang.py	/^forwarder   = where("azure\/forwarderSetup.sh")$/;"	v
+generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
+getClusterState	bigbang.py	/^def getClusterState() -> Tuple[bool, bool]:$/;"	f
+getMinNodeResources	bigbang.py	/^def getMinNodeResources() -> tuple:$/;"	f
+getOutputVars	bigbang.py	/^def getOutputVars() -> dict:$/;"	f
+getVpnInstanceId	bigbang.py	/^def getVpnInstanceId() -> str:$/;"	f
+getVpnVnet	bigbang.py	/^def getVpnVnet() -> dict:$/;"	f
+helm	bigbang.py	/^def helm(cmd: str) -> None:$/;"	f
+helmCreateNamespace	bigbang.py	/^def helmCreateNamespace() -> None:$/;"	f
+helmDeleteNamespace	bigbang.py	/^def helmDeleteNamespace() -> None:$/;"	f
+helmGet	bigbang.py	/^def helmGet(cmd: str) -> str:$/;"	f
+helmGetNamespaces	bigbang.py	/^def helmGetNamespaces() -> list:$/;"	f
+helmGetReleases	bigbang.py	/^def helmGetReleases() -> list:$/;"	f
+helmInstallAll	bigbang.py	/^def helmInstallAll(kv):$/;"	f
+helmInstallRelease	bigbang.py	/^def helmInstallRelease(module: str, kv = {}) -> bool:$/;"	f
+helmIsReleaseInstalled	bigbang.py	/^def helmIsReleaseInstalled(module: str) -> bool:$/;"	f
+helmTry	bigbang.py	/^def helmTry(cmd: str) -> subprocess.CompletedProcess:$/;"	f
+helmUninstallAll	bigbang.py	/^def helmUninstallAll():$/;"	f
+helmUninstallRelease	bigbang.py	/^def helmUninstallRelease(release: str) -> None:$/;"	f
+helmcreds	bigbang.py	/^        helmcreds = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
+helmcredsbf	bigbang.py	/^helmcredsbf = "helm-creds.yaml"$/;"	v
+helmcredsf	bigbang.py	/^helmcredsf  = where("helm-creds.yaml")$/;"	v
+helmns	bigbang.py	/^helmns      = f"--namespace {namespace}"$/;"	v
+help	bigbang.py	/^        help="Skip checking to see if cluster needs to be started")$/;"	v
+help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
+hivecat	bigbang.py	/^hivecat     = "hive"$/;"	v
+hlen	bigbang.py	/^hlen = 3$/;"	v
+hnum	bigbang.py	/^hnum = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**hlen$/;"	v
+installLicense	bigbang.py	/^def installLicense():$/;"	f
+ipntwk	bigbang.py	/^    ipntwk = ipaddress.ip_network(mySubnetCidr)$/;"	v
+issuePrestoCommand	bigbang.py	/^def issuePrestoCommand(command: str, verbose = False) -> list:$/;"	f
+kube	bigbang.py	/^kube        = "kubectl"$/;"	v
+kubeconfig	bigbang.py	/^kubeconfig  = os.path.expanduser("~\/.kube\/config")$/;"	v
+kubens	bigbang.py	/^kubens      = f"kubectl --namespace {namespace}"$/;"	v
+license	bigbang.py	/^    license      = myvars["LicenseName"]$/;"	v
+licensebf	bigbang.py	/^licensebf = f"{license}.license"$/;"	v
+licensef	bigbang.py	/^licensef = where(licensebf)$/;"	v
+loadDatabases	bigbang.py	/^def loadDatabases():$/;"	f
+modules	bigbang.py	/^modules = ["hive", "ranger", "presto"]$/;"	v
+myDir	bigbang.py	/^def myDir():$/;"	f
+mySubnetCidr	bigbang.py	/^    mySubnetCidr = myvars["MyCIDR"]$/;"	v
+myvarsbf	bigbang.py	/^myvarsbf = "my-vars.yaml"$/;"	v
+myvarsf	bigbang.py	/^myvarsf  = where("my-vars.yaml")$/;"	v
+namespace	bigbang.py	/^namespace   = "starburst"$/;"	v
+nodeCount	bigbang.py	/^    nodeCount    = myvars[nodecountlabel]$/;"	v
+nodecountlabel	bigbang.py	/^nodecountlabel = "NodeCount"$/;"	v
+normaliseCPU	bigbang.py	/^def normaliseCPU(cpu) -> int:$/;"	f
+normaliseMem	bigbang.py	/^def normaliseMem(mem) -> int:$/;"	f
+ns	bigbang.py	/^ns = p.parse_args()$/;"	v
+p	bigbang.py	/^p = argparse.ArgumentParser(description=$/;"	v
+parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template, targetDir, varsDict):$/;"	f
+planWorkerSize	bigbang.py	/^def planWorkerSize() -> dict:$/;"	f
+readableDir	bigbang.py	/^def readableDir(p):$/;"	f
+readableFile	bigbang.py	/^def readableFile(p):$/;"	f
+region	bigbang.py	/^    region       = myvars["Region"]$/;"	v
+releases	bigbang.py	/^releases = {}$/;"	v
+repo	bigbang.py	/^    repo         = myvars["HelmRepo"]$/;"	v
+repoloc	bigbang.py	/^    repoloc      = myvars["HelmRepoLocation"]$/;"	v
+repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
+repouser	bigbang.py	/^    repouser     = helmcreds["HelmRepoUser"]$/;"	v
+retry	bigbang.py	/^def retry(f, maxretries: int, err: str) -> requests.Response:$/;"	f
+run	run.py	/^def run(args, check = True, verbose = True):$/;"	f
 runCollect	run.py	/^def runCollect(args) -> str:$/;"	f
+runShell	run.py	/^def runShell(cmd: str) -> int:$/;"	f
 runStdout	run.py	/^def runStdout(args):$/;"	f
 runTry	run.py	/^def runTry(args) -> subprocess.CompletedProcess:$/;"	f
-s	demosvc.py	/^s = username + region$/;"	v
-shortname	demosvc.py	/^shortname = code + str(hnum).zfill(hlen)$/;"	v
-startPortForward	demosvc.py	/^def startPortForward():$/;"	f
-stopPortForward	demosvc.py	/^def stopPortForward():$/;"	f
-storageacct	demosvc.py	/^storageacct = shortname + "sa"$/;"	v
-svcStart	demosvc.py	/^def svcStart(skipClusterStart: bool = False) -> None:$/;"	f
-svcStop	demosvc.py	/^def svcStop(emptyNodes: bool = False) -> None:$/;"	f
-svcports	demosvc.py	/^svcports    = { "presto": 8080, "ranger": 6080 }$/;"	v
-syscat	demosvc.py	/^syscat      = "system"$/;"	v
-target	demosvc.py	/^    target = "aws"$/;"	v
-target	demosvc.py	/^    target = "azure"$/;"	v
-templatedir	demosvc.py	/^templatedir = where("templates")$/;"	v
-templates	demosvc.py	/^templates = {}$/;"	v
-tfdir	demosvc.py	/^tfdir       = where(target)$/;"	v
-tfvars	demosvc.py	/^tfvars      = "variables.tf" # basename only, no path!$/;"	v
-tmpdir	demosvc.py	/^tmpdir      = "\/tmp"$/;"	v
-tpchcat	demosvc.py	/^tpchcat     = "tpch"$/;"	v
-tpchschema	demosvc.py	/^tpchschema  = "tiny"$/;"	v
-username	demosvc.py	/^username = emailparts[0]$/;"	v
-warnVpnConfig	demosvc.py	/^def warnVpnConfig(privateDnsAddr: str = ""):$/;"	f
-where	demosvc.py	/^def where(leaf):$/;"	f
+s	bigbang.py	/^s = username + region$/;"	v
+shortname	bigbang.py	/^shortname = code + str(hnum).zfill(hlen)$/;"	v
+startPortForward	bigbang.py	/^def startPortForward():$/;"	f
+stopPortForward	bigbang.py	/^def stopPortForward():$/;"	f
+storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
+svcStart	bigbang.py	/^def svcStart(skipClusterStart: bool = False) -> None:$/;"	f
+svcStop	bigbang.py	/^def svcStop(emptyNodes: bool = False) -> None:$/;"	f
+svcports	bigbang.py	/^svcports    = { "presto": 8080, "ranger": 6080 }$/;"	v
+syscat	bigbang.py	/^syscat      = "system"$/;"	v
+target	bigbang.py	/^    target = "aws"$/;"	v
+target	bigbang.py	/^    target = "azure"$/;"	v
+templatedir	bigbang.py	/^templatedir = where("templates")$/;"	v
+templates	bigbang.py	/^templates = {}$/;"	v
+tfdir	bigbang.py	/^tfdir       = where(target)$/;"	v
+tfvars	bigbang.py	/^tfvars      = "variables.tf" # basename only, no path!$/;"	v
+tmpdir	bigbang.py	/^tmpdir      = "\/tmp"$/;"	v
+tpchcat	bigbang.py	/^tpchcat     = "tpch"$/;"	v
+tpchschema	bigbang.py	/^tpchschema  = "tiny"$/;"	v
+username	bigbang.py	/^username = emailparts[0]$/;"	v
+warnVpnConfig	bigbang.py	/^def warnVpnConfig(privateDnsAddr: str = ""):$/;"	f
+where	bigbang.py	/^def where(leaf):$/;"	f
+writeableDir	bigbang.py	/^def writeableDir(p):$/;"	f

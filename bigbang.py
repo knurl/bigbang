@@ -2,7 +2,7 @@
 
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml
 import subprocess, ipaddress, glob, threading, time, concurrent.futures
-from run import run, runTry, runStdout, runCollect
+from run import run, runShell, runTry, runStdout, runCollect
 from subprocess import CalledProcessError
 import psutil # type: ignore
 import jinja2
@@ -12,6 +12,12 @@ def myDir():
     return os.path.dirname(os.path.abspath(__file__))
 def where(leaf):
     return os.path.join(myDir(), leaf)
+def readableFile(p):
+    return os.path.isfile(p) and os.access(p, os.R_OK)
+def readableDir(p):
+    return os.path.isdir(p) and os.access(p, os.R_OK | os.X_OK)
+def writeableDir(p):
+    return readableDir and os.access(p, os.W_OK)
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -21,6 +27,8 @@ def where(leaf):
 #
 myvarsbf = "my-vars.yaml"
 myvarsf  = where("my-vars.yaml")
+awsvpnlabel = "AWSVPNInstanceIDs"
+nodecountlabel = "NodeCount"
 try:
     with open(myvarsf) as mypf:
         myvars = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -31,44 +39,58 @@ try:
     email        = myvars["Email"]
     region       = myvars["Region"]
     mySubnetCidr = myvars["MyCIDR"]
-    nodeCount    = myvars["NodeCount"]
+    nodeCount    = myvars[nodecountlabel]
     license      = myvars["LicenseName"]
     repo         = myvars["HelmRepo"]
     repoloc      = myvars["HelmRepoLocation"]
-    awsvpns      = myvars["AWSVPNInstanceIDs"]
+    awsvpns      = myvars[awsvpnlabel]
     azurevpns    = myvars["AzureVPNVnetNames"]
 except KeyError as e:
-    sys.exit(f"Unspecified configuration parameter {e} in {myvarsf}")
+    sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
 
 # Check the license file
 licensebf = f"{license}.license"
 licensef = where(licensebf)
-if not (os.path.isfile(licensef) and os.access(licensef, os.R_OK)):
-    sys.exit(f"Your {myvarsf} file specifies a license named {license} "
+if not readableFile(licensef):
+    sys.exit(f"Your {myvarsbf} file specifies a license named {license} "
             f"located at {licensef} but no readable file exists there.")
 
 # Verify the email looks right, and extract username from it
 emailparts = email.split('@')
 if not (len(emailparts) == 2 and "." in emailparts[1]):
-    sys.exit(f"Email specified in {myvarsf} must be a full email address")
+    sys.exit(f"Email specified in {myvarsbf} must be a full email address")
 username = emailparts[0]
 codelen = min(3, len(username))
 code = username[:codelen]
 
+awsdir = os.path.expanduser("~/.aws")
+awsconfig = os.path.expanduser("~/.aws/config")
+awscreds = os.path.expanduser("~/.aws/credentials")
+
 if region in awsvpns:
     target = "aws"
+    awsregion = runCollect("aws configure get region".split())
+    if awsregion != region:
+        sys.exit(textwrap.dedent(f"""\
+                Region {awsregion} specified in your {awsconfig} doesn't match
+                region {region} set in your {myvarsbf} file. Cannot continue
+                execution. Please ensure these match and re-run."""))
 elif region in azurevpns:
     target = "azure"
 else:
-    sys.exit(f"Region {region} must be added to the VPN section in {myvarsf}")
+    sys.exit(textwrap.dedent(f"""\
+    Region {region} specified in {myvarsbf}, but is not listed in the AWS VPN
+    {awsvpnlabel} section in {myvarsbf}. Please go the AWS console, find the
+    instance ID of the VPN in {region}, and add it to {awsvpnlabel}."""))
 
 if nodeCount < 3:
-    sys.exit(f"Must have at least 3 nodes; {nodeCount} set in {myvarsf}")
+    sys.exit(f"Must have at least 3 nodes; {nodeCount} set for "
+            f"{nodecountlabel} in {myvarsbf}.")
 
 try:
     ipntwk = ipaddress.ip_network(mySubnetCidr)
 except ValueError as e:
-    print(f"It appears the 'MyCIDR' value in {myvarsf} is not in the format "
+    print(f"It appears the 'MyCIDR' value in {myvarsbf} is not in the format "
             "x.x.x.x/mask: {e}")
     raise
 
@@ -120,7 +142,7 @@ kubens      = f"kubectl --namespace {namespace}"
 azuredns    = "168.63.129.16"
 
 for d in [templatedir, tmpdir, tfdir]:
-    assert os.path.isdir(d) and os.access(d, os.R_OK | os.W_OK | os.X_OK)
+    assert writeableDir(d)
 
 # Make a short, unique name, handy for marking created files, naming resources,
 # and other purposes.
@@ -172,7 +194,7 @@ def getVpnInstanceId() -> str:
     try:
         return awsvpns[region]
     except KeyError as e:
-        print(f"Region {region} not listed for AWS VPN instances in {myvarsf}")
+        print(f"Region {region} not listed for AWS VPN instances in {myvarsbf}")
         raise
 
 def getVpnVnet() -> dict:
@@ -181,7 +203,7 @@ def getVpnVnet() -> dict:
         return { "VpnVnetResourceGroup": vnet["resourceGroup"],
                  "VpnVnetName": vnet["name"] }
     except KeyError as e:
-        print(f"Region {region} not listed for Azure VPN vnets in {myvarsf}")
+        print(f"Region {region} not listed for Azure VPN vnets in {myvarsbf}")
         raise
 
 def warnVpnConfig(privateDnsAddr: str = ""):
@@ -287,7 +309,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     if not skipClusterStart:
         announce("Establishing K8S cluster from {n} nodes of {i}".format(n =
             nodeCount, i = env["InstanceType"]))
-        runStdout(f"{tf} init -input=false".split())
+        runStdout(f"{tf} init -input=false -upgrade".split())
         t = time.time()
         runStdout(f"{tf} apply -auto-approve -input=false".split())
         announce("tf apply completed in " + time.strftime("%Hh%Mm%Ss",
@@ -722,12 +744,51 @@ def getClusterState() -> Tuple[bool, bool]:
 
     return started, stopped
 
+def checkCLISetup() -> None:
+    badAws = False
+    if not writeableDir(awsdir):
+        badAws = True
+        err = f"Directory {awsdir} doesn't exist or has bad permissions."
+    elif not readableFile(awsconfig):
+        badAws = True
+        err = f"File {awsconfig} doesn't exist or isn't readable."
+    elif not readableFile(awscreds):
+        badAws = True
+        err = f"File {awscreds} doesn't exist or isn't readable."
+    if badAws:
+        print(err)
+        sys.exit("Have you run aws configure?")
+
+    azuredir = os.path.expanduser("~/.azure")
+    if not writeableDir(azuredir):
+        print(f"Directory {azuredir} doesn't exist or isn't readable.")
+        sys.exit("Have you run az login and az configure?")
+
+def checkRSAKey() -> None:
+    rsa = os.path.expanduser("~/.ssh/id_rsa")
+    rsaPub = os.path.expanduser("~/.ssh/id_rsa.pub")
+
+    if readableFile(rsa) and readableFile(rsaPub):
+        return
+
+    print(f"You do not have readable {rsa} and {rsaPub} files.")
+    yn = input("Would you like me to generate them? [y/N] -> ")
+    if yn.lower() in ("y", "yes"):
+        rc = runShell(f"ssh-keygen -q -t rsa -N '' -f {rsa} <<<y")
+        if rc == 0:
+            print(f"Generated {rsa} file.")
+            return
+        else:
+            print(f"Unable to write {rsa}. Try yourself?")
+    sys.exit(f"Script cannot continue without {rsa} file.")
+
 #
 # Start of execution. Handle commandline args.
 #
+
 p = argparse.ArgumentParser(description=
         f"""Create your own Starbust demo service in AWS or Azure, starting from
-        nothing. You provide the instance ID of your VPN in {myvarsf}, your
+        nothing. You provide the instance ID of your VPN in {myvarsbf}, your
         desired CIDR and some other parameters. This script uses terraform to
         set up a K8S cluster, with its own VPC/VNet and K8S cluster, routes and
         peering connections, security, etc. Presto is automatically set up and
@@ -757,6 +818,9 @@ command = ns.command
 
 if emptyNodes and command != "stop":
     p.error("-e, --empty-nodes is only used with stop and restart")
+
+checkCLISetup()
+checkRSAKey()
 
 announce(f"cloud '{target}', region '{region}'")
 

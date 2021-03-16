@@ -6,10 +6,10 @@ Email: rob.anderson@starburstdata.com
 # names here. The script infers which cloud you want to build in based on which
 # region you select.
 #
-Region: francecentral # Paris, France
-#Region: eu-west-3 # Paris, France
-#Region: eu-west-2 # London, UK
-#Region: us-east-2 # Columbus, OH, USA
+#Region: francecentral # Azure - Paris, France
+Region: eu-west-3 # AWS - Paris, France
+#Region: eu-west-2 # AWS - London, UK
+#Region: us-east-2 # AWS - Columbus, OH, USA
 
 # Pick any CIDR that isn't taken (and make sure to avoid those of the default
 # VPC and/or the VPC hosting the VPN server). I recommend choosing something in

@@ -9,6 +9,8 @@
   my-vars.yaml file for description of what to put in there
 - add a Starburst license file, which you can get from your friendly local
   Starburst Solutions Architect!
+- go through the requirements section below to make sure you have all the
+  dependencies before starting
 
 ## Usage
 
@@ -62,8 +64,30 @@ is done, you'll have access to an executable called `brew`:
 You now should install these required Homebrew packages, like this:
 
 ```
-brew install awscli aws-iam-authenticator helm kubectl libyaml socat terraform
+brew install awscli azure-cli aws-iam-authenticator helm kubectl libyaml \
+    socat terraform
 ```
+
+### AWS CLI
+
+After the installation of `awscli`, you now need to configure it, by running
+`aws configure`. You'll need to have ready your AWS Access Key ID, your AWS
+Secret Access Key, your default region, and your default output format (which
+should probably be json). This will create a `~/.aws` directory, containing a
+`config` file with your default region and output format, and a `.credentials`
+file containing your access key ID and secret access key. You'll never need to
+change the `.credentials` file, but you will need to update the `config` file if
+you want to work in a different region.
+
+See [this link](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config) for the full instructions.
+
+### Azure CLI
+
+After the installation of `azure-cli`, you now need to configure, by running `az
+configure`, and you'll need to login, by running `az login`. When you log in, it
+will fire up your default browser and have you log into the Azure Portal with
+your Microsoft credentials. After running these commands you'll have a
+`~/.azure` directory created with your settings and access tokens inside.
 
 ### Python
 
