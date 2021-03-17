@@ -140,6 +140,7 @@ helmns      = f"--namespace {namespace}"
 kube        = "kubectl"
 kubens      = f"kubectl --namespace {namespace}"
 azuredns    = "168.63.129.16"
+minnodes    = 3
 
 for d in [templatedir, tmpdir, tfdir]:
     assert writeableDir(d)
@@ -325,6 +326,9 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     os.makedirs(os.path.dirname(kubeconfig), mode=0o700, exist_ok=True)
     with open(kubeconfig, 'w') as k:
         k.write(env["kubectl_config"])
+    # Don't return until all nodes are ready to rock
+    runStdout(f"{kube} wait --for=condition=Ready --timeout=10m "
+            "--all nodes".split())
     return env
 
 def stopPortForward():
@@ -637,11 +641,21 @@ def getMinNodeResources() -> tuple:
     nodes = {t["metadata"]["name"]: {"cpu":
         normaliseCPU(t["status"]["allocatable"]["cpu"]), "mem":
         normaliseMem(t["status"]["allocatable"]["memory"])} for t in n}
+    assert len(nodes) >= minnodes
 
     for q in p: # for every pod
+        # If it's Starburst pods, then skip them
         if q["metadata"]["namespace"] == namespace:
             continue
-        nodename = q["spec"]["nodeName"] # see what node it's on
+
+        try:
+            nodename = q["spec"]["nodeName"] # see what node it's on
+        except KeyError as e:
+            qpt = json.dumps(q)
+            ppt = json.dumps(p)
+            print(f"'nodeName' not in {qpt}; pods: {ppt}, e: {e}")
+            raise
+
         assert nodename in nodes
         x = nodes[nodename]
         for c in q["spec"]["containers"]: # for every container in pod
@@ -680,7 +694,7 @@ def planWorkerSize() -> dict:
     assert mem["worker"] + mem["ranger_admin"] + mem["ranger_db"] <= m
     env = {f"{k}_cpu": f"{v}m" for k, v in cpu.items()}
     env.update({f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in mem.items()})
-    assert nodeCount >= 3
+    assert nodeCount >= minnodes
     env["workerCount"] = nodeCount - 1
     return env
 
