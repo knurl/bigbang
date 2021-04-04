@@ -34,3 +34,19 @@ objectStorage:
       accessKey:
         storageAccount: {{StorageAccount}}
         accessKey: {{adls_access_key}}
+  gs:
+    cloudKeyFileSecret: {{gcskeyname}}
+
+# The K8S scheduler sometimes makes sub-optimal arrangements in which hive and
+# ranger are scheduled to the same nodes, not leaving enough room for either the
+# coordinator or a worker. Prevent this with an anti-affinity rule.
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - starburst-ranger
+        topologyKey: "kubernetes.io/hostname"

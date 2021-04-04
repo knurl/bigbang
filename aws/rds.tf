@@ -6,7 +6,6 @@
 resource "aws_security_group" "rds_sg" {
   name                   = "rds_sg"
   vpc_id                 = module.vpc.vpc_id
-  tags                   = merge(var.tags, {Name = "rds_sg"})
   revoke_rules_on_delete = true
 
   # Any protocol or port, as long as it comes from the VPN's subnet (which are
@@ -27,6 +26,8 @@ resource "aws_security_group" "rds_sg" {
     protocol             = "-1"
     cidr_blocks          = module.vpc.private_subnets_cidr_blocks
   }
+
+  tags                   = merge(var.tags, {Name = "rds_sg"})
 }
 
 # for the event logger
@@ -35,7 +36,7 @@ resource "aws_db_instance" "evtlog" {
   engine                   = "postgres"
   allocated_storage        = 20
   instance_class           = "db.m5.xlarge"
-  name                     = var.db_name_el
+  name                     = var.db_name_evtlog
   username                 = var.db_user
   password                 = var.db_password
   skip_final_snapshot      = true
@@ -60,9 +61,9 @@ resource "aws_db_instance" "postgres" {
   tags                     = merge(var.tags, {Name = var.postgres_server_name})
 }
 
-resource "aws_db_instance" "mariadb" {
-  identifier               = var.mariadb_server_name
-  engine               		 = "mariadb"
+resource "aws_db_instance" "mysql" {
+  identifier               = var.mysql_server_name
+  engine               		 = "mysql"
   allocated_storage    		 = 20
   instance_class       		 = "db.m5.xlarge"
   name                 		 = var.db_name
@@ -72,5 +73,5 @@ resource "aws_db_instance" "mariadb" {
   delete_automated_backups = true
   db_subnet_group_name 		 = module.vpc.database_subnet_group
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
-  tags                     = merge(var.tags, {Name = var.mariadb_server_name})
+  tags                     = merge(var.tags, {Name = var.mysql_server_name})
 }

@@ -1,11 +1,12 @@
 variable "tags" {
   default          = {
-    ch_cloud       = "{{Target}}"
-    ch_environment = "demo"
-    ch_org         = "sales"
-    ch_team        = "fieldeng"
-    ch_project     = "demo"
-    ch_user        = "{{UserName}}"
+    cloud       = "{{Target}}"
+    environment = "demo"
+    org         = "sales"
+    team        = "sa"
+    project     = "experiment"
+    user        = "{{UserName}}"
+    info        = "{{Zone}}"
   }
 }
 
@@ -13,8 +14,12 @@ variable "region" {
   default = "{{Region}}"
 }
 
+variable "zone" {
+  default = "{{Zone}}"
+}
+
 variable "resource_group_name" {
-  default = "rg-{{ShortName}}"
+  default = "{{ResourceGroup}}"
 }
 
 variable "my_cidr" {
@@ -61,15 +66,15 @@ variable "postgres_server_name" {
   default = "postgres-server-{{ShortName}}"
 }
 
-variable "mariadb_server_name" {
-  default = "mariadb-server-{{ShortName}}"
+variable "mysql_server_name" {
+  default = "mysql-server-{{ShortName}}"
 }
 
 variable "db_name" {
   default = "{{DBName}}"
 }
 
-variable "db_name_el" {
+variable "db_name_evtlog" {
   default = "{{DBNameEventLogger}}"
 }
 
@@ -81,10 +86,28 @@ variable "db_password" {
   default = "{{DBPassword}}"
 }
 
+variable "charset" {
+  default = "utf8"
+}
+
+variable "mysql_collation" {
+  default = "utf8_general_ci"
+}
+
 variable "storage_account" {
   default = "{{StorageAccount}}"
 }
 
 variable "bucket_name" {
   default = "{{BucketName}}"
+}
+
+variable "my_public_ip" {
+  default = "{{MyPublicIP}}"
+}
+
+variable "ssh_public_key" {
+  default = <<-RSAKEY
+  {{SshPublicKey}}
+  RSAKEY
 }

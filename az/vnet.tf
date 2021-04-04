@@ -41,8 +41,8 @@ resource "azurerm_subnet" "obj_sub" {
 }
 
 data "azurerm_virtual_network" "vpn_vnet" {
-  resource_group_name = "vpn"
-  name                = "OpenVPNVNet"
+  resource_group_name = var.vpn_vnet_resource_group
+  name                = var.vpn_vnet_name
 }
 
 resource "azurerm_virtual_network_peering" "vpn_to_aks" {

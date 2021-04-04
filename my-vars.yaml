@@ -2,29 +2,30 @@
 Email: rob.anderson@starburstdata.com
 
 #
-# The region (location) you're running in. You can list either AWS or Azure
-# names here. The script infers which cloud you want to build in based on which
-# region you select.
+# The zone you're running in. You can list either AWS or Azure names here.
+# ***NB: The script infers which cloud you want to build in based on which
+# zone you select! This is where you choose your cloud!
 #
-#Region: francecentral # Azure - Paris, France
-Region: eu-west-3 # AWS - Paris, France
-#Region: eu-west-2 # AWS - London, UK
-#Region: us-east-2 # AWS - Columbus, OH, USA
+#Zone: francecentral # Azure - Paris, France
+#Zone: europe-west1-b # GCP - St. Ghislain, Belgium
+Zone: eu-west-3 # AWS - Paris, France
+#Zone: eu-west-2 # AWS - London, UK
+#Zone: us-east-2 # AWS - Columbus, OH, USA
 
-# Pick any CIDR that isn't taken (and make sure to avoid those of the default
-# VPC and/or the VPC hosting the VPN server). I recommend choosing something in
-# 10.x.0.0/16. Your pods are going to be drawing from these ranges, so you'll
-# need a bigger IP space than you might think.
-# Rob 10.10/16; Andrei 10.20/16; Tony 10.30/16; Richard 10.40/16; Andy 10.50/16
-MyCIDR: 10.10.0.0/16
+# Version of Starburst you want to install. This must match across
+# starburst-presto, starburst-ranger, and starburst-hive.
+ChartVersion: 350.6.0
 
 # number of nodes in K8S cluster
 NodeCount: 4
 
 # instance types for AWS and Azure
 AWSInstanceType: r5.8xlarge
+AWSBastionInstanceType: m5.large
 AzureVMType: Standard_E16-8ds_v4
 AzureBastionVMType: Standard_B2ms
+GCPMachineType: e2-standard-16
+GCPBastionMachineType: n1-standard-1
 
 # Name of your license file (./${LicenseName}.license)
 LicenseName: starburstdata
@@ -44,8 +45,8 @@ HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
 # HelmRepoPassword: password
 
 #
-# The following two maps don't need to be updated _unless_ you are adding a new
-# region for the first time, for either AWS or Azure.
+# The following maps don't need to be updated _unless_ you are adding a new
+# region for the first time, for AWS, Azure or GCP.
 #
 
 #
@@ -67,3 +68,9 @@ AzureVPNVnetNames:
   francecentral:                 # Paris, France
     resourceGroup: vpn
     name: OpenVPNVNet
+
+#
+# GCP only: As for AWS, but for GCP
+#
+GCPVPNInstanceNames:
+  europe-west1-b: ovpn

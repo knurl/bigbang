@@ -1,5 +1,12 @@
 # bigbang
 
+## Disclaimer
+
+**_NB:_** *This release does not form any part of the Starburst product. It is
+not officially released by Starburst, nor is it supported by Starburst,
+including by any of Starburst's Enterprise Support Agreements. It is made
+publicly and freely available purely for educational purposes.*
+
 ## Important
 
 **NB: Before you run bigbang.py:** Make sure you do the following:
@@ -15,30 +22,27 @@
 ## Usage
 
 ```
-usage: bigbang.py [-h] [-c] [-e] {start,stop,restart,status,pfstart,pfstop,load}
+usage: bigbang.py [-h] [-c] [-e] {start,stop,restart,status,pfstart,pfstop}
 
-Create your own Starbust demo service in AWS or Azure, starting from nothing.
-You provide the instance ID of your VPN in /Users/rob/git/demosvc/my-vars.yaml,
-your desired CIDR and some other parameters. This script uses terraform to set
-up a K8S cluster, with its own VPC/VNet and K8S cluster, routes and peering
-connections, security, etc. Presto is automatically set up and multiple
-databases and a data lake are set up. It's designed to allow you to control the
-new setup from your laptop, without necessarily using a bastion server. The
+Create your own Starbust demo service in AWS, Azure or GCP, starting from
+nothing. It's zero to demo in 20 minutes or less. You provide the instance ID of
+your VPN in my-vars.yaml, your desired CIDR and some other parameters. This
+script uses terraform to set up a K8S cluster, with its own VPC/VNet and K8S
+cluster, routes and peering connections, security, etc. Presto is automatically
+set up and multiple databases and a data lake are set up. It's designed to allow
+you to control the new setup from your laptop, without necessarily using a
+bastion server—although a bastion server is also provided as a convenience. The
 event logger is set up as well as Starburst Insights (running on a PostgreSQL
 database).
 
 positional arguments:
-  {start,stop,restart,status,pfstart,pfstop,load}
-                        Command to issue for demo services.
-			start/stop/restart: Start/stop/restart the demo
-			environment. status: Show whether the demo environment
-			is running or not.
-			pfstart: Start port-forwarding from local ports to
-			container ports (happens with start).
-			pfstop: Stop port-forwarding from local ports to
-			container ports.
-			load: Load databases with tpch data (happens with
-			start).
+  {start,stop,restart,status,pfstart,pfstop}
+			Command to issue for demo services. start/stop/restart:
+			Start/stop/restart the demo environment. status: Show
+			whether the demo environment is running or not. pfstart:
+			Start port-forwarding from local ports to container
+			ports (happens with start). pfstop: Stop port-forwarding
+			from local ports to container ports.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -61,11 +65,17 @@ is done, you'll have access to an executable called `brew`:
 /usr/local/bin/brew
 ```
 
-You now should install these required Homebrew packages, like this:
+You now should install the following required Homebrew formulae, like this:
 
 ```
-brew install awscli azure-cli aws-iam-authenticator helm kubectl libyaml \
-    socat terraform
+brew install awscli azure-cli gscloud aws-iam-authenticator helm kubectl \
+    libyaml socat terraform
+```
+
+And the following brew casks, like this:
+
+```
+brew install --cask google-cloud-sdk
 ```
 
 ### AWS CLI
@@ -88,6 +98,13 @@ configure`, and you'll need to login, by running `az login`. When you log in, it
 will fire up your default browser and have you log into the Azure Portal with
 your Microsoft credentials. After running these commands you'll have a
 `~/.azure` directory created with your settings and access tokens inside.
+
+### GCloud SDK
+
+After the installation of the `gcloud`, `gsutil` and the rest of the Google
+Cloud SDK, you'll need to configure it by running `gcloud init`. Once that is
+completed you'll have a `~/.config/gcloud` directory with all of the
+configuration inside of it.
 
 ### Python
 

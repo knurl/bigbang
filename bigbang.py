@@ -1,11 +1,10 @@
 #!python
 
-import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml
-import subprocess, ipaddress, glob, threading, time, concurrent.futures
+import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
+import subprocess, ipaddress, glob, threading, time, concurrent.futures, jinja2
 from run import run, runShell, runTry, runStdout, runCollect
 from subprocess import CalledProcessError
 import psutil # type: ignore
-import jinja2
 from typing import Tuple, Iterable
 
 def myDir():
@@ -29,6 +28,7 @@ myvarsbf = "my-vars.yaml"
 myvarsf  = where("my-vars.yaml")
 awsvpnlabel = "AWSVPNInstanceIDs"
 nodecountlabel = "NodeCount"
+chartvlabel = "ChartVersion"
 try:
     with open(myvarsf) as mypf:
         myvars = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -37,16 +37,23 @@ except IOError as e:
 
 try:
     email        = myvars["Email"]
-    region       = myvars["Region"]
-    mySubnetCidr = myvars["MyCIDR"]
+    zone         = myvars["Zone"]
+    chartversion = myvars[chartvlabel]
     nodeCount    = myvars[nodecountlabel]
     license      = myvars["LicenseName"]
     repo         = myvars["HelmRepo"]
     repoloc      = myvars["HelmRepoLocation"]
     awsvpns      = myvars[awsvpnlabel]
     azurevpns    = myvars["AzureVPNVnetNames"]
+    gcpvpns      = myvars["GCPVPNInstanceNames"]
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
+
+# Check the format of the chart version
+components = chartversion.split('.')
+if len(components) != 3 or not all(map(str.isdigit, components)):
+    sys.exit(f"The {chartvlabel} in {myvarsbf} field must be of the form "
+            f"x.y.z, all numbers; {chartversion} is not of a valid form")
 
 # Check the license file
 licensebf = f"{license}.license"
@@ -56,36 +63,83 @@ if not readableFile(licensef):
             f"located at {licensef} but no readable file exists there.")
 
 # Verify the email looks right, and extract username from it
+# NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
 emailparts = email.split('@')
 if not (len(emailparts) == 2 and "." in emailparts[1]):
     sys.exit(f"Email specified in {myvarsbf} must be a full email address")
-username = emailparts[0]
+username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035
 codelen = min(3, len(username))
 code = username[:codelen]
+
+# Generate a unique octet for our subnet. Use that octet with the 'code' we
+# generated above as part of a short name we can use to mark resources we
+# create.
+s = username + zone
+octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256
+shortname = code + str(octet).zfill(3)
 
 awsdir = os.path.expanduser("~/.aws")
 awsconfig = os.path.expanduser("~/.aws/config")
 awscreds = os.path.expanduser("~/.aws/credentials")
 
-if region in awsvpns:
+#
+# Work out which cloud target based on the VPN lists.
+#
+if zone in awsvpns:
     target = "aws"
+    instanceType = myvars["AWSInstanceType"]
+    bastionInstanceType = myvars["AWSBastionInstanceType"]
+elif zone in azurevpns:
+    target = "az"
+    instanceType = myvars["AzureVMType"]
+    bastionInstanceType = myvars["AzureBastionVMType"]
+elif zone in gcpvpns:
+    target = "gcp"
+    instanceType = myvars["GCPMachineType"]
+    bastionInstanceType = myvars["GCPBastionMachineType"]
+else:
+    sys.exit(textwrap.dedent(f"""\
+    Zone {zone} specified in {myvarsbf}, but is not listed in any of the VPN
+    sections in {myvarsbf}. Please add it!"""))
+
+# Set the region and zone from the location. We assume zone is more precise and
+# infer the region from the zone.
+region = zone
+if target == "gcp":
+    assert re.fullmatch(r"-[a-e]", zone[-2:]) != None
+    region = zone[:-2]
+
+# Azure and GCP assume the user is working potentially with multiple locations.
+# On the other hand, AWS assumes a single region in the config file, so make
+# sure that the region in the AWS config file and the one set in my-vars are
+# consistent, just to avoid accidents.
+if target == "aws":
     awsregion = runCollect("aws configure get region".split())
     if awsregion != region:
         sys.exit(textwrap.dedent(f"""\
                 Region {awsregion} specified in your {awsconfig} doesn't match
                 region {region} set in your {myvarsbf} file. Cannot continue
                 execution. Please ensure these match and re-run."""))
-elif region in azurevpns:
-    target = "azure"
-else:
-    sys.exit(textwrap.dedent(f"""\
-    Region {region} specified in {myvarsbf}, but is not listed in the AWS VPN
-    {awsvpnlabel} section in {myvarsbf}. Please go the AWS console, find the
-    instance ID of the VPN in {region}, and add it to {awsvpnlabel}."""))
 
 if nodeCount < 3:
     sys.exit(f"Must have at least 3 nodes; {nodeCount} set for "
             f"{nodecountlabel} in {myvarsbf}.")
+
+def genmask(target, octet):
+    assert octet < 256
+    if target in ("aws", "az"):
+        return f"10.{octet}.0.0/16"
+    elif target == "gcp":
+        # Get top four bits and combine with 2nd octet
+        ipnum = 0xAC10 << 16 # 172.16.0.0
+        ipnum |= octet << 12
+        octets = []
+        while ipnum > 0:
+            octets.append(str(ipnum & 0xFF))
+            ipnum >>= 8
+        return ".".join(octets[::-1]) + "/20"
+
+mySubnetCidr = genmask(target, octet)
 
 try:
     ipntwk = ipaddress.ip_network(mySubnetCidr)
@@ -114,20 +168,25 @@ except KeyError as e:
 myvars.update(helmcreds)
 
 #
-# Global variables.
+# Global variables. TODO convert MariaDB everywhere to MySQL
 #
-kubeconfig  = os.path.expanduser("~/.kube/config")
+clouds      = ("aws", "az", "gcp")
 templatedir = where("templates")
 tmpdir      = "/tmp"
+rsa         = os.path.expanduser("~/.ssh/id_rsa")
+rsaPub      = os.path.expanduser("~/.ssh/id_rsa.pub")
 tfvars      = "variables.tf" # basename only, no path!
 svcports    = { "presto": 8080, "ranger": 6080 }
-dbports     = { "mariadb": 3306, "postgres": 5432 }
+dbports     = { "mysql": 3306, "postgres": 5432 }
 tpchschema  = "tiny"
 tpchcat     = "tpch"
 hivecat     = "hive"
 syscat      = "system"
-forwarder   = where("azure/forwarderSetup.sh")
+forwarder   = where("az/forwarderSetup.sh")
 tfdir       = where(target)
+gcskeyname  = "gcs-keyfile"
+gcskeyfbn   = f"key.json"
+gcskeyfile  = tfdir + "/" + gcskeyfbn
 tf          = f"terraform -chdir={tfdir}"
 evtlogcat   = "postgresqlel"
 avoidcat    = [tpchcat, syscat, evtlogcat]
@@ -138,6 +197,7 @@ dbpwd       = "a029fjg!>dfgBiO8"
 namespace   = "starburst"
 helmns      = f"--namespace {namespace}"
 kube        = "kubectl"
+kubecfgf    = os.path.expanduser("~/.kube/config")
 kubens      = f"kubectl --namespace {namespace}"
 azuredns    = "168.63.129.16"
 minnodes    = 3
@@ -145,16 +205,12 @@ minnodes    = 3
 for d in [templatedir, tmpdir, tfdir]:
     assert writeableDir(d)
 
-# Make a short, unique name, handy for marking created files, naming resources,
-# and other purposes.
-hlen = 3
-s = username + region
-hnum = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**hlen
-shortname = code + str(hnum).zfill(hlen)
+# Generate a random octet
 
 clustname = shortname + "cl"
 bucket = shortname + "bk"
 storageacct = shortname + "sa"
+resourcegrp = shortname + "rg"
 
 templates = {}
 releases = {}
@@ -165,52 +221,55 @@ for module in modules:
     releases[module] = f"{module}-{shortname}"
     charts[module] = f"{repo}/starburst-{module}"
 
+#
 # Important announcements to the user!
+#
+
 def announce(s):
-    print(f"====> {s}")
+    print(f"==> {s}")
 
-def announcePresto(s):
-    print(f"SQL-> {s}")
+sqlstr = "Issued 🢩 "
 
-def announceLoud(s):
-    x = "====> {} <====".format(s.upper())
-    b = '='*len(x)
-    print(f"{b}\n{x}\n{b}")
+def announceSqlStart(s):
+    print(f"{sqlstr}⟦{s}⟧")
+
+def announceSqlEnd(s):
+    print(" " * len(sqlstr) + f"⟦{s}⟧ 🢨 Done!")
+
+def announceLoud(lines: list) -> None:
+    maxl = max(map(len, lines))
+    lt = "┃⮚ "
+    rt = " ⮘┃"
+    p = ["{l}{t}{r}".format(l = lt, t = l.center(maxl), r = rt) for l in lines]
+    pmaxl = maxl + len(lt) + len(rt)
+    print('┏' + '━' * (pmaxl - 2) + '┓')
+    for i in p:
+        print(i)
+    print('┗' + '━' * (pmaxl - 2) + '┛')
 
 def announceBox(s):
-    boundslen = 80
-    bl = "| "
-    br = " |"
-    textlen = boundslen - len(bl) - len(br)
-    bord = '-'*boundslen
-    print(bord)
-    lines = textwrap.wrap(s, width = textlen, break_on_hyphens = False)
+    boundary = 80 # maximum length to wrap to
+    bl = '║ '
+    br = ' ║'
+    hz = '═'
+    ul = '╔'
+    ur = '╗'
+    ll = '╚'
+    lr = '╝'
+    inner = boundary - len(bl) - len(br)
+    lines = textwrap.wrap(s, width = inner, break_on_hyphens = False)
+    maxl = max(map(len, lines))
+    topbord = ul + hz * (maxl + 2) + ur
+    botbord = ll + hz * (maxl + 2) + lr
+    print(topbord)
     for l in lines:
-        padl = bl + l.ljust(textlen) + br
-        assert len(padl) == boundslen
-        print(padl)
-    print(bord)
-
-def getVpnInstanceId() -> str:
-    try:
-        return awsvpns[region]
-    except KeyError as e:
-        print(f"Region {region} not listed for AWS VPN instances in {myvarsbf}")
-        raise
-
-def getVpnVnet() -> dict:
-    try:
-        vnet = azurevpns[region]
-        return { "VpnVnetResourceGroup": vnet["resourceGroup"],
-                 "VpnVnetName": vnet["name"] }
-    except KeyError as e:
-        print(f"Region {region} not listed for Azure VPN vnets in {myvarsbf}")
-        raise
+        print(bl + l.ljust(maxl) + br)
+    print(botbord)
 
 def warnVpnConfig(privateDnsAddr: str = ""):
     s = textwrap.dedent(f"""\
-            NB: Your VPC/VNET CIDR is listed as '{mySubnetCidr}', which must
-            be added to your home workstation's routing table.""")
+            NB: Your VPC/VNET CIDR is listed as {mySubnetCidr}, which should be
+            included in your routing table.""")
 
     ovpnfiles = glob.glob(os.path.expanduser("~/Library/Application Support/"
         "Tunnelblick/Configurations/*/Contents/Resources/config.ovpn"))
@@ -221,13 +280,45 @@ def warnVpnConfig(privateDnsAddr: str = ""):
                 config and reconnect Tunnelblick.""".format(netaddr =
                     ipntwk.network_address, netmask = ipntwk.netmask))
 
-    if target == "azure":
+    if target == "az":
         s += textwrap.dedent(""" \
                 For Azure, you also will need {p} and {a} listed as DNS
                 resolvers, in that order, to access the new demo
                 vnet.""".format(p = privateDnsAddr, a = azuredns))
 
     announceBox(s)
+
+def replaceFile(filepath, contents) -> bool:
+    oldmd5 = None
+    if os.path.exists(filepath):
+        if os.path.isfile(filepath):
+            with open(filepath) as fh:
+                fl = fh.readline()
+                if len(fl) > 0:
+                    match = re.match("# md5: ([0-9a-f]{32})", fl)
+                    if match:
+                        oldmd5 = match.group(1)
+        else:
+            sys.exit("Please manually remove {filepath} and rerun")
+
+    newmd5 = hashlib.md5(contents.encode('utf-8')).hexdigest()
+    if oldmd5 != None and oldmd5 == newmd5:
+        # It's the same file. Don't bother writing it.
+        return False # didn't write
+
+    # some of the files being written contain secrets in plaintext, so don't
+    # allow them to be read by anyone but the user
+    os.remove(filepath) # remove the old one
+    os.umask(0)
+    flags = os.O_CREAT | os.O_WRONLY | os.O_EXCL # we are writing new one
+    try:
+        with open(os.open(path=filepath, flags=flags, mode=0o600), 'w') as fh:
+            fh.write(f"# md5: {newmd5}\n")
+            fh.write(contents)
+    except IOError as e:
+        print(f"Couldn't write file {filepath} due to {e}")
+        raise
+    return True # wrote new file
 
 def parameteriseTemplate(template, targetDir, varsDict):
     assert os.path.basename(template) == template, \
@@ -248,69 +339,91 @@ def parameteriseTemplate(template, targetDir, varsDict):
         print(f"Couldn't read {template} from {templatedir} due to {e}")
         raise
 
-    if os.path.exists(yamltmp):
-        if os.path.isfile(yamltmp):
-            os.remove(yamltmp)
-        else:
-            sys.exit("Please manually remove {yamltmp} and rerun")
-
-    os.umask(0)
-    flags = os.O_CREAT | os.O_WRONLY | os.O_EXCL
-
-    try:
-        # some of these config files contain user credentials in plaintext, so
-        # don't allow them to be read by anyone but the user
-        with open(os.open(path=yamltmp, flags=flags, mode=0o600), 'w') as fh:
-            fh.write(output)
-    except IOError as e:
-        print(f"Couldn't write config file {yamltmp} due to {e}")
-        raise
-
-    return yamltmp
+    changed = replaceFile(yamltmp, output)
+    return changed, yamltmp
 
 def getOutputVars() -> dict:
     env = json.loads(runCollect(f"{tf} output -json".split()))
     return {k: v["value"] for k, v in env.items()}
 
-# Azure does some funky stuff with usernames for databases: It interpose a
+# Azure does some funky stuff with usernames for databases: It interposes a
 # gateway in front of the database that forwards connections from
 # username@hostname to username at hostname (supplied separately). So we must
 # supply usernames in different formats for AWS and Azure.
 def generateDatabaseUsers(env: dict) -> None:
-    for db in ["mariadb", "postgres", "evtlog"]:
+    for db in ["mysql", "postgres", "evtlog"]:
         env[db + "_user"] = dbuser
-        if target == "azure":
+        if target == "az":
             env[db + "_user"] += "@" + env[db + "_address"]
 
-def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
-    env = {
-            "ClusterName":       clustname,
-            "DBName":            dbschema,
-            "DBNameEventLogger": dbevtlog,
-            "DBPassword":        dbpwd,
-            "DBUser":            dbuser,
-            "ForwarderScript":   forwarder,
-            "NodeCount":         nodeCount,
-            "BucketName":        bucket,
-            "StorageAccount":    storageacct,
-            "ShortName":         shortname,
-            "Target":            target,
-            "UserName":          username
-            }
-
-    env.update(myvars)
+def updateKubeConfig(kubecfg: str) -> None:
+    announce(f"Updating kube config file")
     if target == "aws":
-        env["VpnInstanceId"] = getVpnInstanceId()
-        env["InstanceType"] = myvars["AWSInstanceType"]
-    elif target == "azure":
-        env.update(getVpnVnet())
-        env["InstanceType"] = myvars["AzureVMType"]
-        env["BastionInstanceType"] = myvars["AzureBastionVMType"]
+        replaceFile(kubecfgf, kubecfg)
+        print(f"wrote out kubectl file to {kubecfgf}")
+    elif target == "az":
+        runStdout(f"az aks get-credentials --resource-group {resourcegrp} "
+                f"--name {clustname}".split())
+    elif target == "gcp":
+        runStdout(f"gcloud container clusters get-credentials {clustname} "
+                f"--region {zone} --internal-ip".split())
+
+def getMyPublicIp() -> str:
+    i = runCollect("dig +short myip.opendns.com @resolver1.opendns.com "
+            "-4".split())
+    try:
+        myIp = ipaddress.ip_address(i)
+        announceBox(f"Your visible IP address is {myIp}. Ingress to your "
+                "newly-created bastion server will be limited to this address "
+                "exclusively.")
+        return myIp
+    except ValueError:
+        print(f"Unable to retrieve my public IP address; got {i}")
+        raise
+
+def getSshPublicKey() -> str:
+    try:
+        with open(rsaPub) as rf:
+            return rf.read()
+    except IOError as e:
+        sys.exit(f"Unable to read your public RSA key {rsaPub}")
+
+def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
+    env = myvars
+    env.update({
+        "BastionInstanceType": bastionInstanceType,
+        "BucketName":          bucket,
+        "ClusterName":         clustname,
+        "DBName":              dbschema,
+        "DBNameEventLogger":   dbevtlog,
+        "DBPassword":          dbpwd,
+        "DBUser":              dbuser,
+        "InstanceType":        instanceType,
+        "MyCIDR":              mySubnetCidr,
+        "MyPublicIP":          getMyPublicIp(),
+        "NodeCount":           nodeCount,
+        "SshPublicKey":        getSshPublicKey(),
+        "Region":              region,
+        "ShortName":           shortname,
+        "Target":              target,
+        "UserName":            username,
+        "Zone":                zone
+        })
+    assert target in clouds
+    if target == "aws":
+        env["VpnInstanceId"] = awsvpns[zone]
+    elif target == "az":
+        vpn = azurevpns[zone]
+        env["VpnVnetResourceGroup"] = vpn["resourceGroup"]
+        env["VpnVnetName"] = vpn["name"]
+        env["ResourceGroup"] = resourcegrp
+        env["ForwarderScript"] = forwarder
+        env["StorageAccount"] = storageacct
+    elif target == "gcp":
+        env["VpnInstanceId"] = gcpvpns[zone]
     parameteriseTemplate(tfvars, tfdir, env)
 
     if not skipClusterStart:
-        announce("Establishing K8S cluster from {n} nodes of {i}".format(n =
-            nodeCount, i = env["InstanceType"]))
         runStdout(f"{tf} init -input=false -upgrade".split())
         t = time.time()
         runStdout(f"{tf} apply -auto-approve -input=false".split())
@@ -321,14 +434,37 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = getOutputVars()
     generateDatabaseUsers(env) # Modify dict in-place
 
-    # Update kubectl config file
-    announce(f"Updating kube config file at {kubeconfig}")
-    os.makedirs(os.path.dirname(kubeconfig), mode=0o700, exist_ok=True)
-    with open(kubeconfig, 'w') as k:
-        k.write(env["kubectl_config"])
-    # Don't return until all nodes are ready to rock
-    runStdout(f"{kube} wait --for=condition=Ready --timeout=10m "
-            "--all nodes".split())
+    # Having set up storage, we've received some credentials for it that we'll
+    # need later. For GCP, write out a key file that Hive will use to access
+    # GCS. For Azure, just set a value we'll use for the presto values file.
+    if target == "gcp":
+        replaceFile(gcskeyfile, env["object_key"])
+        env["gcskeyfile"] = gcskeyfile
+    elif target == "az":
+        env["adls_access_key"] = env["object_key"]
+
+    updateKubeConfig(env["kubectl_config"] if "kubectl_config" in env else "")
+    warnVpnConfig(env["private_dns_address"] if target == "az" else "")
+
+#   TODO: Complete this function so we can set DNS for the user
+#    if target == "az":
+#        checkDnsConfig(env["private_dns_address"])
+
+    # Don't return until all nodes and K8S system pods are ready
+    announce("Waiting for nodes to come online")
+    runStdout(f"{kube} wait --for=condition=Ready --timeout=5m --all "
+            "nodes".split())
+    print("All nodes online")
+    announce("Waiting for K8S system pods to come online")
+    cmd = "{k} wait {v} --namespace=kube-system --for=condition=Ready " \
+            "--timeout=5m pods --all"
+    try:
+        runStdout(cmd.format(k = kube, v = "").split())
+    except CalledProcessError as e:
+        print("Timeout waiting for system pods. 2nd & final attempt.")
+        # run again with verbose output
+        runStdout(cmd.format(k = kube, v = "--v=2").split())
+    print("All K8S system pods online")
     return env
 
 def stopPortForward():
@@ -342,9 +478,11 @@ def stopPortForward():
 
 def startPortForward():
     stopPortForward()
-    announce("Waiting for services to be ready")
-    runStdout(f"{kubens} wait --for=condition=Available --timeout=10m --all "
-            "deployments".split())
+    announce("Waiting for pods to be ready")
+    runStdout(f"{kubens} wait --for=condition=Ready pods --all".split())
+    announce("Waiting for services to be available")
+    runStdout(f"{kubens} wait --for=condition=Available deployments.apps "
+            "--all".split())
 
     #
     # Get the DNS name of the load balancers we've created
@@ -381,15 +519,16 @@ def startPortForward():
 
     assert len(subprocs) == len(svcports)
 
-class ApiError(Exception):
-    pass
-
 def retry(f, maxretries: int, err: str) -> requests.Response:
     retries = 0
     stime = 1
     while True:
         try:
-            return f()
+            r = f()
+            if r.status_code == 503:
+                time.sleep(0.1)
+                continue
+            return r
         except requests.exceptions.ConnectionError as e:
             print(f"Failed to connect: \"{err}\"; retries={retries}; sleep={stime}")
             if retries > maxretries:
@@ -399,9 +538,12 @@ def retry(f, maxretries: int, err: str) -> requests.Response:
             retries += 1
             stime <<= 1
 
+class ApiError(Exception):
+    pass
+
 def issuePrestoCommand(command: str, verbose = False) -> list:
     httpmaxretries = 5
-    if verbose: announcePresto(command)
+    if verbose: announceSqlStart(command)
     url = "http://localhost:{}/v1/statement".format(svcports["presto"])
     headers = { "X-Presto-User": "presto_service" }
     r = retry(lambda: requests.post(url, headers = headers, data = command),
@@ -410,19 +552,21 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
     data = []
     while True:
         r.raise_for_status()
+        assert r.status_code == 200
         j = r.json()
-        if "error" in j:
-            raise ApiError("Error executing SQL '{s}': error {e}".format(s =
-                command, e = str(j["error"])))
         if "data" in j:
             data += j["data"]
         if "nextUri" not in j:
-            return data
+            if "error" in j:
+                raise ApiError("Error executing SQL '{s}': error {e}".format(s =
+                    command, e = str(j["error"])))
+            if verbose: announceSqlEnd(command)
+            return data # the only way out is success, or an exception
         r = retry(lambda: requests.get(j["nextUri"], headers = headers),
                 maxretries = httpmaxretries, err = f"GET nextUri [{command}]")
 
 def copySchemaTables(srcCatalog: str, srcSchema: str,
-        dstCatalogs: list, dstSchema: str):
+        dstCatalogs: list, dstSchema: str, hiveTarget: str):
     # fetch our source tables
     stab = issuePrestoCommand(f"show tables in {srcCatalog}.{srcSchema}")
     srctables = [t[0] for t in stab]
@@ -440,18 +584,10 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
         schemas = [s[0] for s in stable]
         dsttables = []
         if dstSchema not in schemas:
-            if dstCatalog == "hive":
-                if target == "aws":
-                    location = f"s3://{bucket}/{dstSchema}"
-                elif target == "azure":
-                    location = f"abfs://{bucket}@{storageacct}.dfs.core." \
-                            f"windows.net/datasets/{dstSchema}"
-                clause = f" with (location = '{location}')"
-            else:
-                clause = ""
-
-            issuePrestoCommand(f"create schema {dstCatalog}.{dstSchema}" +
-                    clause, verbose = True)
+            clause = " with (location = '{l}/{s}')".format(l = hiveTarget,
+                    s = dstSchema) if dstCatalog == "hive" else ""
+            issuePrestoCommand("create schema {c}.{s}{w}".format(c = dstCatalog,
+                s = dstSchema, w = clause), verbose = True)
         else:
             dtab = issuePrestoCommand("show tables in {c}.{s}".format(c =
                 dstCatalog, s = dstSchema))
@@ -473,43 +609,51 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
 
 def eraseBucketContents():
     # Delete everything in the S3 bucket
+    assert target in clouds
+    env = getOutputVars()
     cmd = None
     if target == "aws":
-        cmd = f"aws s3 rm s3://{bucket} --recursive"
-    elif target == "azure":
-        env = getOutputVars()
-        try:
-            ak = env["adls_access_key"]
-            cmd = ("az storage fs directory delete -y --file-system {b} "
-                    "--account-name {s} --account-key {a} --name "
-                    "/datasets/{d}").format(b = bucket, s = storageacct, a =
-                            env["adls_access_key"], d = dbschema)
-        except KeyError as e:
-            print("Azure storage account appears to be shut down")
-    else:
-        return
+        cmd = "aws s3 rm s3://{b}/{d} --recursive".format(b = bucket, d =
+                dbschema)
+    elif target == "az" and "adls_access_key" in env:
+        cmd = ("az storage fs directory delete -y --file-system {b} "
+                "--account-name {s} --account-key {a} --name /{d}").format(b =
+                        bucket, s = storageacct, a = env["adls_access_key"], d =
+                        dbschema)
+    elif target == "gcp" and "object_address" in env:
+        cmd = "gsutil rm -rf {b}/{d}".format(b = env["object_address"], d =
+                dbschema)
 
     if cmd != None:
         announce(f"Deleting contents of bucket {bucket}")
-        runTry(cmd.split())
+        try:
+            runStdout(cmd.split())
+        except CalledProcessError as e:
+            print(f"Unable to erase bucket {bucket} (already empty?)")
 
-def loadDatabases():
+def loadDatabases(hive_location):
+    if target == "aws":
+        hive_location = f"s3://{bucket}"
+    elif target == "az":
+        hive_location = f"abfs://{bucket}@{hive_location}/"
+
     # First copy from tpch to hive...
     announce(f"populating tables in {hivecat}")
-    copySchemaTables(tpchcat, tpchschema, [hivecat], dbschema)
+    copySchemaTables(tpchcat, tpchschema, [hivecat], dbschema, hive_location)
 
     # Then copy from hive to everywhere in parallel
     ctab = issuePrestoCommand("show catalogs")
     dstCatalogs = [c[0] for c in ctab if c[0] not in avoidcat + [hivecat]]
     announce("populating tables in {}".format(", ".join(dstCatalogs)))
-    copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema)
+    copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema, "")
 
-def installLicense():
-    r = runTry(f"{kubens} get secrets {repo}".split())
-    if r.returncode != 0: runStdout(f"{kubens} create secret generic {repo} "
-                f"--from-file {licensef}".split())
-
-    announce(f"license file {licensef} is installed as secret")
+def installSecret(name, file):
+    r = runTry(f"{kubens} get secrets {name}".split())
+    # if the secret with that name doesn't yet exist, create it
+    if r.returncode != 0:
+        runStdout(f"{kubens} create secret generic {name} --from-file "
+                f"{file}".split())
+    announce(f"Secret {file} installed as \"{name}\"")
 
 def helmTry(cmd: str) -> subprocess.CompletedProcess:
     return runTry(["helm"] + cmd.split())
@@ -531,7 +675,8 @@ def ensureHelmRepoSetUp(repo: str) -> None:
     if (r := helmTry("repo list -o=json")).returncode == 0:
         repos = [x["name"] for x in json.loads(r.stdout)]
         if repo in repos:
-            announce(f"Verified repo {repo} already set up")
+            announce(f"Upgrading repo {repo}")
+            helm("repo update")
             return
 
     try:
@@ -574,44 +719,48 @@ def helmGetReleases() -> list:
         releases = helmGet(f"{helmns} ls --short").splitlines()
     except CalledProcessError as e:
         print("No helm releases found.")
-
     return releases
 
 def helmIsReleaseInstalled(module: str) -> bool:
     return releases[module] in helmGetReleases()
 
-def helmInstallRelease(module: str, kv = {}) -> bool:
-    installed = False
-
-    kv.update({
+def helmInstallRelease(module: str, env = {}) -> bool:
+    env.update(myvars)
+    env.update({
         "BucketName":        bucket,
         "DBName":            dbschema,
         "DBNameEventLogger": dbevtlog,
         "DBPassword":        dbpwd,
         "StorageAccount":    storageacct,
-        "mariadb_port":      dbports["mariadb"],
-        "postgres_port":     dbports["postgres"]
+        "mysql_port":        dbports["mysql"],
+        "postgres_port":     dbports["postgres"],
+        "target":            target
         })
 
     # Parameterise the yaml file that configures the helm chart install
-    kv.update(myvars)
-    yamltmp = parameteriseTemplate(templates[module], tmpdir, kv)
+    changed, yamltmp = parameteriseTemplate(templates[module], tmpdir, env)
 
-    if helmIsReleaseInstalled(module): # Upgrade
-        announce("Upgrading release {} using helm".format(releases[module]))
-        helm("{h} upgrade {r} {c} -i -f {y}".format(h = helmns, r =
-            releases[module], c = charts[module], y = yamltmp))
-    else: # Fresh install
-        installed = True
+    if not helmIsReleaseInstalled(module):
         announce("Installing release {} using helm".format(releases[module]))
-        helm("{h} install {r} {c} -f {y}".format(h = helmns, r =
-            releases[module], c = charts[module], y = yamltmp))
+        helm("{h} install {r} {c} -f {y} --version {v}".format(h = helmns, r =
+            releases[module], c = charts[module], y = yamltmp, v =
+            chartversion))
+        return True # freshly installed
 
-    return installed
+    if not changed:
+        print("Values file for {r} unchanged ➼ avoiding helm upgrade".format(r =
+            releases[module]))
+        return False
+
+    announce("Upgrading release {} using helm".format(releases[module]))
+    helm("{h} upgrade {r} {c} -i -f {y} --version {v}".format(h = helmns, r =
+        releases[module], c = charts[module], y = yamltmp, v = chartversion))
+    return False # upgraded, rather than newly installed
 
 def helmUninstallRelease(release: str) -> None:
-    helm(f"{helmns} uninstall {release}")
+    helm(f"{helmns} uninstall {release} --timeout=30s")
 
+# Normalise CPU to 1000ths of a CPU ("mCPU")
 def normaliseCPU(cpu) -> int:
     if cpu.endswith("m"):
         cpu = cpu[:-1]
@@ -622,6 +771,7 @@ def normaliseCPU(cpu) -> int:
         cpu = int(cpu) * 1000
     return cpu
 
+# Normalise memory to Ki
 def normaliseMem(mem) -> int:
     normalise = { "Ki": 0, "Mi": 10, "Gi": 20 }
     assert len(mem) > 2
@@ -676,6 +826,8 @@ def getMinNodeResources() -> tuple:
         if minmem == 0 or minmem > mem:
             minmem = mem
     assert mincpu > 0 and minmem > 0
+    print("All nodes have >= {c}m CPU and {m}Ki mem after K8S "
+            "system pods".format(c = mincpu, m = minmem))
     return mincpu, minmem
 
 def planWorkerSize() -> dict:
@@ -686,24 +838,37 @@ def planWorkerSize() -> dict:
     mem = {}
     cpu["worker"] = cpu["coordinator"] = (c >> 3) * 7
     mem["worker"] = mem["coordinator"] = (m >> 3) * 7
+    print("Workers & coordinator get {c}m CPU and {m}Mi mem".format(c =
+        cpu["worker"], m = mem["worker"] >> 10))
     cpu["ranger_admin"] = cpu["ranger_db"] = cpu["hive"] = cpu["hive_db"] = c >> 4
     mem["ranger_admin"] = mem["ranger_db"] = mem["hive"] = mem["hive_db"] = m >> 4
     assert cpu["worker"] + cpu["hive"] + cpu["hive_db"] <= c
     assert mem["worker"] + mem["hive"] + mem["hive_db"] <= m
     assert cpu["worker"] + cpu["ranger_admin"] + cpu["ranger_db"] <= c
     assert mem["worker"] + mem["ranger_admin"] + mem["ranger_db"] <= m
+    print("Hive gets {c}m CPU and {m}Mi mem".format(c = cpu["hive"] +
+        cpu["hive_db"], m = (mem["hive"] + mem["hive_db"]) >> 10))
+    print("Ranger gets {c}m CPU and {m}Mi mem".format(c = cpu["ranger_admin"] +
+        cpu["ranger_db"], m = (mem["ranger_admin"] + mem["ranger_db"]) >> 10))
     env = {f"{k}_cpu": f"{v}m" for k, v in cpu.items()}
     env.update({f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in mem.items()})
     assert nodeCount >= minnodes
     env["workerCount"] = nodeCount - 1
     return env
 
-def helmInstallAll(kv):
+def helmInstallAll(env):
     helmCreateNamespace()
-    installLicense()
+    installSecret(repo, licensef)
+
+    # For GCP, we'll need to store the secret for our GCS access in K8S
+    if target == "gcp":
+        installSecret(gcskeyname, gcskeyfile)
+        env["gcskeyname"] = gcskeyname
+        env["gskeyfbn"] = gcskeyfbn
+
     ensureHelmRepoSetUp(repo)
-    env = planWorkerSize()
-    env.update(kv)
+    capacities = planWorkerSize()
+    env.update(capacities)
     installed = False
     for module in modules:
         installed = helmInstallRelease(module, env) or installed
@@ -728,6 +893,12 @@ def awsGetCreds():
     awsSecret = runCollect("aws configure get aws_secret_access_key".split())
     return dict(AWSAccessKey=awsAccess, AWSSecretKey=awsSecret)
 
+def announceReady(env: dict) -> None:
+    w = ["Bastion: {b}".format(b = env["bastion_address"])]
+    for service, port in svcports.items():
+        w.append(f"{service}: localhost:{port}")
+    announceLoud(w)
+
 def svcStart(skipClusterStart: bool = False) -> None:
     # First see if there isn't a cluster created yet, and create the cluster.
     # This can take a long time. This will create the control plane and workers.
@@ -735,16 +906,17 @@ def svcStart(skipClusterStart: bool = False) -> None:
     env["Region"] = region
     env.update(awsGetCreds())
     helmInstallAll(env)
-    warnVpnConfig(["private_dns_address"] if target == "azure" else "")
     startPortForward()
-    loadDatabases()
+    loadDatabases(env["object_address"])
+    announceReady(env)
 
 def svcStop(emptyNodes: bool = False) -> None:
+    stopPortForward()
     t = time.time()
     helmUninstallAll()
+    eraseBucketContents()
     announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
         time.gmtime(time.time() - t)))
-    eraseBucketContents()
     if emptyNodes: return
 
     announce(f"Ensuring cluster {clustname} is deleted")
@@ -753,7 +925,6 @@ def svcStop(emptyNodes: bool = False) -> None:
     runStdout(f"{tf} destroy -auto-approve".split())
     announce("tf destroy completed in " + time.strftime("%Hh%Mm%Ss",
         time.gmtime(time.time() - t)))
-    stopPortForward()
 
 def getClusterState() -> Tuple[bool, bool]:
     started = stopped = False
@@ -766,29 +937,33 @@ def getClusterState() -> Tuple[bool, bool]:
     return started, stopped
 
 def checkCLISetup() -> None:
-    badAws = False
-    if not writeableDir(awsdir):
-        badAws = True
-        err = f"Directory {awsdir} doesn't exist or has bad permissions."
-    elif not readableFile(awsconfig):
-        badAws = True
-        err = f"File {awsconfig} doesn't exist or isn't readable."
-    elif not readableFile(awscreds):
-        badAws = True
-        err = f"File {awscreds} doesn't exist or isn't readable."
-    if badAws:
-        print(err)
-        sys.exit("Have you run aws configure?")
-
-    azuredir = os.path.expanduser("~/.azure")
-    if not writeableDir(azuredir):
-        print(f"Directory {azuredir} doesn't exist or isn't readable.")
-        sys.exit("Have you run az login and az configure?")
+    assert target in clouds
+    if target == "aws":
+        badAws = False
+        if not writeableDir(awsdir):
+            badAws = True
+            err = f"Directory {awsdir} doesn't exist or has bad permissions."
+        elif not readableFile(awsconfig):
+            badAws = True
+            err = f"File {awsconfig} doesn't exist or isn't readable."
+        elif not readableFile(awscreds):
+            badAws = True
+            err = f"File {awscreds} doesn't exist or isn't readable."
+        if badAws:
+            print(err)
+            sys.exit("Have you run aws configure?")
+    elif target == "az":
+        azuredir = os.path.expanduser("~/.azure")
+        if not writeableDir(azuredir):
+            print(f"Directory {azuredir} doesn't exist or isn't readable.")
+            sys.exit("Have you run az login and az configure?")
+    elif target == "gcp":
+        gcpdir = os.path.expanduser("~/.config/gcloud")
+        if not writeableDir(gcpdir):
+            print("Directory {gcpdir} doesn't exist or isn't readable.")
+            sys.exit("Have you run gcloud init?")
 
 def checkRSAKey() -> None:
-    rsa = os.path.expanduser("~/.ssh/id_rsa")
-    rsaPub = os.path.expanduser("~/.ssh/id_rsa.pub")
-
     if readableFile(rsa) and readableFile(rsaPub):
         return
 
@@ -808,42 +983,44 @@ def checkRSAKey() -> None:
 #
 
 p = argparse.ArgumentParser(description=
-        f"""Create your own Starbust demo service in AWS or Azure, starting from
-        nothing. You provide the instance ID of your VPN in {myvarsbf}, your
-        desired CIDR and some other parameters. This script uses terraform to
-        set up a K8S cluster, with its own VPC/VNet and K8S cluster, routes and
-        peering connections, security, etc. Presto is automatically set up and
-        multiple databases and a data lake are set up. It's designed to allow
-        you to control the new setup from your laptop, without necessarily using
-        a bastion server. The event logger is set up as well as Starburst
-        Insights (running on a PostgreSQL database).""")
+        f"""Create your own Starbust demo service in AWS, Azure or GCP, starting
+        from nothing. It's zero to demo in 20 minutes or less. You provide the
+        instance ID of your VPN in {myvarsbf}, your desired CIDR and some other
+        parameters. This script uses terraform to set up a K8S cluster, with its
+        own VPC/VNet and K8S cluster, routes and peering connections, security,
+        etc. Presto is automatically set up and multiple databases and a data
+        lake are set up. It's designed to allow you to control the new setup
+        from your laptop, without necessarily using a bastion server—although a
+        bastion server is also provided as a convenience. The event logger is
+        set up as well as Starburst Insights (running on a PostgreSQL
+        database).""")
 
 p.add_argument('-c', '--skip-cluster-start', action="store_true",
         help="Skip checking to see if cluster needs to be started")
 p.add_argument('-e', '--empty-nodes', action="store_true",
         help="Unload k8s cluster only. Used with stop or restart.")
 p.add_argument('command',
-        choices = ["start", "stop", "restart", "status", "pfstart", "pfstop",
-            "load"],
+        choices = ["start", "stop", "restart", "status", "pfstart", "pfstop"],
         help="""Command to issue for demo services.
            start/stop/restart: Start/stop/restart the demo environment.
            status: Show whether the demo environment is running or not.
            pfstart: Start port-forwarding from local ports to container ports
                     (happens with start).
-           pfstop: Stop port-forwarding from local ports to container ports.
-           load: Load databases with tpch data (happens with start).""")
+           pfstop: Stop port-forwarding from local ports to container ports.""")
 
 ns = p.parse_args()
 emptyNodes = ns.empty_nodes
 command = ns.command
 
-if emptyNodes and command != "stop":
+if emptyNodes and command not in ("stop", "restart"):
     p.error("-e, --empty-nodes is only used with stop and restart")
 
 checkCLISetup()
 checkRSAKey()
 
-announce(f"cloud '{target}', region '{region}'")
+announceLoud([f"Cloud: {target}",
+    f"Region: {region}",
+    f"Cluster: {nodeCount} × {instanceType}"])
 
 if command == "pfstart":
     startPortForward()
@@ -851,11 +1028,6 @@ if command == "pfstart":
 
 if command == "pfstop":
     stopPortForward()
-    sys.exit(0)
-
-if command == "load":
-    startPortForward()
-    loadDatabases()
     sys.exit(0)
 
 if command in ("stop", "restart"):
@@ -867,9 +1039,8 @@ if command in ("start", "restart"):
 started, stopped = getClusterState()
 
 if started:
-    announceLoud("Service is started")
+    announceLoud(["Service is started"])
 elif stopped:
-    announceLoud("Service is stopped")
+    announceLoud(["Service is stopped"])
 else:
-    announceLoud("Service state is undefined. Issue start or stop?")
-
+    announceLoud(["Service state is undefined. Issue start or stop?"])

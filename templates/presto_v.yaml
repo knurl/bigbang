@@ -65,17 +65,25 @@ catalogs:
   hive: |-
     connector.name=hive-hadoop2
     hive.metastore.uri=thrift://hive:9083
-    hive.azure.abfs-storage-account={{StorageAccount | default("Acct-1f-Blank", true)}}
-    hive.azure.abfs-access-key={{adls_access_key | default("Creds-1f-Blank", true)}}
     hive.non-managed-table-creates-enabled=true
     hive.non-managed-table-writes-enabled=true
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
+    # Azure
+    {% if target == "az" %}
+    hive.azure.abfs-storage-account={{StorageAccount}}
+    hive.azure.abfs-access-key={{adls_access_key}}
+    {% endif %}
+    # GCS
+    {% if target == "gcp" %}
+    hive.gcs.json-key-file-path=secretRef:{{gcskeyname}}:{{gskeyfbn}}
+    hive.gcs.use-access-token=false
+    {% endif %}
   mysql: |
     connector.name=mysql
-    connection-url=jdbc:mysql://{{mariadb_address}}:{{mariadb_port}}/
-    connection-user={{mariadb_user}}
+    connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/
+    connection-user={{mysql_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
   postgresql: |

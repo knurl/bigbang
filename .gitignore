@@ -5,12 +5,13 @@ kubeconfig_*
 .commit.swp
 .demosvc.py.swp
 .gitignore.swp
+*terraform.tfstate*
 __pycache__
 aws/.terraform*
-aws/terraform.tfstate*
 aws/variables*
-azure/.terraform*
-azure/terraform.tfstate*
-azure/variables*
+az/.terraform*
+az/variables*
+gcp/.terraform*
+gcp/variables*
 *.swp
 *.info
