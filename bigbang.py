@@ -201,6 +201,7 @@ kubecfgf    = os.path.expanduser("~/.kube/config")
 kubens      = f"kubectl --namespace {namespace}"
 azuredns    = "168.63.129.16"
 minnodes    = 3
+timeout     = "--timeout 1h"
 
 for d in [templatedir, tmpdir, tfdir]:
     assert writeableDir(d)
@@ -452,18 +453,18 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
 
     # Don't return until all nodes and K8S system pods are ready
     announce("Waiting for nodes to come online")
-    runStdout(f"{kube} wait --for=condition=Ready --timeout=5m --all "
+    runStdout(f"{kube} wait --for=condition=Ready {timeout} --all "
             "nodes".split())
     print("All nodes online")
     announce("Waiting for K8S system pods to come online")
     cmd = "{k} wait {v} --namespace=kube-system --for=condition=Ready " \
-            "--timeout=5m pods --all"
+            "{t} pods --all"
     try:
-        runStdout(cmd.format(k = kube, v = "").split())
+        runStdout(cmd.format(k = kube, v = "", t = timeout).split())
     except CalledProcessError as e:
         print("Timeout waiting for system pods. 2nd & final attempt.")
         # run again with verbose output
-        runStdout(cmd.format(k = kube, v = "--v=2").split())
+        runStdout(cmd.format(k = kube, v = "--v=2", t = timeout).split())
     print("All K8S system pods online")
     return env
 
@@ -479,10 +480,11 @@ def stopPortForward():
 def startPortForward():
     stopPortForward()
     announce("Waiting for pods to be ready")
-    runStdout(f"{kubens} wait --for=condition=Ready pods --all".split())
+    runStdout(f"{kubens} wait --for=condition=Ready pods --all "
+            f"{timeout}".split())
     announce("Waiting for services to be available")
     runStdout(f"{kubens} wait --for=condition=Available deployments.apps "
-            "--all".split())
+            f"--all {timeout}".split())
 
     #
     # Get the DNS name of the load balancers we've created
@@ -758,7 +760,7 @@ def helmInstallRelease(module: str, env = {}) -> bool:
     return False # upgraded, rather than newly installed
 
 def helmUninstallRelease(release: str) -> None:
-    helm(f"{helmns} uninstall {release} --timeout=30s")
+    helm(f"{helmns} uninstall {release} {timeout}")
 
 # Normalise CPU to 1000ths of a CPU ("mCPU")
 def normaliseCPU(cpu) -> int:
