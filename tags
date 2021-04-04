@@ -8,6 +8,7 @@ ApiError	bigbang.py	/^class ApiError(Exception):$/;"	c
 announce	bigbang.py	/^def announce(s):$/;"	f
 announceBox	bigbang.py	/^def announceBox(s):$/;"	f
 announceLoud	bigbang.py	/^def announceLoud(lines: list) -> None:$/;"	f
+announceReady	bigbang.py	/^def announceReady(env: dict) -> None:$/;"	f
 announceSqlEnd	bigbang.py	/^def announceSqlEnd(s):$/;"	f
 announceSqlStart	bigbang.py	/^def announceSqlStart(s):$/;"	f
 avoidcat	bigbang.py	/^avoidcat    = [tpchcat, syscat, evtlogcat]$/;"	v
@@ -20,6 +21,9 @@ awsvpnlabel	bigbang.py	/^awsvpnlabel = "AWSVPNInstanceIDs"$/;"	v
 awsvpns	bigbang.py	/^    awsvpns      = myvars[awsvpnlabel]$/;"	v
 azuredns	bigbang.py	/^azuredns    = "168.63.129.16"$/;"	v
 azurevpns	bigbang.py	/^    azurevpns    = myvars["AzureVPNVnetNames"]$/;"	v
+bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AWSBastionInstanceType"]$/;"	v
+bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AzureBastionVMType"]$/;"	v
+bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["GCPBastionMachineType"]$/;"	v
 bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 charts	bigbang.py	/^charts = {}$/;"	v
 chartversion	bigbang.py	/^    chartversion = myvars[chartvlabel]$/;"	v
@@ -78,6 +82,9 @@ help	bigbang.py	/^        help="Skip checking to see if cluster needs to be star
 help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
 hivecat	bigbang.py	/^hivecat     = "hive"$/;"	v
 installSecret	bigbang.py	/^def installSecret(name, file):$/;"	f
+instanceType	bigbang.py	/^    instanceType = myvars["AWSInstanceType"]$/;"	v
+instanceType	bigbang.py	/^    instanceType = myvars["AzureVMType"]$/;"	v
+instanceType	bigbang.py	/^    instanceType = myvars["GCPMachineType"]$/;"	v
 ipntwk	bigbang.py	/^    ipntwk = ipaddress.ip_network(mySubnetCidr)$/;"	v
 issuePrestoCommand	bigbang.py	/^def issuePrestoCommand(command: str, verbose = False) -> list:$/;"	f
 kube	bigbang.py	/^kube        = "kubectl"$/;"	v
@@ -108,7 +115,7 @@ readableFile	bigbang.py	/^def readableFile(p):$/;"	f
 region	bigbang.py	/^    region = zone[:-2]$/;"	v
 region	bigbang.py	/^region = zone$/;"	v
 releases	bigbang.py	/^releases = {}$/;"	v
-replaceFile	bigbang.py	/^def replaceFile(filepath, contents):$/;"	f
+replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
 repo	bigbang.py	/^    repo         = myvars["HelmRepo"]$/;"	v
 repoloc	bigbang.py	/^    repoloc      = myvars["HelmRepoLocation"]$/;"	v
 repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
