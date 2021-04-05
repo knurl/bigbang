@@ -10,6 +10,8 @@ expose:
     annotations:
       {% if target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+      {% elif target == "az" %}
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
       {% elif target == "gcp" %}
       networking.gke.io/load-balancer-type: "Internal"
       {% endif %}
