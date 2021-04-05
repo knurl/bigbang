@@ -9,8 +9,8 @@ Email: rob.anderson@starburstdata.com
 #Zone: eu-west-3 # AWS - Paris, France
 #Zone: eu-west-2 # AWS - London, UK
 #Zone: us-east-2 # AWS - Columbus, OH, USA
-#Zone: francecentral # Azure - Paris, France
-Zone: europe-west1-b # GCP - St. Ghislain, Belgium
+Zone: francecentral # Azure - Paris, France
+#Zone: europe-west1-b # GCP - St. Ghislain, Belgium
 
 # Version of Starburst you want to install. This must match across
 # starburst-presto, starburst-ranger, and starburst-hive.

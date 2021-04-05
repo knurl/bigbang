@@ -31,3 +31,9 @@ resource "azurerm_kubernetes_cluster" "k8s" {
 
   tags                        = var.tags
 }
+
+resource "azurerm_role_assignment" "assignment" {
+  principal_id         = azurerm_kubernetes_cluster.k8s.identity[0].principal_id
+  role_definition_name = "Network Contributor"
+  scope                = azurerm_virtual_network.vnet.id
+}

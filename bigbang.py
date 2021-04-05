@@ -387,8 +387,14 @@ def updateKubeConfig(kubecfg: str) -> None:
                 f"--region {zone} --internal-ip".split())
 
 def getMyPublicIp() -> str:
-    i = runCollect("dig +short myip.opendns.com @resolver1.opendns.com "
-            "-4".split())
+    announce("Getting public IP address")
+    try:
+        i = runCollect("dig +short myip.opendns.com @resolver1.opendns.com "
+                "-4".split())
+    except CalledProcessError as e:
+        sys.exit("Unable to reach the internet. Are your DNS resolvers set "
+                "correctly?")
+
     try:
         myIp = ipaddress.ip_address(i)
         # TODO: This statement won't actually be true until we exclude VPN
@@ -402,6 +408,7 @@ def getMyPublicIp() -> str:
         raise
 
 def getSshPublicKey() -> str:
+    announce(f"Retrieving public ssh key {rsaPub}")
     try:
         with open(rsaPub) as rf:
             return rf.read()
@@ -444,6 +451,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     parameteriseTemplate(tfvars, tfdir, env)
 
     if not skipClusterStart:
+        announce("Starting terraform apply")
         runStdout(f"{tf} init -input=false -upgrade".split())
         t = time.time()
         runStdout(f"{tf} apply -auto-approve -input=false".split())
