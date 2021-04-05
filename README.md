@@ -89,7 +89,8 @@ file containing your access key ID and secret access key. You'll never need to
 change the `.credentials` file, but you will need to update the `config` file if
 you want to work in a different region.
 
-See [this link](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config) for the full instructions.
+See [this link](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config)
+for the full instructions.
 
 ### Azure CLI
 
@@ -99,12 +100,18 @@ will fire up your default browser and have you log into the Azure Portal with
 your Microsoft credentials. After running these commands you'll have a
 `~/.azure` directory created with your settings and access tokens inside.
 
+See [this link](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-macos)
+for the full instructions.
+
 ### GCloud SDK
 
 After the installation of the `gcloud`, `gsutil` and the rest of the Google
 Cloud SDK, you'll need to configure it by running `gcloud init`. Once that is
 completed you'll have a `~/.config/gcloud` directory with all of the
 configuration inside of it.
+
+See [this link](https://blog.petehouston.com/install-and-configure-google-cloud-sdk-using-homebrew/)
+for the full instructions.
 
 ### Python
 
