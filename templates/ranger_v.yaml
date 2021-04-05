@@ -8,7 +8,11 @@ expose:
   type: loadBalancer
   loadBalancer:
     annotations:
+      {% if target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+      {% elif target == "gcp" %}
+      networking.gke.io/load-balancer-type: "Internal"
+      {% endif %}
 
 admin:
   resources:

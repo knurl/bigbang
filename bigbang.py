@@ -349,7 +349,8 @@ def parameteriseTemplate(template, targetDir, varsDict):
     # render the template with the parameters, and capture the result
     try:
         file_loader = jinja2.FileSystemLoader(templatedir)
-        env = jinja2.Environment(loader = file_loader)
+        env = jinja2.Environment(loader = file_loader, trim_blocks = True,
+                lstrip_blocks = True)
         t = env.get_template(template)
         output = t.render(varsDict)
     except jinja2.TemplateNotFound as e:

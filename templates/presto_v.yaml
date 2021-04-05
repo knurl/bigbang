@@ -10,7 +10,11 @@ expose:
   type: loadBalancer
   loadBalancer:
     annotations:
+      {% if target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+      {% elif target == "gcp" %}
+      networking.gke.io/load-balancer-type: "Internal"
+      {% endif %}
 
 coordinator:
   etcFiles:
@@ -70,13 +74,10 @@ catalogs:
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
-    # Azure
     {% if target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
-    {% endif %}
-    # GCS
-    {% if target == "gcp" %}
+    {% elif target == "gcp" %}
     hive.gcs.json-key-file-path=secretRef:{{gcskeyname}}:{{gskeyfbn}}
     hive.gcs.use-access-token=false
     {% endif %}
