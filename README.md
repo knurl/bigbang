@@ -68,7 +68,7 @@ is done, you'll have access to an executable called `brew`:
 You now should install the following required Homebrew formulae, like this:
 
 ```
-brew install awscli azure-cli gscloud aws-iam-authenticator helm kubectl \
+brew install awscli azure-cli gcloud aws-iam-authenticator helm kubectl \
     libyaml socat terraform
 ```
 
