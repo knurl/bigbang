@@ -32,12 +32,11 @@ resource "google_compute_firewall" "fw-bastion" {
   name        = "fw-bastion"
   network     = data.google_compute_network.vpc.self_link
   project     = data.google_project.project.project_id
+  # Restrict to home IP or VPN
+  source_ranges = ["${var.my_public_ip}/32", "10.0.0.0/8"]
   allow {
     protocol  = "tcp"
     ports     = ["22"]
-  }
-  allow {
-    protocol  = "icmp"
   }
   target_tags = ["bastion"]
 }

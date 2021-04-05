@@ -168,7 +168,7 @@ except KeyError as e:
 myvars.update(helmcreds)
 
 #
-# Global variables. TODO convert MariaDB everywhere to MySQL
+# Global variables.
 #
 clouds      = ("aws", "az", "gcp")
 templatedir = where("templates")
@@ -241,7 +241,7 @@ def announceLoud(lines: list) -> None:
     maxl = max(map(len, lines))
     lt = "┃⮚ "
     rt = " ⮘┃"
-    p = ["{l}{t}{r}".format(l = lt, t = l.center(maxl), r = rt) for l in lines]
+    p = ["{l}{t}{r}".format(l = lt, t = i.center(maxl), r = rt) for i in lines]
     pmaxl = maxl + len(lt) + len(rt)
     print('┏' + '━' * (pmaxl - 2) + '┓')
     for i in p:
@@ -290,31 +290,37 @@ def warnVpnConfig(privateDnsAddr: str = ""):
     announceBox(s)
 
 def replaceFile(filepath, contents) -> bool:
-    oldmd5 = None
+    newmd5 = hashlib.md5(contents.encode('utf-8')).hexdigest()
+    root, ext = os.path.splitext(filepath)
+
     if os.path.exists(filepath):
-        if os.path.isfile(filepath):
+        if not os.path.isfile(filepath):
+            sys.exit("Please manually remove {filepath} and rerun")
+        # We have an old file by the same name. Check the extension, as we only
+        # embed the md5 and version in file formats that take comments, and
+        # .json files don't take comments.
+        if ext in (".yaml", ".tf"):
             with open(filepath) as fh:
                 fl = fh.readline()
                 if len(fl) > 0:
-                    match = re.match("# md5: ([0-9a-f]{32})", fl)
-                    if match:
-                        oldmd5 = match.group(1)
-        else:
-            sys.exit("Please manually remove {filepath} and rerun")
-
-    newmd5 = hashlib.md5(contents.encode('utf-8')).hexdigest()
-    if oldmd5 != None and oldmd5 == newmd5:
-        # It's the same file. Don't bother writing it.
-        return False # didn't write
+                    if match := re.match(r"# md5 ([\da-f]{32}) ver "
+                            "(\d+\.\d+\.\d+)", fl):
+                        if newmd5 == match.group(1) and \
+                                chartversion == match.group(2):
+                            # It's the same file. Don't bother writing it.
+                            return False # didn't write
+        # We have an old file, but the md5 doesn't match, indicating it has been
+        # updated. We want to remove the old one in preparation for the update.
+        os.remove(filepath)
 
     # some of the files being written contain secrets in plaintext, so don't
     # allow them to be read by anyone but the user
-    os.remove(filepath) # remove the old one
     os.umask(0)
     flags = os.O_CREAT | os.O_WRONLY | os.O_EXCL # we are writing new one
     try:
         with open(os.open(path=filepath, flags=flags, mode=0o600), 'w') as fh:
-            fh.write(f"# md5: {newmd5}\n")
+            if ext in (".yaml", ".tf"):
+                fh.write(f"# md5 {newmd5} ver {chartversion}\n")
             fh.write(contents)
     except IOError as e:
         print(f"Couldn't write file {filepath} due to {e}")
@@ -364,7 +370,7 @@ def updateKubeConfig(kubecfg: str) -> None:
         print(f"wrote out kubectl file to {kubecfgf}")
     elif target == "az":
         runStdout(f"az aks get-credentials --resource-group {resourcegrp} "
-                f"--name {clustname}".split())
+                f"--name {clustname} --overwrite-existing".split())
     elif target == "gcp":
         runStdout(f"gcloud container clusters get-credentials {clustname} "
                 f"--region {zone} --internal-ip".split())
@@ -374,7 +380,9 @@ def getMyPublicIp() -> str:
             "-4".split())
     try:
         myIp = ipaddress.ip_address(i)
-        announceBox(f"Your visible IP address is {myIp}. Ingress to your "
+        # TODO: This statement won't actually be true until we exclude VPN
+        # access for AWS and GCP, and restrict home access for Azure too.
+        text = announceBox(f"Your visible IP address is {myIp}. Ingress to your "
                 "newly-created bastion server will be limited to this address "
                 "exclusively.")
         return myIp
@@ -446,10 +454,6 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
 
     updateKubeConfig(env["kubectl_config"] if "kubectl_config" in env else "")
     warnVpnConfig(env["private_dns_address"] if target == "az" else "")
-
-#   TODO: Complete this function so we can set DNS for the user
-#    if target == "az":
-#        checkDnsConfig(env["private_dns_address"])
 
     # Don't return until all nodes and K8S system pods are ready
     announce("Waiting for nodes to come online")
@@ -895,11 +899,11 @@ def awsGetCreds():
     awsSecret = runCollect("aws configure get aws_secret_access_key".split())
     return dict(AWSAccessKey=awsAccess, AWSSecretKey=awsSecret)
 
-def announceReady(env: dict) -> None:
+def announceReady(env: dict) -> list:
     w = ["Bastion: {b}".format(b = env["bastion_address"])]
     for service, port in svcports.items():
         w.append(f"{service}: localhost:{port}")
-    announceLoud(w)
+    return w
 
 def svcStart(skipClusterStart: bool = False) -> None:
     # First see if there isn't a cluster created yet, and create the cluster.
@@ -910,7 +914,7 @@ def svcStart(skipClusterStart: bool = False) -> None:
     helmInstallAll(env)
     startPortForward()
     loadDatabases(env["object_address"])
-    announceReady(env)
+    return announceReady(env)
 
 def svcStop(emptyNodes: bool = False) -> None:
     stopPortForward()
@@ -928,15 +932,14 @@ def svcStop(emptyNodes: bool = False) -> None:
     announce("tf destroy completed in " + time.strftime("%Hh%Mm%Ss",
         time.gmtime(time.time() - t)))
 
-def getClusterState() -> Tuple[bool, bool]:
-    started = stopped = False
-
-    if (r := runTry(f"{tf} plan -input=false -detailed-exitcode".split())).returncode == 0:
-        started = True
-    elif (r := runTry(f"{tf} state list".split())).returncode == 0 and len(r.stdout) == 0:
-        stopped = True
-
-    return started, stopped
+def getClusterState() -> tuple:
+    r = runTry(f"{tf} plan -input=false "
+            "-detailed-exitcode".split()).returncode
+    if r == 0:
+        env = getOutputVars()
+        w = ["Bastion: {b}".format(b = env["bastion_address"])]
+        return True, w
+    return False, []
 
 def checkCLISetup() -> None:
     assert target in clouds
@@ -980,6 +983,17 @@ def checkRSAKey() -> None:
             print(f"Unable to write {rsa}. Try yourself?")
     sys.exit(f"Script cannot continue without {rsa} file.")
 
+def announceSummary() -> None:
+    if target == "aws":
+        cloud = "Amazon Web Services"
+    elif target == "az":
+        cloud = "Microsoft Azure"
+    else:
+        cloud = "Google Cloud Services"
+    announceLoud([f"Cloud: {cloud}",
+        f"Region: {region}",
+        f"Cluster: {nodeCount} × {instanceType}"])
+
 #
 # Start of execution. Handle commandline args.
 #
@@ -1020,10 +1034,6 @@ if emptyNodes and command not in ("stop", "restart"):
 checkCLISetup()
 checkRSAKey()
 
-announceLoud([f"Cloud: {target}",
-    f"Region: {region}",
-    f"Cluster: {nodeCount} × {instanceType}"])
-
 if command == "pfstart":
     startPortForward()
     sys.exit(0)
@@ -1032,17 +1042,24 @@ if command == "pfstop":
     stopPortForward()
     sys.exit(0)
 
+announceSummary()
+
+w = []
+started = False
+
 if command in ("stop", "restart"):
     svcStop(emptyNodes)
 
 if command in ("start", "restart"):
-    svcStart(ns.skip_cluster_start)
+    w = svcStart(ns.skip_cluster_start)
+    started = True
 
-started, stopped = getClusterState()
+if command == "status":
+    started, w = getClusterState()
 
-if started:
-    announceLoud(["Service is started"])
-elif stopped:
-    announceLoud(["Service is stopped"])
-else:
-    announceLoud(["Service state is undefined. Issue start or stop?"])
+y = ["Service is " + ("started" if started else "stopped")]
+if len(w) > 0:
+    y += w
+announceBox(f"Your {rsaPub} public key has been installed into the bastion "
+        "server, so you can ssh there now (user 'ubuntu').")
+announceLoud(y)

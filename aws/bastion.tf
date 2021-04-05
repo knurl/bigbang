@@ -27,14 +27,14 @@ resource "aws_security_group" "bastion_sg" {
     from_port            = 22
     to_port              = 22
     protocol             = "tcp"
-    cidr_blocks          = ["${var.my_public_ip}/32"] # Restrict to home IP only
+    cidr_blocks          = ["${var.my_public_ip}/32"] # Restrict to home IP...
   }
 
   ingress {
     from_port            = 22
     to_port              = 22
     protocol             = "tcp"
-    cidr_blocks          = ["172.16.0.0/12"]
+    cidr_blocks          = ["172.16.0.0/12"] # ... or those coming in via VPN
   }
 
   tags                   = merge(var.tags, {Name = "bastion_sg"})

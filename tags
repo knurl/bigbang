@@ -8,9 +8,10 @@ ApiError	bigbang.py	/^class ApiError(Exception):$/;"	c
 announce	bigbang.py	/^def announce(s):$/;"	f
 announceBox	bigbang.py	/^def announceBox(s):$/;"	f
 announceLoud	bigbang.py	/^def announceLoud(lines: list) -> None:$/;"	f
-announceReady	bigbang.py	/^def announceReady(env: dict) -> None:$/;"	f
+announceReady	bigbang.py	/^def announceReady(env: dict) -> list:$/;"	f
 announceSqlEnd	bigbang.py	/^def announceSqlEnd(s):$/;"	f
 announceSqlStart	bigbang.py	/^def announceSqlStart(s):$/;"	f
+announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
 avoidcat	bigbang.py	/^avoidcat    = [tpchcat, syscat, evtlogcat]$/;"	v
 awsGetCreds	bigbang.py	/^def awsGetCreds():$/;"	f
 awsconfig	bigbang.py	/^awsconfig = os.path.expanduser("~\/.aws\/config")$/;"	v
@@ -57,7 +58,7 @@ gcskeyfile	bigbang.py	/^gcskeyfile  = tfdir + "\/" + gcskeyfbn$/;"	v
 gcskeyname	bigbang.py	/^gcskeyname  = "gcs-keyfile"$/;"	v
 generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
-getClusterState	bigbang.py	/^def getClusterState() -> Tuple[bool, bool]:$/;"	f
+getClusterState	bigbang.py	/^def getClusterState() -> tuple:$/;"	f
 getMinNodeResources	bigbang.py	/^def getMinNodeResources() -> tuple:$/;"	f
 getMyPublicIp	bigbang.py	/^def getMyPublicIp() -> str:$/;"	f
 getOutputVars	bigbang.py	/^def getOutputVars() -> dict:$/;"	f
@@ -133,6 +134,8 @@ s	bigbang.py	/^s = username + zone$/;"	v
 shortname	bigbang.py	/^shortname = code + str(octet).zfill(3)$/;"	v
 sqlstr	bigbang.py	/^sqlstr = "Issued 🢩 "$/;"	v
 startPortForward	bigbang.py	/^def startPortForward():$/;"	f
+started	bigbang.py	/^    started = True$/;"	v
+started	bigbang.py	/^started = False$/;"	v
 stopPortForward	bigbang.py	/^def stopPortForward():$/;"	f
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
 svcStart	bigbang.py	/^def svcStart(skipClusterStart: bool = False) -> None:$/;"	f
@@ -146,12 +149,16 @@ templatedir	bigbang.py	/^templatedir = where("templates")$/;"	v
 templates	bigbang.py	/^templates = {}$/;"	v
 tfdir	bigbang.py	/^tfdir       = where(target)$/;"	v
 tfvars	bigbang.py	/^tfvars      = "variables.tf" # basename only, no path!$/;"	v
+timeout	bigbang.py	/^timeout     = "--timeout 1h"$/;"	v
 tmpdir	bigbang.py	/^tmpdir      = "\/tmp"$/;"	v
 tpchcat	bigbang.py	/^tpchcat     = "tpch"$/;"	v
 tpchschema	bigbang.py	/^tpchschema  = "tiny"$/;"	v
 updateKubeConfig	bigbang.py	/^def updateKubeConfig(kubecfg: str) -> None:$/;"	f
 username	bigbang.py	/^username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035$/;"	v
+w	bigbang.py	/^    w = svcStart(ns.skip_cluster_start)$/;"	v
+w	bigbang.py	/^w = []$/;"	v
 warnVpnConfig	bigbang.py	/^def warnVpnConfig(privateDnsAddr: str = ""):$/;"	f
 where	bigbang.py	/^def where(leaf):$/;"	f
 writeableDir	bigbang.py	/^def writeableDir(p):$/;"	f
+y	bigbang.py	/^y = ["Service is " + ("started" if started else "stopped")]$/;"	v
 zone	bigbang.py	/^    zone         = myvars["Zone"]$/;"	v

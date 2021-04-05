@@ -61,15 +61,4 @@ resource "google_container_cluster" "gke" {
     labels                        = var.tags
   }
   resource_labels                 = var.tags
-
-  # This dependency can be necessary during destroys to avoid connections to the
-  # databases that prevent them from being destroyed.
-  # https://github.com/hashicorp/terraform-provider-google/issues/3820
-  #
-  #  depends_on = [
-  #    google_service_account.gke_servacct,
-  #    google_sql_database.db_evtlog,
-  #    google_sql_database.db_postgres,
-  #    google_sql_database.db_mysql
-  #  ]
 }
