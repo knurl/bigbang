@@ -327,6 +327,14 @@ def replaceFile(filepath, contents) -> bool:
         raise
     return True # wrote new file
 
+def removeOldVersions(yamltmp: str, similar: str) -> None:
+    old = glob.glob(similar)
+    for f in old:
+        if f == yamltmp:
+            continue # skip the one we're about to write
+        print(f"Removing old parameterised file {f}")
+        os.remove(f)
+
 def parameteriseTemplate(template, targetDir, varsDict):
     assert os.path.basename(template) == template, \
             f"YAML template {template} should be in basename form (no path)"
@@ -335,6 +343,8 @@ def parameteriseTemplate(template, targetDir, varsDict):
 
     # temporary file where we'll write the filled-in template
     yamltmp = f"{targetDir}/{root}-{shortname}{ext}"
+    similar = f"{targetDir}/{root}-*{ext}"
+    removeOldVersions(yamltmp, similar)
 
     # render the template with the parameters, and capture the result
     try:
