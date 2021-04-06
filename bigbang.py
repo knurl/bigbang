@@ -1072,13 +1072,14 @@ if command in ("stop", "restart"):
 if command in ("start", "restart"):
     w = svcStart(ns.skip_cluster_start)
     started = True
+    announceBox(f"Your {rsaPub} public key has been installed into the bastion "
+            "server, so you can ssh there now (user 'ubuntu').")
 
 if command == "status":
+    announce("Fetching current status")
     started, w = getClusterState()
 
 y = ["Service is " + ("started" if started else "stopped")]
 if len(w) > 0:
     y += w
-announceBox(f"Your {rsaPub} public key has been installed into the bastion "
-        "server, so you can ssh there now (user 'ubuntu').")
 announceLoud(y)
