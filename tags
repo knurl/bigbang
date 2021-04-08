@@ -116,6 +116,7 @@ readableFile	bigbang.py	/^def readableFile(p):$/;"	f
 region	bigbang.py	/^    region = zone[:-2]$/;"	v
 region	bigbang.py	/^region = zone$/;"	v
 releases	bigbang.py	/^releases = {}$/;"	v
+removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
 replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
 repo	bigbang.py	/^    repo         = myvars["HelmRepo"]$/;"	v
 repoloc	bigbang.py	/^    repoloc      = myvars["HelmRepoLocation"]$/;"	v
@@ -157,6 +158,7 @@ updateKubeConfig	bigbang.py	/^def updateKubeConfig(kubecfg: str) -> None:$/;"	f
 username	bigbang.py	/^username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035$/;"	v
 w	bigbang.py	/^    w = svcStart(ns.skip_cluster_start)$/;"	v
 w	bigbang.py	/^w = []$/;"	v
+waitForCondition	bigbang.py	/^def waitForCondition(resource: str, condition: str, minresources: int) -> None:$/;"	f
 warnVpnConfig	bigbang.py	/^def warnVpnConfig(privateDnsAddr: str = ""):$/;"	f
 where	bigbang.py	/^def where(leaf):$/;"	f
 writeableDir	bigbang.py	/^def writeableDir(p):$/;"	f

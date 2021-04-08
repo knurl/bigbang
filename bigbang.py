@@ -415,6 +415,35 @@ def getSshPublicKey() -> str:
     except IOError as e:
         sys.exit(f"Unable to read your public RSA key {rsaPub}")
 
+# This whole function exists because of a race condition in kubectl wait (see
+# https://github.com/kubernetes/kubernetes/issues/83242). kubectl tries to look
+# for resources to wait for, matching the specified criteria, and if it doesn't
+# find any it fails out. This doesn't take into account that the necessary
+# resources may not have yet appeared.
+def waitForCondition(resource: str, condition: str, minresources: int) -> None:
+    out = ""
+    attempts = 1
+    stime = 1 # 2 seconds, doubling every time as a backoff
+    while True:
+        r = runTry(f"{kube} get {resource} --output=name -A".split())
+        if r.returncode == 0 and r.stdout.count('\n') >= minresources:
+            r = runTry(f"{kube} wait --for=condition={condition} --timeout 0 "
+                    f"--all {resource} -A --output=name".split())
+            if r.returncode == 0:
+                out = r.stdout.strip()
+                if r.stdout.count('\n') >= minresources:
+                    break
+                elif attempts & 3 == 0:
+                    print("So far I have these:\n" + out)
+        print(f"Waiting for {resource} to reach '{condition}' state "
+                f"(attempts = {attempts})...")
+        time.sleep(stime)
+        attempts += 1
+        stime <<= 1
+
+    print(out)
+    print(f"All {resource} are in '{condition}' state")
+
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars
     env.update({
@@ -476,19 +505,9 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
 
     # Don't return until all nodes and K8S system pods are ready
     announce("Waiting for nodes to come online")
-    runStdout(f"{kube} wait --for=condition=Ready {timeout} --all "
-            "nodes".split())
-    print("All nodes online")
+    waitForCondition("nodes", "Ready", nodeCount)
     announce("Waiting for K8S system pods to come online")
-    cmd = "{k} wait {v} --namespace=kube-system --for=condition=Ready " \
-            "{t} pods --all"
-    try:
-        runStdout(cmd.format(k = kube, v = "", t = timeout).split())
-    except CalledProcessError as e:
-        print("Timeout waiting for system pods. 2nd & final attempt.")
-        # run again with verbose output
-        runStdout(cmd.format(k = kube, v = "--v=2", t = timeout).split())
-    print("All K8S system pods online")
+    waitForCondition("pods", "Ready", nodeCount*2)
     return env
 
 def stopPortForward():
@@ -503,11 +522,9 @@ def stopPortForward():
 def startPortForward():
     stopPortForward()
     announce("Waiting for pods to be ready")
-    runStdout(f"{kubens} wait --for=condition=Ready pods --all "
-            f"{timeout}".split())
+    waitForCondition("pods", "Ready", nodeCount*2)
     announce("Waiting for services to be available")
-    runStdout(f"{kubens} wait --for=condition=Available deployments.apps "
-            f"--all {timeout}".split())
+    waitForCondition("deployments.apps", "Available", 5)
 
     #
     # Get the DNS name of the load balancers we've created
@@ -567,7 +584,7 @@ class ApiError(Exception):
     pass
 
 def issuePrestoCommand(command: str, verbose = False) -> list:
-    httpmaxretries = 5
+    httpmaxretries = 10
     if verbose: announceSqlStart(command)
     url = "http://localhost:{}/v1/statement".format(svcports["presto"])
     headers = { "X-Presto-User": "presto_service" }
