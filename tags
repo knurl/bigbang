@@ -12,7 +12,7 @@ announceReady	bigbang.py	/^def announceReady(env: dict) -> list:$/;"	f
 announceSqlEnd	bigbang.py	/^def announceSqlEnd(s):$/;"	f
 announceSqlStart	bigbang.py	/^def announceSqlStart(s):$/;"	f
 announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
-avoidcat	bigbang.py	/^avoidcat    = [tpchcat, syscat, evtlogcat]$/;"	v
+avoidcat	bigbang.py	/^avoidcat    = [tpchcat, syscat, evtlogcat, bqcat]$/;"	v
 awsGetCreds	bigbang.py	/^def awsGetCreds():$/;"	f
 awsconfig	bigbang.py	/^awsconfig = os.path.expanduser("~\/.aws\/config")$/;"	v
 awscreds	bigbang.py	/^awscreds = os.path.expanduser("~\/.aws\/credentials")$/;"	v
@@ -25,6 +25,7 @@ azurevpns	bigbang.py	/^    azurevpns    = myvars["AzureVPNVnetNames"]$/;"	v
 bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AWSBastionInstanceType"]$/;"	v
 bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AzureBastionVMType"]$/;"	v
 bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["GCPBastionMachineType"]$/;"	v
+bqcat	bigbang.py	/^bqcat       = "bigquery" # for now, connector doesn't support INSERT or CTAS$/;"	v
 bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 charts	bigbang.py	/^charts = {}$/;"	v
 chartversion	bigbang.py	/^    chartversion = myvars[chartvlabel]$/;"	v
@@ -96,7 +97,7 @@ licensebf	bigbang.py	/^licensebf = f"{license}.license"$/;"	v
 licensef	bigbang.py	/^licensef = where(licensebf)$/;"	v
 loadDatabases	bigbang.py	/^def loadDatabases(hive_location):$/;"	f
 minnodes	bigbang.py	/^minnodes    = 3$/;"	v
-modules	bigbang.py	/^modules = ["hive", "ranger", "presto"]$/;"	v
+modules	bigbang.py	/^modules = ["hive", "ranger", "enterprise"]$/;"	v
 myDir	bigbang.py	/^def myDir():$/;"	f
 mySubnetCidr	bigbang.py	/^mySubnetCidr = genmask(target, octet)$/;"	v
 myvarsbf	bigbang.py	/^myvarsbf = "my-vars.yaml"$/;"	v
@@ -141,7 +142,7 @@ stopPortForward	bigbang.py	/^def stopPortForward():$/;"	f
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
 svcStart	bigbang.py	/^def svcStart(skipClusterStart: bool = False) -> None:$/;"	f
 svcStop	bigbang.py	/^def svcStop(emptyNodes: bool = False) -> None:$/;"	f
-svcports	bigbang.py	/^svcports    = { "presto": 8080, "ranger": 6080 }$/;"	v
+svcports	bigbang.py	/^svcports    = { "starburst": 8080, "ranger": 6080 }$/;"	v
 syscat	bigbang.py	/^syscat      = "system"$/;"	v
 target	bigbang.py	/^    target = "aws"$/;"	v
 target	bigbang.py	/^    target = "az"$/;"	v

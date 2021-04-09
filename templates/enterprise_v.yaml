@@ -24,8 +24,8 @@ coordinator:
       access-control.properties: |
         access-control.name = ranger
         ranger.authentication-type = BASIC
-        ranger.presto-plugin-username = presto_service
-        ranger.presto-plugin-password = RangerPassword1
+        ranger.username = presto_service
+        ranger.password = RangerPassword1
         ranger.service-name = starburst-enterprise-presto
         ranger.policy-rest-url = http://ranger:6080
         ranger.policy-refresh-interval = 10s
@@ -76,13 +76,16 @@ catalogs:
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
-    {% if target == "az" %}
+{% if target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
-    {% elif target == "gcp" %}
+{% elif target == "gcp" %}
     hive.gcs.json-key-file-path=secretRef:{{gcskeyname}}:{{gskeyfbn}}
     hive.gcs.use-access-token=false
-    {% endif %}
+  bigquery: |
+    connector.name=bigquery
+    bigquery.project-id={{project_id}}
+{% endif %}
   mysql: |
     connector.name=mysql
     connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/
@@ -101,4 +104,3 @@ catalogs:
     connection-user={{evtlog_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
-

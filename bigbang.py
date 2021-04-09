@@ -189,7 +189,8 @@ gcskeyfbn   = f"key.json"
 gcskeyfile  = tfdir + "/" + gcskeyfbn
 tf          = f"terraform -chdir={tfdir}"
 evtlogcat   = "postgresqlel"
-avoidcat    = [tpchcat, syscat, evtlogcat]
+bqcat       = "bigquery" # for now, connector doesn't support INSERT or CTAS
+avoidcat    = [tpchcat, syscat, evtlogcat, bqcat]
 dbschema    = "fdd"
 dbevtlog    = "evtlog" # event logger PostgreSQL instance
 dbuser      = "fdd"
