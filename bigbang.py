@@ -176,7 +176,7 @@ tmpdir      = "/tmp"
 rsa         = os.path.expanduser("~/.ssh/id_rsa")
 rsaPub      = os.path.expanduser("~/.ssh/id_rsa.pub")
 tfvars      = "variables.tf" # basename only, no path!
-svcports    = { "presto": 8080, "ranger": 6080 }
+svcports    = { "starburst": 8080, "ranger": 6080 }
 dbports     = { "mysql": 3306, "postgres": 5432 }
 tpchschema  = "tiny"
 tpchcat     = "tpch"
@@ -216,7 +216,7 @@ resourcegrp = shortname + "rg"
 templates = {}
 releases = {}
 charts = {}
-modules = ["hive", "ranger", "presto"]
+modules = ["hive", "ranger", "enterprise"]
 for module in modules:
     templates[module] = f"{module}_v.yaml"
     releases[module] = f"{module}-{shortname}"
@@ -426,17 +426,22 @@ def waitForCondition(resource: str, condition: str, minresources: int) -> None:
     stime = 1 # 2 seconds, doubling every time as a backoff
     while True:
         r = runTry(f"{kube} get {resource} --output=name -A".split())
-        if r.returncode == 0 and r.stdout.count('\n') >= minresources:
-            r = runTry(f"{kube} wait --for=condition={condition} --timeout 0 "
-                    f"--all {resource} -A --output=name".split())
-            if r.returncode == 0:
-                out = r.stdout.strip()
-                if r.stdout.count('\n') >= minresources:
-                    break
-                elif attempts & 3 == 0:
-                    print("So far I have these:\n" + out)
+        if r.returncode == 0:
+            out = r.stdout.strip()
+            if r.stdout.count('\n') >= minresources:
+                r = runTry(f"{kube} wait --for=condition={condition} --timeout "
+                        f"0 --all {resource} -A --output=name".split())
+                if r.returncode == 0:
+                    out = r.stdout.strip()
+                    if r.stdout.count('\n') >= minresources:
+                        break
         print(f"Waiting for {resource} to reach '{condition}' state "
                 f"(attempts = {attempts})...")
+        if attempts & 3 == 0: # every fourth time, give extra info
+            if len(out) > 0:
+                print("So far I have these:\n" + out)
+            else:
+                print(f"No {resource} exist yet")
         time.sleep(stime)
         attempts += 1
         stime <<= 1
@@ -493,7 +498,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
 
     # Having set up storage, we've received some credentials for it that we'll
     # need later. For GCP, write out a key file that Hive will use to access
-    # GCS. For Azure, just set a value we'll use for the presto values file.
+    # GCS. For Azure, just set a value we'll use for the starburst values file.
     if target == "gcp":
         replaceFile(gcskeyfile, env["object_key"])
         env["gcskeyfile"] = gcskeyfile
@@ -586,8 +591,8 @@ class ApiError(Exception):
 def issuePrestoCommand(command: str, verbose = False) -> list:
     httpmaxretries = 10
     if verbose: announceSqlStart(command)
-    url = "http://localhost:{}/v1/statement".format(svcports["presto"])
-    headers = { "X-Presto-User": "presto_service" }
+    url = "http://localhost:{}/v1/statement".format(svcports["starburst"])
+    headers = { "X-Trino-User": "presto_service" }
     r = retry(lambda: requests.post(url, headers = headers, data = command),
             maxretries = httpmaxretries, err = f"POST [{command}]")
 

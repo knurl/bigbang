@@ -6,16 +6,16 @@ Email: rob.anderson@starburstdata.com
 # ***NB: The script infers which cloud you want to build in based on which
 # zone you select! This is where you choose your cloud!
 #
-Zone: eu-west-3 # AWS - Paris, France
+#Zone: eu-west-3 # AWS - Paris, France
 #Zone: eu-west-2 # AWS - London, UK
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: francecentral # Azure - Paris, France
-#Zone: europe-west1-b # GCP - St. Ghislain, Belgium
+Zone: europe-west1-b # GCP - St. Ghislain, Belgium
 
 # Version of Starburst you want to install. This must match across
 # starburst-presto, starburst-ranger, and starburst-hive.
 #ChartVersion: 350.6.0
-ChartVersion: 350.1.0
+ChartVersion: 354.0.0
 
 # number of nodes in K8S cluster
 NodeCount: 4
