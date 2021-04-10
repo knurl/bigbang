@@ -84,7 +84,7 @@ catalogs:
     hive.gcs.use-access-token=false
   bigquery: |
     connector.name=bigquery
-    bigquery.project-id={{project_id}}
+    bigquery.project-id={{bq_project_id}}
 {% endif %}
   mysql: |
     connector.name=mysql

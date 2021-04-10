@@ -19,6 +19,40 @@ def writeableDir(p):
     return readableDir and os.access(p, os.W_OK)
 
 #
+# Global variables.
+#
+clouds      = ("aws", "az", "gcp")
+templatedir = where("templates")
+tmpdir      = "/tmp"
+rsa         = os.path.expanduser("~/.ssh/id_rsa")
+rsaPub      = os.path.expanduser("~/.ssh/id_rsa.pub")
+tfvars      = "variables.tf" # basename only, no path!
+svcports    = { "starburst": 8080, "ranger": 6080 }
+dbports     = { "mysql": 3306, "postgres": 5432 }
+tpchschema  = "tiny"
+tpchcat     = "tpch"
+hivecat     = "hive"
+syscat      = "system"
+forwarder   = where("az/forwarderSetup.sh")
+gcskeyname  = "gcs-keyfile"
+gcskeyfbn   = f"key.json"
+evtlogcat   = "postgresqlel"
+bqcat       = "bigquery" # for now, connector doesn't support INSERT or CTAS
+avoidcat    = [tpchcat, syscat, evtlogcat, bqcat]
+dbschema    = "fdd"
+dbevtlog    = "evtlog" # event logger PostgreSQL instance
+dbuser      = "fdd"
+dbpwd       = "a029fjg!>dfgBiO8"
+namespace   = "starburst"
+helmns      = f"--namespace {namespace}"
+kube        = "kubectl"
+kubecfgf    = os.path.expanduser("~/.kube/config")
+kubens      = f"kubectl --namespace {namespace}"
+azuredns    = "168.63.129.16"
+minnodes    = 2
+timeout     = "--timeout 1h"
+
+#
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
 # is the main configuration file one needs to edit. There is a 2nd configuration
 # file, very small, called ./helm-creds.yaml, which contains just the username
@@ -109,6 +143,13 @@ if target == "gcp":
     assert re.fullmatch(r"-[a-e]", zone[-2:]) != None
     region = zone[:-2]
 
+# Terraform files are in a directory named for target
+tfdir       = where(target)
+gcskeyfile  = tfdir + "/" + gcskeyfbn
+tf          = f"terraform -chdir={tfdir}"
+for d in [templatedir, tmpdir, tfdir]:
+    assert writeableDir(d)
+
 # Azure and GCP assume the user is working potentially with multiple locations.
 # On the other hand, AWS assumes a single region in the config file, so make
 # sure that the region in the AWS config file and the one set in my-vars are
@@ -121,8 +162,8 @@ if target == "aws":
                 region {region} set in your {myvarsbf} file. Cannot continue
                 execution. Please ensure these match and re-run."""))
 
-if nodeCount < 3:
-    sys.exit(f"Must have at least 3 nodes; {nodeCount} set for "
+if nodeCount < 2:
+    sys.exit(f"Must have at least {minnodes} nodes; {nodeCount} set for "
             f"{nodecountlabel} in {myvarsbf}.")
 
 def genmask(target, octet):
@@ -166,46 +207,6 @@ try:
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {helmcredsf}")
 myvars.update(helmcreds)
-
-#
-# Global variables.
-#
-clouds      = ("aws", "az", "gcp")
-templatedir = where("templates")
-tmpdir      = "/tmp"
-rsa         = os.path.expanduser("~/.ssh/id_rsa")
-rsaPub      = os.path.expanduser("~/.ssh/id_rsa.pub")
-tfvars      = "variables.tf" # basename only, no path!
-svcports    = { "starburst": 8080, "ranger": 6080 }
-dbports     = { "mysql": 3306, "postgres": 5432 }
-tpchschema  = "tiny"
-tpchcat     = "tpch"
-hivecat     = "hive"
-syscat      = "system"
-forwarder   = where("az/forwarderSetup.sh")
-tfdir       = where(target)
-gcskeyname  = "gcs-keyfile"
-gcskeyfbn   = f"key.json"
-gcskeyfile  = tfdir + "/" + gcskeyfbn
-tf          = f"terraform -chdir={tfdir}"
-evtlogcat   = "postgresqlel"
-bqcat       = "bigquery" # for now, connector doesn't support INSERT or CTAS
-avoidcat    = [tpchcat, syscat, evtlogcat, bqcat]
-dbschema    = "fdd"
-dbevtlog    = "evtlog" # event logger PostgreSQL instance
-dbuser      = "fdd"
-dbpwd       = "a029fjg!>dfgBiO8"
-namespace   = "starburst"
-helmns      = f"--namespace {namespace}"
-kube        = "kubectl"
-kubecfgf    = os.path.expanduser("~/.kube/config")
-kubens      = f"kubectl --namespace {namespace}"
-azuredns    = "168.63.129.16"
-minnodes    = 3
-timeout     = "--timeout 1h"
-
-for d in [templatedir, tmpdir, tfdir]:
-    assert writeableDir(d)
 
 # Generate a random octet
 
@@ -947,7 +948,7 @@ def announceReady(env: dict) -> list:
         w.append(f"{service}: localhost:{port}")
     return w
 
-def svcStart(skipClusterStart: bool = False) -> None:
+def svcStart(skipClusterStart: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the cluster.
     # This can take a long time. This will create the control plane and workers.
     env = ensureClusterIsStarted(skipClusterStart)
