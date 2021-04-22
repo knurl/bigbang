@@ -27,6 +27,7 @@ module "vpc" {
 
   # Our workers will need to be able to get packages
   enable_nat_gateway = true
+  single_nat_gateway = true
 
   tags = merge(var.tags, { Name = module.vpc.name })
 
