@@ -593,7 +593,7 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
             print(' ' * maxlen, end='\r')
             return
         i += 1
-        time.sleep(2.5)
+        time.sleep(1.5)
 
 # A class for recording ssh tunnels
 class Tunnel:
