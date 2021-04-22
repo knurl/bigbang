@@ -1189,7 +1189,7 @@ def isTerraformSettled(tgtResource: str = None) -> bool:
 def svcStop(emptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion, or our helm and kubectl
     # commands won't work.
-    announce("Seeing whether Terraform has already run")
+    announce("Checking current Terraform status")
     if isTerraformSettled():
         announce("Re-establishing bastion tunnel")
         env = getOutputVars()
@@ -1331,7 +1331,7 @@ if len(w) > 0:
     y += w
 
 if command in ("start", "restart") and started:
-    y.append("You have the following ssh tunnels running via bastion:")
+    y.append("These ssh tunnels are now running:")
     y += [str(i) for i in toreap]
     announceLoud(y)
     input("Press return key to quit and terminate tunnels!")
