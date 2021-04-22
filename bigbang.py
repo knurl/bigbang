@@ -53,18 +53,16 @@ dbevtlog    = "evtlog" # event logger PostgreSQL instance
 dbuser      = "fdd"
 dbpwd       = "a029fjg!>dfgBiO8"
 namespace   = "starburst"
-helmns      = f"--namespace {namespace}"
+helmns      = f"-n {namespace}"
 kube        = "kubectl"
 kubecfgf    = os.path.expanduser("~/.kube/config")
-kubens      = f"kubectl --namespace {namespace}"
+kubens      = f"{kube} -n {namespace}"
 minnodes    = 2
-timeout     = "--timeout 1h"
 maxpodpnode = 16
 toreap      = [] # Accumulate tunnels to destroy
 awsdir = os.path.expanduser("~/.aws")
 awsconfig = os.path.expanduser("~/.aws/config")
 awscreds = os.path.expanduser("~/.aws/credentials")
-
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -335,7 +333,7 @@ def parameteriseTemplate(template, targetDir, varsDict):
     try:
         file_loader = jinja2.FileSystemLoader(templatedir)
         env = jinja2.Environment(loader = file_loader, trim_blocks = True,
-                lstrip_blocks = True, undefined=jinja2.DebugUndefined)
+                lstrip_blocks = True)
         t = env.get_template(template)
         output = t.render(varsDict)
     except jinja2.TemplateNotFound as e:
@@ -623,7 +621,7 @@ class Tunnel:
                 self.rport)
 
 # Input dictionary is the output variables from Terraform.
-def establishBastionTunnel(env: dict) -> None:
+def establishBastionTunnel(env: dict) -> Tunnel:
     # The new bastion server will have a new host key. Delete the old one we
     # have and grab the new one.
     announce(f"Replacing bastion host keys in {knownhosts}")
@@ -641,8 +639,8 @@ def establishBastionTunnel(env: dict) -> None:
     appendToFile(knownhosts, hostkeys)
 
     # Start up the tunnel to the Kubernetes API server
-    toreap.append(Tunnel("k8s-apiserver", env["bastion_address"], apisrvportl,
-        env["k8s_api_server"], apisrvport))
+    tun = Tunnel("k8s-apiserver", env["bastion_address"], apisrvportl,
+            env["k8s_api_server"], apisrvport)
 
     # Now that the tunnel is in place, update our kubecfg with the address to
     # the tunnel, keeping everything else in place
@@ -652,6 +650,7 @@ def establishBastionTunnel(env: dict) -> None:
     # Ensure that we can talk to the api server
     announce("Waiting for api server to respond")
     spinWait(lambda: waitUntilApiServerResponding())
+    return tun
 
 def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     # If we've already got an aws auth config map, we're done
@@ -665,11 +664,6 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     # Nodes should start joining after this
     announce("Adding aws-auth configmap to cluster")
     runStdout(f"{kube} apply -f {yamltmp}".split())
-
-    # TODO Needs further investigation. There seems to be a bug where something
-    # needs to "prompt" the control plane into allowing the nodes to join, even
-    # after adding the config map... Reading it back seems to trigger it.
-    r = runStdout(f"{kube} describe configmap -n kube-system aws-auth".split())
 
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars
@@ -723,7 +717,8 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
         env["adls_access_key"] = env["object_key"]
 
     # Start up the ssh tunnel to the bastion, so we can run kubectl
-    establishBastionTunnel(env)
+    tun = establishBastionTunnel(env)
+    toreap.append(tun) # Save the reference so it doesn't get destroyed
 
     # For AWS, the nodes will not join until we have added the node role ARN to
     # the aws-auth-map-cn.yaml.
@@ -1025,7 +1020,7 @@ def helmInstallRelease(module: str, env = {}) -> bool:
     return False # upgraded, rather than newly installed
 
 def helmUninstallRelease(release: str) -> None:
-    helm(f"{helmns} uninstall {release} {timeout}")
+    helm(f"{helmns} uninstall {release}")
 
 # Normalise CPU to 1000ths of a CPU ("mCPU")
 def normaliseCPU(cpu) -> int:
@@ -1199,7 +1194,7 @@ def svcStop(emptyNodes: bool = False) -> None:
         announce("Re-establishing bastion tunnel")
         env = getOutputVars()
         try:
-            establishBastionTunnel(env)
+            tun = establishBastionTunnel(env)
             t = time.time()
             deleteAllServices()
             helmUninstallAll()
@@ -1214,14 +1209,12 @@ def svcStop(emptyNodes: bool = False) -> None:
                     try to destroy your terraform without unloading your pods
                     but you might have trouble on the destroy."""))
 
-    if emptyNodes: return
-
-    announce(f"Ensuring cluster {clustname} is deleted")
-    t = time.time()
-    runTry(f"{tf} state rm module.eks.kubernetes_config_map.aws_auth".split())
-    runStdout(f"{tf} destroy -auto-approve".split())
-    announce("tf destroy completed in " + time.strftime("%Hh%Mm%Ss",
-        time.gmtime(time.time() - t)))
+    if not emptyNodes:
+        announce(f"Ensuring cluster {clustname} is deleted")
+        t = time.time()
+        runStdout(f"{tf} destroy -auto-approve".split())
+        announce("tf destroy completed in " + time.strftime("%Hh%Mm%Ss",
+            time.gmtime(time.time() - t)))
 
 def checkCLISetup() -> None:
     assert target in clouds
@@ -1342,6 +1335,6 @@ if command in ("start", "restart") and started:
     y += [str(i) for i in toreap]
     announceLoud(y)
     input("Press return key to quit and terminate tunnels!")
-    sys.exit(0)
+    sys.exit(0) # Tunnels destroyed on de-reference
 
 announceLoud(y)

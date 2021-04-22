@@ -6,7 +6,7 @@ metadata:
 data:
   mapRoles: |
     - rolearn: {{NodeRoleARN}}
-      username: system:node:{{EC2PrivateDNSName}}
+      username: system:node:{{ "{{" }}EC2PrivateDNSName}}
       groups:
         - system:bootstrappers
         - system:nodes
