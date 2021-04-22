@@ -23,12 +23,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
     max_pods              = var.max_pods_per_node
   }
 
-  addon_profile {
-    kube_dashboard {
-      enabled = true
-    }
-  }
-
   tags = var.tags
 }
 

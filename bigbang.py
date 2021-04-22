@@ -560,8 +560,8 @@ def waitUntilApiServerResponding() -> float:
     url = f"https://localhost:{apisrvportl}/"
     try:
         r = requests.get(url, verify = False) # ignore certificate
-        # Either forbidden (403) or 200 is Ok and expected.
-        if r.status_code in (403, 200):
+        # Either forbidden (403), unauthorised (403) or 200 are acceptable
+        if r.status_code in (401, 403, 200):
             return 1.0 # all done!
     except requests.exceptions.ConnectionError as e:
         pass
@@ -1201,6 +1201,7 @@ def svcStop(emptyNodes: bool = False) -> None:
             eraseBucketContents(env)
             announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
                 time.gmtime(time.time() - t)))
+            del tun # Get rid of the tunnel
         except CalledProcessError as e:
             announceBox(textwrap.dedent("""\
                     Your Terraform is set up, but your bastion host is not

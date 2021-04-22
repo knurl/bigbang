@@ -23,5 +23,6 @@ output "object_address" {
 }
 
 output "object_key" {
-  value = azurerm_storage_account.storacct.primary_access_key
+  value     = azurerm_storage_account.storacct.primary_access_key
+  sensitive = true
 }
