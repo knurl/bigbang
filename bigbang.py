@@ -666,6 +666,11 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     announce("Adding aws-auth configmap to cluster")
     runStdout(f"{kube} apply -f {yamltmp}".split())
 
+    # TODO Needs further investigation. There seems to be a bug where something
+    # needs to "prompt" the control plane into allowing the nodes to join, even
+    # after adding the config map... Reading it back seems to trigger it.
+    r = runStdout(f"{kube} describe configmap -n kube-system aws-auth".split())
+
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars
     env.update({
@@ -1141,6 +1146,15 @@ def helmInstallAll(env):
     if installed:
         eraseBucketContents(env)
 
+def deleteAllServices() -> None:
+    # Explicitly deleting services gets rid of load balancers, which eliminates
+    # a race condition that Terraform is susceptible to, where the ELBs created
+    # by the load balancers endure while the cluster is destroyed, stranding
+    # the ENIs and preventing the deletion of the associated subnets
+    # https://github.com/kubernetes/kubernetes/issues/93390
+    announce("Deleting all k8s services")
+    runStdout(f"{kubens} delete svc --all".split())
+
 def helmUninstallAll():
     announce("Uninstalling all helm releases")
     for release in helmGetReleases():
@@ -1187,6 +1201,7 @@ def svcStop(emptyNodes: bool = False) -> None:
         try:
             establishBastionTunnel(env)
             t = time.time()
+            deleteAllServices()
             helmUninstallAll()
             eraseBucketContents(env)
             announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
