@@ -9,6 +9,7 @@ kubeconfig_*
 __pycache__
 aws/.terraform*
 aws/variables*
+aws/aws-auth*
 az/.terraform*
 az/variables*
 gcp/.terraform*

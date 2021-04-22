@@ -12,8 +12,8 @@ publicly and freely available purely for educational purposes.*
 **NB: Before you run bigbang.py:** Make sure you do the following:
 
 - update my-vars.yaml, to specify your new setup
-- write helm-creds.yaml, to provide your login credentials for the helm repo—see
-  my-vars.yaml file for description of what to put in there
+- write helm-creds.yaml, to provide your login credentials for the helm
+  repo—see my-vars.yaml file for description of what to put in there
 - add a Starburst license file, which you can get from your friendly local
   Starburst Solutions Architect!
 - go through the requirements section below to make sure you have all the
@@ -25,24 +25,20 @@ publicly and freely available purely for educational purposes.*
 usage: bigbang.py [-h] [-c] [-e] {start,stop,restart,status,pfstart,pfstop}
 
 Create your own Starbust demo service in AWS, Azure or GCP, starting from
-nothing. It's zero to demo in 20 minutes or less. You provide the instance ID of
-your VPN in my-vars.yaml, your desired CIDR and some other parameters. This
-script uses terraform to set up a K8S cluster, with its own VPC/VNet and K8S
-cluster, routes and peering connections, security, etc. Presto is automatically
-set up and multiple databases and a data lake are set up. It's designed to allow
-you to control the new setup from your laptop, without necessarily using a
-bastion server—although a bastion server is also provided as a convenience. The
-event logger is set up as well as Starburst Insights (running on a PostgreSQL
+nothing. It's zero to demo in 20 minutes or less. You provide your target
+cloud, zone, your desired CIDR and some other parameters. This script uses
+terraform to set up a K8S cluster, with its own VPC/VNet and K8S cluster,
+routes and peering connections, security, etc. Presto is automatically set up
+and multiple databases and a data lake are set up. It's designed to allow you
+to control the new setup from your laptop using a bastion server. The event
+logger is set up as well as Starburst Insights (running on a PostgreSQL
 database).
 
 positional arguments:
-  {start,stop,restart,status,pfstart,pfstop}
+  {start,stop,restart,status}
 			Command to issue for demo services. start/stop/restart:
-			Start/stop/restart the demo environment. status: Show
-			whether the demo environment is running or not. pfstart:
-			Start port-forwarding from local ports to container
-			ports (happens with start). pfstop: Stop port-forwarding
-			from local ports to container ports.
+			Start/stop/restart the demo environment.
+			status: Show whether the environment is running or not.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -69,7 +65,7 @@ You now should install the following required Homebrew formulae, like this:
 
 ```
 brew install awscli azure-cli aws-iam-authenticator helm kubectl \
-    libyaml socat terraform
+    libyaml terraform
 ```
 
 And the following brew casks, like this:

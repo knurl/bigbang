@@ -1,5 +1,9 @@
+output "k8s_api_server" {
+  value = azurerm_kubernetes_cluster.aks.private_fqdn
+}
+
 output "bastion_address" {
-  value = azurerm_linux_virtual_machine.bastion.private_ip_address
+  value = azurerm_linux_virtual_machine.bastion.public_ip_address
 }
 
 output "evtlog_address" {
@@ -20,8 +24,4 @@ output "object_address" {
 
 output "object_key" {
   value = azurerm_storage_account.storacct.primary_access_key
-}
-
-output "private_dns_address" {
-  value = azurerm_linux_virtual_machine.dnsfwd.private_ip_address
 }

@@ -1,5 +1,9 @@
+output "k8s_api_server" {
+  value = module.eks.cluster_endpoint
+}
+
 output "bastion_address" {
-  value = aws_instance.bastion.private_ip
+  value = aws_instance.bastion.public_ip
 }
 
 output "evtlog_address" {
@@ -19,6 +23,10 @@ output "object_address" {
 }
 
 output "kubectl_config" {
-  value = module.eks.kubeconfig
+  value     = module.eks.kubeconfig
   sensitive = true
+}
+
+output "worker_iam_role_arn" {
+  value = module.eks.worker_iam_role_arn
 }

@@ -1,9 +1,3 @@
-data "google_compute_instance" "vpnserv" {
-  name    = var.vpn_instance_id
-  project = data.google_project.project.project_id
-  zone    = var.zone
-}
-
 data "google_compute_network" "vpc" {
   name    = "default"
   project = data.google_project.project.project_id
@@ -23,20 +17,20 @@ locals {
 # Place our new subnet in same VPC as the VPN.
 #
 resource "google_compute_subnetwork" "snet" {
-  project                  = data.google_project.project.project_id
-  name                     = "${data.google_compute_network.vpc.name}-snet"
-  region                   = var.region
-  network                  = data.google_compute_network.vpc.name
-  ip_cidr_range            = local.subnetwork_cidr
-  
+  project       = data.google_project.project.project_id
+  name          = "${data.google_compute_network.vpc.name}-snet"
+  region        = var.region
+  network       = data.google_compute_network.vpc.name
+  ip_cidr_range = local.subnetwork_cidr
+
   secondary_ip_range {
-    range_name             = "k8s-pod-range"
-    ip_cidr_range          = local.k8s_pod_cidr
+    range_name    = "k8s-pod-range"
+    ip_cidr_range = local.k8s_pod_cidr
   }
 
   secondary_ip_range {
-    range_name             = "k8s-services-range"
-    ip_cidr_range          = local.k8s_services_cidr
+    range_name    = "k8s-services-range"
+    ip_cidr_range = local.k8s_services_cidr
   }
 
   private_ip_google_access = true
@@ -50,8 +44,8 @@ resource "google_compute_global_address" "googserv_gaddrs" {
   purpose       = "VPC_PEERING"
   address_type  = "INTERNAL"
   network       = data.google_compute_network.vpc.id
-	address       = split("/", local.googserv_cidr)[0]
-	prefix_length = split("/", local.googserv_cidr)[1]
+  address       = split("/", local.googserv_cidr)[0]
+  prefix_length = split("/", local.googserv_cidr)[1]
 }
 
 resource "google_service_networking_connection" "pvpc_peering" {

@@ -1,35 +1,40 @@
 # Your email. Used to generate a unique code to mark your resources.
 Email: rob.anderson@starburstdata.com
 
+# Cloud target.
+# XXX Make sure to change this in conjunction with the following field so
+# zone/location you're selecting is appropriate for cloud target
+#Target: gcp
+#Target: az
+Target: aws
+
 #
-# The zone you're running in. You can list either AWS or Azure names here.
-# ***NB: The script infers which cloud you want to build in based on which
-# zone you select! This is where you choose your cloud!
+# The zone/region/location you want to run in.
+# XXX Choose something appropriate for the cloud you've selected above.
 #
-#Zone: eu-west-3 # AWS - Paris, France
+Zone: eu-west-3 # AWS - Paris, France
 #Zone: eu-west-2 # AWS - London, UK
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: francecentral # Azure - Paris, France
-Zone: europe-west1-b # GCP - St. Ghislain, Belgium
+#Zone: europe-west1-b # GCP - St. Ghislain, Belgium
 
 # Version of Starburst you want to install. This must match across
 # starburst-presto, starburst-ranger, and starburst-hive.
-#ChartVersion: 350.6.0
 ChartVersion: 354.0.0
 
 # number of nodes in K8S cluster
 NodeCount: 4
 
+# Name of your license file (./${LicenseName}.license)
+LicenseName: starburstdata
+
 # instance types for AWS and Azure
-AWSInstanceType: r5.8xlarge
+AWSInstanceType: m5.4xlarge
 AWSBastionInstanceType: m5.large
 AzureVMType: Standard_E16-8ds_v4
 AzureBastionVMType: Standard_B2ms
 GCPMachineType: e2-standard-16
 GCPBastionMachineType: n1-standard-1
-
-# Name of your license file (./${LicenseName}.license)
-LicenseName: starburstdata
 
 #
 # Helm repo information
@@ -37,41 +42,11 @@ LicenseName: starburstdata
 HelmRepo: starburstdata
 HelmRegistry: harbor.starburstdata.net/starburstdata
 HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
-#############
-# IMPORTANT #
-#############
+
+#####################
+# XXX IMPORTANT XXX #
+#####################
 # NB: Your helm repo credentials are stored in a separate file called
 # ./helm-creds.yaml. You must create and fill out that file in this format:
 # HelmRepoUser: username
 # HelmRepoPassword: password
-
-#
-# The following maps don't need to be updated _unless_ you are adding a new
-# region for the first time, for AWS, Azure or GCP.
-#
-
-#
-# AWS only: The instance ID of the VPN for your AWS region. We need the VPN in
-# order to automatically set up routes between your home workstation and the
-# pods and services.
-#
-AWSVPNInstanceIDs:
-  us-east-2: i-0cbff040f87447a43 # Columbus, OH, USA
-  eu-west-2: i-00f6ad9c9696317c1 # London, UK
-  eu-west-3: i-009c2815f1ebee222 # Paris, France
-
-#
-# Azure only: As above, but this time for Azure. The azure provider in terraform
-# can't look up VMs by ID, so instead here we'll list the resource group and
-# name of the vnet of the VPN.
-#
-AzureVPNVnetNames:
-  francecentral:                 # Paris, France
-    resourceGroup: vpn
-    name: OpenVPNVNet
-
-#
-# GCP only: As for AWS, but for GCP
-#
-GCPVPNInstanceNames:
-  europe-west1-b: ovpn

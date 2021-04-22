@@ -13,11 +13,15 @@ resource "google_service_account_key" "gke_servacct_key" {
 }
 
 resource "google_container_cluster" "gke" {
-  project                   = data.google_project.project.project_id
-  name                      = var.cluster_name
-  location                  = var.zone
-  initial_node_count        = var.node_count
-  default_max_pods_per_node = 16
+  project  = data.google_project.project.project_id
+  name     = var.cluster_name
+  location = var.zone
+
+  # We can't create a cluster with no node pool defined, but we want to only
+  # use separately managed node pools. So we create the smallest possible
+  # default node pool and immediately delete it.
+  remove_default_node_pool = true
+  initial_node_count       = 1
 
   # subnet for nodes
   subnetwork = google_compute_subnetwork.snet.self_link
@@ -37,31 +41,42 @@ resource "google_container_cluster" "gke" {
   # If private endpoint is enabled, then the public endpoint is automatically
   # disabled and it becomes mandatory to enable master authorised networks,
   # which will be applied to the private endpoint.
-  # TODO: Do we still need this here to work?
   #
   master_authorized_networks_config {
     cidr_blocks {
-      cidr_block   = "10.0.0.0/8"
-      display_name = "Class_A"
-    }
-    cidr_blocks {
-      cidr_block   = "172.16.0.0/12"
-      display_name = "Class_B"
-    }
-    cidr_blocks {
-      cidr_block   = "192.168.0.0/16"
-      display_name = "Class_C"
+      # Only allow access to K8S control plane from the subnet we're running on
+      cidr_block   = google_compute_subnetwork.snet.ip_cidr_range
+      display_name = "Access from GKE private subnet"
     }
   }
 
+  resource_labels = var.tags
+}
+
+resource "google_container_node_pool" "node_pool" {
+  project           = data.google_project.project.project_id
+  name              = "${google_container_cluster.gke.name}-nodepool"
+  location          = var.zone
+  cluster           = google_container_cluster.gke.name
+  node_count        = var.node_count
+  max_pods_per_node = var.max_pods_per_node
+  # TODO: add autoscaling
+
   node_config {
-    machine_type    = var.instance_type
+    machine_type = var.instance_type
+    # Google recommends custom service accounts that have cloud-platform scope
+    # and permissions granted via IAM Roles.
     service_account = google_service_account.gke_servacct.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
     metadata = {
-      sshKeys = "ubuntu:${file("~/.ssh/id_rsa.pub")}"
+      ssh-keys                 = "ubuntu:${var.ssh_public_key}"
+      disable-legacy-endpoints = true
     }
     labels = var.tags
   }
-  resource_labels = var.tags
+  depends_on = [
+    google_sql_database.db_evtlog,
+    google_sql_database.db_postgres,
+    google_sql_database.db_mysql
+  ]
 }

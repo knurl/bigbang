@@ -30,20 +30,19 @@ coordinator:
         ranger.policy-rest-url = http://ranger:6080
         ranger.policy-refresh-interval = 10s
       config.properties: |
-        # These are the values we want to add that are non-default
+        coordinator = true
+        node-scheduler.include-coordinator = false
+        http-server.http.port = 8080
+        discovery-server.enabled = true
+        discovery.uri = http://localhost:8080
         insights.persistence-enabled = true
         insights.metrics-persistence-enabled = true
         insights.jdbc.url = jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
         insights.jdbc.user = {{evtlog_user}}
         insights.jdbc.password = {{DBPassword}}
+        insights.metrics-collection-interval=15s
+        insights.metrics-persistence-interval=60s
         insights.authorized-users = .*
-        # The following just sets non-default values that are already in the
-        # starburst-presto helm chart. Because we're setting config.properties,
-        # we have to set _all_ of the values in config.properties in the
-        # values.yaml file.
-        node-scheduler.include-coordinator=false
-        discovery-server.enabled=true
-        discovery.uri=http://localhost:8080
       event-listener.properties: |
         event-listener.name = event-logger
         jdbc.url = jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}

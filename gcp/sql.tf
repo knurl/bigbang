@@ -13,9 +13,9 @@ resource "random_id" "db_name_suffix" {
  */
 
 resource "google_sql_database_instance" "sql_evtlog" {
-  name                = "${var.evtlog_server_name}-${random_id.db_name_suffix.hex}"
-  region              = var.region
-  project             = data.google_project.project.project_id
+  name    = "${var.evtlog_server_name}-${random_id.db_name_suffix.hex}"
+  region  = var.region
+  project = data.google_project.project.project_id
 
   database_version    = "POSTGRES_11"
   depends_on          = [google_service_networking_connection.pvpc_peering]
@@ -26,7 +26,7 @@ resource "google_sql_database_instance" "sql_evtlog" {
     availability_type = "ZONAL"
 
     location_preference {
-      zone            = var.zone
+      zone = var.zone
     }
 
     ip_configuration {
@@ -34,14 +34,14 @@ resource "google_sql_database_instance" "sql_evtlog" {
       private_network = data.google_compute_network.vpc.id
     }
 
-    user_labels       = var.tags
+    user_labels = var.tags
   }
 }
 
 resource "google_sql_database_instance" "sql_postgres" {
-  name                = "${var.postgres_server_name}-${random_id.db_name_suffix.hex}"
-  region              = var.region
-  project             = data.google_project.project.project_id
+  name    = "${var.postgres_server_name}-${random_id.db_name_suffix.hex}"
+  region  = var.region
+  project = data.google_project.project.project_id
 
   database_version    = "POSTGRES_11"
   depends_on          = [google_service_networking_connection.pvpc_peering]
@@ -52,7 +52,7 @@ resource "google_sql_database_instance" "sql_postgres" {
     availability_type = "ZONAL"
 
     location_preference {
-      zone            = var.zone
+      zone = var.zone
     }
 
     ip_configuration {
@@ -60,14 +60,14 @@ resource "google_sql_database_instance" "sql_postgres" {
       private_network = data.google_compute_network.vpc.id
     }
 
-    user_labels       = var.tags
+    user_labels = var.tags
   }
 }
 
 resource "google_sql_database_instance" "sql_mysql" {
-  name                = "${var.mysql_server_name}-${random_id.db_name_suffix.hex}"
-  region              = var.region
-  project             = data.google_project.project.project_id
+  name    = "${var.mysql_server_name}-${random_id.db_name_suffix.hex}"
+  region  = var.region
+  project = data.google_project.project.project_id
 
   database_version    = "MYSQL_5_6"
   depends_on          = [google_service_networking_connection.pvpc_peering]
@@ -78,7 +78,7 @@ resource "google_sql_database_instance" "sql_mysql" {
     availability_type = "ZONAL"
 
     location_preference {
-      zone            = var.zone
+      zone = var.zone
     }
 
     ip_configuration {
@@ -86,7 +86,7 @@ resource "google_sql_database_instance" "sql_mysql" {
       private_network = data.google_compute_network.vpc.id
     }
 
-    user_labels       = var.tags
+    user_labels = var.tags
   }
 }
 

@@ -36,66 +36,66 @@ resource "azurerm_private_dns_zone_virtual_network_link" "dnslink-mysql" {
  */
 
 resource "azurerm_postgresql_server" "evtlog" {
-  name                          = var.evtlog_server_name
-  location                      = azurerm_resource_group.rg.location
-  resource_group_name           = azurerm_resource_group.rg.name
+  name                = var.evtlog_server_name
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
 
-  administrator_login           = var.db_user
-  administrator_login_password  = var.db_password
+  administrator_login          = var.db_user
+  administrator_login_password = var.db_password
 
-  sku_name                      = "GP_Gen5_2"
-  version                       = "11"
-  storage_mb                    = 20480
+  sku_name   = "GP_Gen5_2"
+  version    = "11"
+  storage_mb = 20480
 
-  geo_redundant_backup_enabled  = false
-  auto_grow_enabled             = false
+  geo_redundant_backup_enabled = false
+  auto_grow_enabled            = false
 
   public_network_access_enabled = false
   ssl_enforcement_enabled       = false
 
-  tags                          = var.tags
+  tags = var.tags
 }
 
 resource "azurerm_postgresql_server" "postgres" {
-  name                          = var.postgres_server_name
-  location                      = azurerm_resource_group.rg.location
-  resource_group_name           = azurerm_resource_group.rg.name
+  name                = var.postgres_server_name
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
 
-  administrator_login           = var.db_user
-  administrator_login_password  = var.db_password
+  administrator_login          = var.db_user
+  administrator_login_password = var.db_password
 
-  sku_name                      = "GP_Gen5_2"
-  version                       = "11"
-  storage_mb                    = 20480
+  sku_name   = "GP_Gen5_2"
+  version    = "11"
+  storage_mb = 20480
 
-  geo_redundant_backup_enabled  = false
-  auto_grow_enabled             = false
+  geo_redundant_backup_enabled = false
+  auto_grow_enabled            = false
 
   public_network_access_enabled = false
   ssl_enforcement_enabled       = false
 
-  tags                          = var.tags
+  tags = var.tags
 }
 
 resource "azurerm_mysql_server" "mysql" {
-  name                          = var.mysql_server_name
-  location                      = azurerm_resource_group.rg.location
-  resource_group_name           = azurerm_resource_group.rg.name
+  name                = var.mysql_server_name
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
 
-  administrator_login           = var.db_user
-  administrator_login_password  = var.db_password
+  administrator_login          = var.db_user
+  administrator_login_password = var.db_password
 
-  sku_name                      = "GP_Gen5_2"
-  version                       = "5.6"
-  storage_mb                    = 20480
+  sku_name   = "GP_Gen5_2"
+  version    = "5.6"
+  storage_mb = 20480
 
-  geo_redundant_backup_enabled  = false
-  auto_grow_enabled             = false
+  geo_redundant_backup_enabled = false
+  auto_grow_enabled            = false
 
   public_network_access_enabled = false
   ssl_enforcement_enabled       = false
 
-  tags                          = var.tags
+  tags = var.tags
 }
 
 /*
@@ -132,10 +132,10 @@ resource "azurerm_mysql_database" "mysql_db" {
  */
 
 resource "azurerm_private_endpoint" "pe_evtlog" {
-  name                             = "${var.evtlog_server_name}-pe"
-  location                         = azurerm_resource_group.rg.location
-  resource_group_name              = azurerm_resource_group.rg.name
-  subnet_id                        = azurerm_subnet.db_sub.id
+  name                = "${var.evtlog_server_name}-pe"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.db_sub.id
 
   private_service_connection {
     name                           = "${var.evtlog_server_name}-psc"
@@ -145,18 +145,18 @@ resource "azurerm_private_endpoint" "pe_evtlog" {
   }
 
   private_dns_zone_group {
-    name                           = "${var.evtlog_server_name}-dnszg"
-    private_dns_zone_ids           = [azurerm_private_dns_zone.prvdns-postgres.id]
+    name                 = "${var.evtlog_server_name}-dnszg"
+    private_dns_zone_ids = [azurerm_private_dns_zone.prvdns-postgres.id]
   }
 
-  tags                             = var.tags
+  tags = var.tags
 }
 
 resource "azurerm_private_endpoint" "pe_postgres" {
-  name                             = "${var.postgres_server_name}-pe"
-  location                         = azurerm_resource_group.rg.location
-  resource_group_name              = azurerm_resource_group.rg.name
-  subnet_id                        = azurerm_subnet.db_sub.id
+  name                = "${var.postgres_server_name}-pe"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.db_sub.id
 
   private_service_connection {
     name                           = "${var.postgres_server_name}-psc"
@@ -166,18 +166,18 @@ resource "azurerm_private_endpoint" "pe_postgres" {
   }
 
   private_dns_zone_group {
-    name                           = "${var.postgres_server_name}-dnszg"
-    private_dns_zone_ids           = [azurerm_private_dns_zone.prvdns-postgres.id]
+    name                 = "${var.postgres_server_name}-dnszg"
+    private_dns_zone_ids = [azurerm_private_dns_zone.prvdns-postgres.id]
   }
 
-  tags                             = var.tags
+  tags = var.tags
 }
 
 resource "azurerm_private_endpoint" "pe_mysql" {
-  name                             = "${var.mysql_server_name}-pe"
-  location                         = azurerm_resource_group.rg.location
-  resource_group_name              = azurerm_resource_group.rg.name
-  subnet_id                        = azurerm_subnet.db_sub.id
+  name                = "${var.mysql_server_name}-pe"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.db_sub.id
 
   private_service_connection {
     name                           = "${var.mysql_server_name}-psc"
@@ -187,9 +187,9 @@ resource "azurerm_private_endpoint" "pe_mysql" {
   }
 
   private_dns_zone_group {
-    name                           = "${var.mysql_server_name}-dnszg"
-    private_dns_zone_ids           = [azurerm_private_dns_zone.prvdns-mysql.id]
+    name                 = "${var.mysql_server_name}-dnszg"
+    private_dns_zone_ids = [azurerm_private_dns_zone.prvdns-mysql.id]
   }
 
-  tags                             = var.tags
+  tags = var.tags
 }

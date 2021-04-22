@@ -2,10 +2,16 @@
 
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
 import subprocess, ipaddress, glob, threading, time, concurrent.futures, jinja2
+import atexit, psutil # type: ignore
 from run import run, runShell, runTry, runStdout, runCollect
 from subprocess import CalledProcessError
-import psutil # type: ignore
-from typing import Tuple, Iterable
+from typing import Tuple, Iterable, Callable
+from urllib.parse import urlparse
+
+# Do this just to get rid of the warning when we try to read from the
+# api server, and the certificate isn't trusted
+from urllib3 import disable_warnings, exceptions # type: ignore
+disable_warnings(exceptions.InsecureRequestWarning)
 
 def myDir():
     return os.path.dirname(os.path.abspath(__file__))
@@ -26,14 +32,17 @@ templatedir = where("templates")
 tmpdir      = "/tmp"
 rsa         = os.path.expanduser("~/.ssh/id_rsa")
 rsaPub      = os.path.expanduser("~/.ssh/id_rsa.pub")
+knownhosts  = os.path.expanduser("~/.ssh/known_hosts")
 tfvars      = "variables.tf" # basename only, no path!
+awsauthcm   = "aws-auth-cm.yaml" # basename only, no path!
+apisrvport  = 443
+apisrvportl = 8443
 svcports    = { "starburst": 8080, "ranger": 6080 }
 dbports     = { "mysql": 3306, "postgres": 5432 }
 tpchschema  = "tiny"
 tpchcat     = "tpch"
 hivecat     = "hive"
 syscat      = "system"
-forwarder   = where("az/forwarderSetup.sh")
 gcskeyname  = "gcs-keyfile"
 gcskeyfbn   = f"key.json"
 evtlogcat   = "postgresqlel"
@@ -48,19 +57,24 @@ helmns      = f"--namespace {namespace}"
 kube        = "kubectl"
 kubecfgf    = os.path.expanduser("~/.kube/config")
 kubens      = f"kubectl --namespace {namespace}"
-azuredns    = "168.63.129.16"
 minnodes    = 2
 timeout     = "--timeout 1h"
+maxpodpnode = 16
+toreap      = [] # Accumulate tunnels to destroy
+awsdir = os.path.expanduser("~/.aws")
+awsconfig = os.path.expanduser("~/.aws/config")
+awscreds = os.path.expanduser("~/.aws/credentials")
+
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
-# is the main configuration file one needs to edit. There is a 2nd configuration
-# file, very small, called ./helm-creds.yaml, which contains just the username
-# and password for the helm repo you wish to use to get the helm charts.
+# is the main configuration file one needs to edit. There is a 2nd config file,
+# very small, called ./helm-creds.yaml, which contains just the username and
+# password for the helm repo you wish to use to get the helm charts.
 #
 myvarsbf = "my-vars.yaml"
 myvarsf  = where("my-vars.yaml")
-awsvpnlabel = "AWSVPNInstanceIDs"
+targetlabel = "Target"
 nodecountlabel = "NodeCount"
 chartvlabel = "ChartVersion"
 try:
@@ -71,30 +85,15 @@ except IOError as e:
 
 try:
     email        = myvars["Email"]
+    target       = myvars[targetlabel]
     zone         = myvars["Zone"]
     chartversion = myvars[chartvlabel]
     nodeCount    = myvars[nodecountlabel]
     license      = myvars["LicenseName"]
     repo         = myvars["HelmRepo"]
     repoloc      = myvars["HelmRepoLocation"]
-    awsvpns      = myvars[awsvpnlabel]
-    azurevpns    = myvars["AzureVPNVnetNames"]
-    gcpvpns      = myvars["GCPVPNInstanceNames"]
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
-
-# Check the format of the chart version
-components = chartversion.split('.')
-if len(components) != 3 or not all(map(str.isdigit, components)):
-    sys.exit(f"The {chartvlabel} in {myvarsbf} field must be of the form "
-            f"x.y.z, all numbers; {chartversion} is not of a valid form")
-
-# Check the license file
-licensebf = f"{license}.license"
-licensef = where(licensebf)
-if not readableFile(licensef):
-    sys.exit(f"Your {myvarsbf} file specifies a license named {license} "
-            f"located at {licensef} but no readable file exists there.")
 
 # Verify the email looks right, and extract username from it
 # NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
@@ -105,36 +104,22 @@ username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035
 codelen = min(3, len(username))
 code = username[:codelen]
 
-# Generate a unique octet for our subnet. Use that octet with the 'code' we
-# generated above as part of a short name we can use to mark resources we
-# create.
-s = username + zone
-octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256
-shortname = code + str(octet).zfill(3)
-
-awsdir = os.path.expanduser("~/.aws")
-awsconfig = os.path.expanduser("~/.aws/config")
-awscreds = os.path.expanduser("~/.aws/credentials")
-
+# Verify the cloud target is set up correctly Gather up other related items
+# based on which cloud target it is.
 #
-# Work out which cloud target based on the VPN lists.
-#
-if zone in awsvpns:
-    target = "aws"
+if target == "aws":
     instanceType = myvars["AWSInstanceType"]
     bastionInstanceType = myvars["AWSBastionInstanceType"]
-elif zone in azurevpns:
-    target = "az"
+elif target == "az":
     instanceType = myvars["AzureVMType"]
     bastionInstanceType = myvars["AzureBastionVMType"]
-elif zone in gcpvpns:
-    target = "gcp"
+elif target == "gcp":
     instanceType = myvars["GCPMachineType"]
     bastionInstanceType = myvars["GCPBastionMachineType"]
 else:
-    sys.exit(textwrap.dedent(f"""\
-    Zone {zone} specified in {myvarsbf}, but is not listed in any of the VPN
-    sections in {myvarsbf}. Please add it!"""))
+    sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
+            "{c}".format(t = target, tl = targetlabel, m = myvarsbf,
+                c = ", ".join(clouds)))
 
 # Set the region and zone from the location. We assume zone is more precise and
 # infer the region from the zone.
@@ -142,13 +127,6 @@ region = zone
 if target == "gcp":
     assert re.fullmatch(r"-[a-e]", zone[-2:]) != None
     region = zone[:-2]
-
-# Terraform files are in a directory named for target
-tfdir       = where(target)
-gcskeyfile  = tfdir + "/" + gcskeyfbn
-tf          = f"terraform -chdir={tfdir}"
-for d in [templatedir, tmpdir, tfdir]:
-    assert writeableDir(d)
 
 # Azure and GCP assume the user is working potentially with multiple locations.
 # On the other hand, AWS assumes a single region in the config file, so make
@@ -162,9 +140,38 @@ if target == "aws":
                 region {region} set in your {myvarsbf} file. Cannot continue
                 execution. Please ensure these match and re-run."""))
 
+# Terraform files are in a directory named for target
+tfdir       = where(target)
+gcskeyfile  = tfdir + "/" + gcskeyfbn
+tf          = f"terraform -chdir={tfdir}"
+for d in [templatedir, tmpdir, tfdir]:
+    assert writeableDir(d)
+
+# Check the format of the chart version
+components = chartversion.split('.')
+if len(components) != 3 or not all(map(str.isdigit, components)):
+    sys.exit(f"The {chartvlabel} in {myvarsbf} field must be of the form "
+            f"x.y.z, all numbers; {chartversion} is not of a valid form")
+
+# The yaml files for the coordinator and worker specify they should be on
+# different nodes, so we need a 2-node cluster at minimum.
 if nodeCount < 2:
     sys.exit(f"Must have at least {minnodes} nodes; {nodeCount} set for "
             f"{nodecountlabel} in {myvarsbf}.")
+
+# Check the license file
+licensebf = f"{license}.license"
+licensef = where(licensebf)
+if not readableFile(licensef):
+    sys.exit(f"Your {myvarsbf} file specifies a license named {license} "
+            f"located at {licensef} but no readable file exists there.")
+
+# Generate a unique octet for our subnet. Use that octet with the 'code' we
+# generated above as part of a short name we can use to mark resources we
+# create.
+s = username + zone
+octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256
+shortname = code + str(octet).zfill(3)
 
 def genmask(target, octet):
     assert octet < 256
@@ -181,13 +188,6 @@ def genmask(target, octet):
         return ".".join(octets[::-1]) + "/20"
 
 mySubnetCidr = genmask(target, octet)
-
-try:
-    ipntwk = ipaddress.ip_network(mySubnetCidr)
-except ValueError as e:
-    print(f"It appears the 'MyCIDR' value in {myvarsbf} is not in the format "
-            "x.x.x.x/mask: {e}")
-    raise
 
 #
 # Now, read the credentials file for helm ("./helm-creds.yaml"), also found in
@@ -208,8 +208,9 @@ except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {helmcredsf}")
 myvars.update(helmcreds)
 
-# Generate a random octet
-
+#
+# Create some names for some cloud resources we'll need
+#
 clustname = shortname + "cl"
 bucket = shortname + "bk"
 storageacct = shortname + "sa"
@@ -269,27 +270,9 @@ def announceBox(s):
         print(bl + l.ljust(maxl) + br)
     print(botbord)
 
-def warnVpnConfig(privateDnsAddr: str = ""):
-    s = textwrap.dedent(f"""\
-            NB: Your VPC/VNET CIDR is listed as {mySubnetCidr}, which should be
-            included in your routing table.""")
-
-    ovpnfiles = glob.glob(os.path.expanduser("~/Library/Application Support/"
-        "Tunnelblick/Configurations/*/Contents/Resources/config.ovpn"))
-    if (l := len(ovpnfiles)) > 0:
-        s += textwrap.dedent(""" \
-                It looks like you're using Tunnelblick. To achieve this routing
-                you could add 'route {netaddr} {netmask}' to your OpenVPN client
-                config and reconnect Tunnelblick.""".format(netaddr =
-                    ipntwk.network_address, netmask = ipntwk.netmask))
-
-    if target == "az":
-        s += textwrap.dedent(""" \
-                For Azure, you also will need {p} and {a} listed as DNS
-                resolvers, in that order, to access the new demo
-                vnet.""".format(p = privateDnsAddr, a = azuredns))
-
-    announceBox(s)
+def appendToFile(filepath, contents) -> None:
+    with open(filepath, "a+") as fh:
+        fh.write(contents)
 
 def replaceFile(filepath, contents) -> bool:
     newmd5 = hashlib.md5(contents.encode('utf-8')).hexdigest()
@@ -311,8 +294,8 @@ def replaceFile(filepath, contents) -> bool:
                                 chartversion == match.group(2):
                             # It's the same file. Don't bother writing it.
                             return False # didn't write
-        # We have an old file, but the md5 doesn't match, indicating it has been
-        # updated. We want to remove the old one in preparation for the update.
+        # We have an old file, but the md5 doesn't match, indicating the new
+        # one may be updated, so remove the old one.
         os.remove(filepath)
 
     # some of the files being written contain secrets in plaintext, so don't
@@ -352,7 +335,7 @@ def parameteriseTemplate(template, targetDir, varsDict):
     try:
         file_loader = jinja2.FileSystemLoader(templatedir)
         env = jinja2.Environment(loader = file_loader, trim_blocks = True,
-                lstrip_blocks = True)
+                lstrip_blocks = True, undefined=jinja2.DebugUndefined)
         t = env.get_template(template)
         output = t.render(varsDict)
     except jinja2.TemplateNotFound as e:
@@ -363,8 +346,17 @@ def parameteriseTemplate(template, targetDir, varsDict):
     return changed, yamltmp
 
 def getOutputVars() -> dict:
-    env = json.loads(runCollect(f"{tf} output -json".split()))
-    return {k: v["value"] for k, v in env.items()}
+    x = json.loads(runCollect(f"{tf} output -json".split()))
+    env = {k: v["value"] for k, v in x.items()}
+    if target == "aws":
+        # Trim off everything on the AWS API server endpoint so that we're left
+        # with just the hostname.
+        ep = env["k8s_api_server"]
+        u = urlparse(ep)
+        assert u.scheme == None or u.scheme == "https"
+        assert u.port == None or u.port == 443
+        env["k8s_api_server"] = u.hostname
+    return env
 
 # Azure does some funky stuff with usernames for databases: It interposes a
 # gateway in front of the database that forwards connections from
@@ -376,9 +368,14 @@ def generateDatabaseUsers(env: dict) -> None:
         if target == "az":
             env[db + "_user"] += "@" + env[db + "_address"]
 
-def updateKubeConfig(kubecfg: str) -> None:
+class KubeContextError(Exception):
+    pass
+
+def updateKubeConfig(kubecfg: str = None) -> None:
+    # Phase I: Write in the new kubectl config file as-is
     announce(f"Updating kube config file")
     if target == "aws":
+        assert kubecfg != None
         replaceFile(kubecfgf, kubecfg)
         print(f"wrote out kubectl file to {kubecfgf}")
     elif target == "az":
@@ -387,6 +384,22 @@ def updateKubeConfig(kubecfg: str) -> None:
     elif target == "gcp":
         runStdout(f"gcloud container clusters get-credentials {clustname} "
                 f"--region {zone} --internal-ip".split())
+
+    # Phase II: Modify the config so that we use the proxy address and so that
+    # we ignore the subject alternative names in the api-server certificate
+    c = runCollect(f"{kube} config get-contexts "
+            "--no-headers".split()).splitlines()
+    for l in c:
+        columns = l.split()
+        if columns[0] == "*":
+            # get the cluster name
+            cluster = columns[2]
+            runStdout(f"kubectl config set clusters.{cluster}.server "
+                    f"https://localhost:{apisrvportl}".split())
+            runStdout(f"kubectl config set-cluster {cluster} "
+                    "--insecure-skip-tls-verify=true".split())
+            return
+    raise KubeContextError(f"No active {kube} context within:\n{c}")
 
 def getMyPublicIp() -> str:
     announce("Getting public IP address")
@@ -401,9 +414,9 @@ def getMyPublicIp() -> str:
         myIp = ipaddress.ip_address(i)
         # TODO: This statement won't actually be true until we exclude VPN
         # access for AWS and GCP, and restrict home access for Azure too.
-        text = announceBox(f"Your visible IP address is {myIp}. Ingress to your "
-                "newly-created bastion server will be limited to this address "
-                "exclusively.")
+        text = announceBox(f"Your visible IP address is {myIp}. Ingress to "
+                "your newly-created bastion server will be limited to this "
+                "address exclusively.")
         return myIp
     except ValueError:
         print(f"Unable to retrieve my public IP address; got {i}")
@@ -417,39 +430,241 @@ def getSshPublicKey() -> str:
     except IOError as e:
         sys.exit(f"Unable to read your public RSA key {rsaPub}")
 
-# This whole function exists because of a race condition in kubectl wait (see
-# https://github.com/kubernetes/kubernetes/issues/83242). kubectl tries to look
-# for resources to wait for, matching the specified criteria, and if it doesn't
-# find any it fails out. This doesn't take into account that the necessary
-# resources may not have yet appeared.
-def waitForCondition(resource: str, condition: str, minresources: int) -> None:
-    out = ""
-    attempts = 1
-    stime = 1 # 2 seconds, doubling every time as a backoff
-    while True:
-        r = runTry(f"{kube} get {resource} --output=name -A".split())
-        if r.returncode == 0:
-            out = r.stdout.strip()
-            if r.stdout.count('\n') >= minresources:
-                r = runTry(f"{kube} wait --for=condition={condition} --timeout "
-                        f"0 --all {resource} -A --output=name".split())
-                if r.returncode == 0:
-                    out = r.stdout.strip()
-                    if r.stdout.count('\n') >= minresources:
-                        break
-        print(f"Waiting for {resource} to reach '{condition}' state "
-                f"(attempts = {attempts})...")
-        if attempts & 3 == 0: # every fourth time, give extra info
-            if len(out) > 0:
-                print("So far I have these:\n" + out)
-            else:
-                print(f"No {resource} exist yet")
-        time.sleep(stime)
-        attempts += 1
-        stime <<= 1
+def waitUntilNodesReady(minnodes: int) -> float:
+    numer = 0
+    denom = 0
+    r = runTry(f"{kube} get no --no-headers".split())
+    if r.returncode == 0:
+        lines = r.stdout.splitlines()
+        denom = len(lines)
+        for line in lines:
+            cols = line.split()
+            assert len(cols) == 5
+            if cols[1] == "Ready":
+                # We've found a node that's ready. Count it.
+                numer += 1
+    denom = max(denom, minnodes)
+    assert numer <= denom
+    return float(numer) / float(denom)
 
-    print(out)
-    print(f"All {resource} are in '{condition}' state")
+def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:
+    numer = 0
+    denom = 0
+    ns = f" --namespace {namespace}" if namespace != None else ""
+    r = runTry(f"{kube}{ns} get po --no-headers".split())
+    if r.returncode == 0:
+        lines = r.stdout.splitlines()
+        for line in lines:
+            cols = line.split()
+            assert len(cols) == 5
+            readyratio = cols[1].split('/')
+            contready = int(readyratio[0])
+            conttotal = int(readyratio[1])
+            assert contready <= conttotal
+            assert contready < conttotal or cols[2] == "Running"
+            numer += contready
+            denom += conttotal
+    denom = max(denom, mincontainers)
+    assert numer <= denom
+    return float(numer) / float(denom)
+
+def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
+        -> float:
+    numer = 0
+    denom = 0
+    ns = f" --namespace {namespace}" if namespace != None else ""
+    r = runTry(f"{kube}{ns} get deployments --no-headers".split())
+    if r.returncode == 0:
+        lines = r.stdout.splitlines()
+        for line in lines:
+            cols = line.split()
+            assert len(cols) == 5
+            readyratio = cols[1].split('/')
+            repready = int(readyratio[0])
+            reptotal = int(readyratio[1])
+            assert repready <= reptotal
+            numer += repready
+            denom += reptotal
+    denom = max(denom, minreplicas)
+    assert numer <= denom
+    return float(numer) / float(denom)
+
+def loadBalancerResponding(service: str) -> bool:
+    port = svcports[service]
+
+    # It is assumed this function will only be called once the ssh tunnels
+    # have been established between the localhost and the bastion host
+    if service == "starburst":
+        url = f"http://localhost:{port}/ui/login.html"
+    elif service == "ranger":
+        url = f"http://localhost:{port}/login.jsp"
+
+    try:
+        r = requests.get(url)
+        return r.status_code == 200
+    except requests.exceptions.ConnectionError as e:
+        return False
+
+def waitUntilLoadBalancersUp(services: list, namespace: str = None,
+        checkConnectivity: bool = False) -> float:
+    numer = 0
+    denom = 0
+    ns = f" --namespace {namespace}" if namespace != None else ""
+    r = runTry(f"{kube}{ns} get svc -ojson".split())
+    if r.returncode == 0:
+        servs = json.loads(r.stdout)
+        for s in servs["items"]:
+            # Metadata section
+            meta = s["metadata"] # this should always be present
+            assert meta["namespace"] == namespace # we only asked for this
+            if not "name" in meta:
+                continue
+            name = meta["name"]
+            if not name in services:
+                continue
+            denom += 1 # found one we care about it
+
+            # Status section - now see if its IP is allocated yet
+            if not "status" in s:
+                continue
+            status = s["status"]
+            if "loadBalancer" not in status:
+                continue
+            lb = status["loadBalancer"]
+            if not "ingress" in lb:
+                continue
+            ingress = lb["ingress"]
+            assert len(ingress) == 1
+            ingress0 = ingress[0]
+            
+            # Key could be either ip or hostname, both valid
+            if "ip" in ingress0:
+                host = ingress0["ip"]
+            elif "hostname" in ingress0:
+                host = ingress0["hostname"]
+            else:
+                continue
+            if not len(host) > 0:
+                continue
+
+            # Has to actually respond to an HTTP GET
+            if checkConnectivity and not loadBalancerResponding(name):
+                continue
+
+            # Found one service load balancer running
+            numer += 1
+    assert numer <= denom
+    return float(numer) / float(denom)
+
+def waitUntilApiServerResponding() -> float:
+    # It is assumed this function will only be called once the ssh tunnels
+    # have been established between the localhost and the bastion host
+    url = f"https://localhost:{apisrvportl}/"
+    try:
+        r = requests.get(url, verify = False) # ignore certificate
+        # Either forbidden (403) or 200 is Ok and expected.
+        if r.status_code in (403, 200):
+            return 1.0 # all done!
+    except requests.exceptions.ConnectionError as e:
+        pass
+    return 0.0
+
+def spinWait(waitFunc: Callable[[], float]) -> None:
+    anim1 = ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷']
+    anim2 = ['⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽', '⣾']
+    maxlen = 0
+    f = min(len(anim1), len(anim2))
+    barlength = 64
+    i = 0
+    pct = 0.0
+    while pct < 1.0:
+        pct = waitFunc()
+        assert(pct <= 1.0)
+        c = int(pct * barlength)
+        arrow = '⇒' if c > 0 else ""
+        if c > 1:
+            arrow = (c - 1) * '═' + arrow
+        r = barlength - c
+        space = ' '*r
+        s = '   ' + anim1[i % f] + '╞' + arrow + space + '╡' + anim2[i % f]
+        maxlen = max(maxlen, len(s))
+        print(s, end='\r', flush=True)
+        if pct == 1.0:
+            print(' ' * maxlen, end='\r')
+            return
+        i += 1
+        time.sleep(2.5)
+
+# A class for recording ssh tunnels
+class Tunnel:
+    def __init__(self, shortname: str, bastionIp: str, lPort: int, rAddr: str,
+            rPort: int):
+        self.shortname = shortname
+        self.bastion = bastionIp
+        self.lport = lPort
+        self.raddr = rAddr
+        self.rport = rPort
+        self.p = None
+        cmd = "ssh -N -L{p}:{a}:{k} ubuntu@{b}".format(p = lPort, a = rAddr, k
+                = rPort, b = bastionIp)
+        print(cmd)
+        self.p = subprocess.Popen(cmd.split())
+        announce("Created tunnel " + str(self))
+
+    def __del__(self):
+        announce("Terminating tunnel " + str(self))
+        if self.p != None:
+            self.p.terminate()
+
+    def __str__(self):
+        return "PID {p}: localhost:{l} -> {ra}:{rp}".format(p =
+                self.p.pid if self.p != None else "UNKNOWN", l = self.lport, ra
+                = self.raddr if len(self.raddr) < 16 else self.shortname, rp =
+                self.rport)
+
+# Input dictionary is the output variables from Terraform.
+def establishBastionTunnel(env: dict) -> None:
+    # The new bastion server will have a new host key. Delete the old one we
+    # have and grab the new one.
+    announce(f"Replacing bastion host keys in {knownhosts}")
+    try:
+        runStdout("ssh-keygen -q -R {b}".format(b =
+            env["bastion_address"]).split())
+    except CalledProcessError as e:
+        print("Unable to remove host key for {b} in {k}. Is file "
+                "missing?".format(b = env["bastion_address"], k = knownhosts))
+    cmd = "ssh-keyscan -4 -p22 -H {b}".format(b = env["bastion_address"])
+    print(cmd)
+    hostkeys = runCollect(cmd.split())
+    print("Adding {n} host keys from bastion to {k}".format(n =
+        len(hostkeys.splitlines()), k = knownhosts))
+    appendToFile(knownhosts, hostkeys)
+
+    # Start up the tunnel to the Kubernetes API server
+    toreap.append(Tunnel("k8s-apiserver", env["bastion_address"], apisrvportl,
+        env["k8s_api_server"], apisrvport))
+
+    # Now that the tunnel is in place, update our kubecfg with the address to
+    # the tunnel, keeping everything else in place
+    updateKubeConfig(env["kubectl_config"] if "kubectl_config" in env
+            else None)
+
+    # Ensure that we can talk to the api server
+    announce("Waiting for api server to respond")
+    spinWait(lambda: waitUntilApiServerResponding())
+
+def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
+    # If we've already got an aws auth config map, we're done
+    r = runTry(f"{kube} describe configmap -n kube-system aws-auth".split())
+    if r.returncode == 0:
+        announce("aws-auth configmap already installed")
+        return
+    # Parameterise the aws auth config map template with the node role arn
+    changed, yamltmp = parameteriseTemplate(awsauthcm, tfdir, { "NodeRoleARN":
+        workerIamRoleArn })
+    # Nodes should start joining after this
+    announce("Adding aws-auth configmap to cluster")
+    runStdout(f"{kube} apply -f {yamltmp}".split())
 
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars
@@ -462,6 +677,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
         "DBPassword":          dbpwd,
         "DBUser":              dbuser,
         "InstanceType":        instanceType,
+        "MaxPodsPerNode":      maxpodpnode,
         "MyCIDR":              mySubnetCidr,
         "MyPublicIP":          getMyPublicIp(),
         "NodeCount":           nodeCount,
@@ -473,29 +689,23 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
         "Zone":                zone
         })
     assert target in clouds
-    if target == "aws":
-        env["VpnInstanceId"] = awsvpns[zone]
-    elif target == "az":
-        vpn = azurevpns[zone]
-        env["VpnVnetResourceGroup"] = vpn["resourceGroup"]
-        env["VpnVnetName"] = vpn["name"]
+    if target == "az":
         env["ResourceGroup"] = resourcegrp
-        env["ForwarderScript"] = forwarder
         env["StorageAccount"] = storageacct
-    elif target == "gcp":
-        env["VpnInstanceId"] = gcpvpns[zone]
     parameteriseTemplate(tfvars, tfdir, env)
 
     if not skipClusterStart:
-        announce("Starting terraform apply")
-        runStdout(f"{tf} init -input=false -upgrade".split())
+        announce("Starting terraform run")
         t = time.time()
+        runStdout(f"{tf} init -input=false -upgrade".split())
         runStdout(f"{tf} apply -auto-approve -input=false".split())
-        announce("tf apply completed in " + time.strftime("%Hh%Mm%Ss",
+        announce("terraform run completed in " + time.strftime("%Hh%Mm%Ss",
             time.gmtime(time.time() - t)))
 
     # Get variables returned from terraform run
     env = getOutputVars()
+
+    # Generate the usernames for the databases
     generateDatabaseUsers(env) # Modify dict in-place
 
     # Having set up storage, we've received some credentials for it that we'll
@@ -507,31 +717,37 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     elif target == "az":
         env["adls_access_key"] = env["object_key"]
 
-    updateKubeConfig(env["kubectl_config"] if "kubectl_config" in env else "")
-    warnVpnConfig(env["private_dns_address"] if target == "az" else "")
+    # Start up the ssh tunnel to the bastion, so we can run kubectl
+    establishBastionTunnel(env)
 
-    # Don't return until all nodes and K8S system pods are ready
+    # For AWS, the nodes will not join until we have added the node role ARN to
+    # the aws-auth-map-cn.yaml.
+    if target == "aws":
+        addAwsAuthConfigMap(env["worker_iam_role_arn"])
+
+    # Don't continue until all nodes are ready
     announce("Waiting for nodes to come online")
-    waitForCondition("nodes", "Ready", nodeCount)
+    spinWait(lambda: waitUntilNodesReady(nodeCount))
+
+    # Don't continue until all K8S system pods are ready
     announce("Waiting for K8S system pods to come online")
-    waitForCondition("pods", "Ready", nodeCount*2)
+    spinWait(lambda: waitUntilPodsReady(nodeCount*2, "kube-system"))
     return env
 
-def stopPortForward():
-    for p in psutil.process_iter(["cmdline"]):
-        c = p.info["cmdline"]
-        if c and c[0] == "socat":
-            port = ((c[1]).split(',')[0]).split(':')[1]
-            p.terminate()
-            announce("Terminated process {pid} which was port-forwarding "
-                    "localhost:{port}".format(port = port, pid = p.pid))
-
-def startPortForward():
-    stopPortForward()
+def startPortForward(bastionIp: str) -> None:
+    # should be nodeCount - 1 workers with 1 container each, 2 containers for
+    # the coordinator, and 2 containers each for Hive and Ranger
     announce("Waiting for pods to be ready")
-    waitForCondition("pods", "Ready", nodeCount*2)
-    announce("Waiting for services to be available")
-    waitForCondition("deployments.apps", "Available", 5)
+    spinWait(lambda: waitUntilPodsReady(nodeCount + 5, namespace))
+
+    # coordinator, worker, hive, ranger, 1 replica each = 4 replicas
+    announce("Waiting for deployments to be available")
+    spinWait(lambda: waitUntilDeploymentsAvail(4, namespace))
+
+    # now the load balancers need to be running with their IPs assigned
+    announce("Waiting for load-balancers to launch")
+    spinWait(lambda: waitUntilLoadBalancersUp(list(svcports.keys()),
+        namespace))
 
     #
     # Get the DNS name of the load balancers we've created
@@ -552,21 +768,18 @@ def startPortForward():
         else:
             sys.exit("Could not find either hostname or ip in {ingress}")
 
-
     # we should have a load balancer for every service we'll forward
     assert len(lbs) == len(svcports)
-
-    subprocs = []
     for svc, port in svcports.items():
-        sproc = subprocess.Popen("socat TCP-LISTEN:{p},fork,reuseaddr "
-                "TCP:{lb}:{p}".format(p = port, lb = lbs[svc]).split(), stderr =
-                subprocess.STDOUT, stdout = subprocess.DEVNULL)
-        subprocs.append(sproc)
-        announce("PID {pid} is now port-forwarding from localhost:{p} to "
-                "{lb}:{p}".format(p = str(port), lb = lbs[svc], pid =
-                    sproc.pid))
+        toreap.append(Tunnel(svc, bastionIp, port, lbs[svc], port))
 
-    assert len(subprocs) == len(svcports)
+    # make sure the load balancers are actually responding
+    announce("Waiting for load-balancers to start responding")
+    spinWait(lambda: waitUntilLoadBalancersUp(list(svcports.keys()),
+        namespace, checkConnectivity = True))
+
+class ApiError(Exception):
+    pass
 
 def retry(f, maxretries: int, err: str) -> requests.Response:
     retries = 0
@@ -575,8 +788,11 @@ def retry(f, maxretries: int, err: str) -> requests.Response:
         try:
             r = f()
             if r.status_code == 503:
-                time.sleep(0.1)
+                time.sleep(0.5)
                 continue
+            # All good -- we exit here.
+            if retries > 0:
+                print(f"Succeeded on \"{err}\" after {retries} retries")
             return r
         except requests.exceptions.ConnectionError as e:
             print(f"Failed to connect: \"{err}\"; retries={retries}; sleep={stime}")
@@ -586,9 +802,6 @@ def retry(f, maxretries: int, err: str) -> requests.Response:
             time.sleep(stime)
             retries += 1
             stime <<= 1
-
-class ApiError(Exception):
-    pass
 
 def issuePrestoCommand(command: str, verbose = False) -> list:
     httpmaxretries = 10
@@ -656,24 +869,24 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
     for t in threads:
         t.join()
 
-def eraseBucketContents():
+def eraseBucketContents(env: dict):
     # Delete everything in the S3 bucket
     assert target in clouds
-    env = getOutputVars()
-    cmd = None
+
+    cmd = ""
     if target == "aws":
         cmd = "aws s3 rm s3://{b}/{d} --recursive".format(b = bucket, d =
                 dbschema)
     elif target == "az" and "adls_access_key" in env:
         cmd = ("az storage fs directory delete -y --file-system {b} "
                 "--account-name {s} --account-key {a} --name /{d}").format(b =
-                        bucket, s = storageacct, a = env["adls_access_key"], d =
-                        dbschema)
+                        bucket, s = storageacct, a = env["adls_access_key"], d
+                        = dbschema)
     elif target == "gcp" and "object_address" in env:
         cmd = "gsutil rm -rf {b}/{d}".format(b = env["object_address"], d =
                 dbschema)
 
-    if cmd != None:
+    if cmd != "":
         announce(f"Deleting contents of bucket {bucket}")
         try:
             runStdout(cmd.split())
@@ -684,7 +897,7 @@ def loadDatabases(hive_location):
     if target == "aws":
         hive_location = f"s3://{bucket}"
     elif target == "az":
-        hive_location = f"abfs://{bucket}@{hive_location}/"
+        hive_location = f"abfs://{bucket}@{hive_location}"
 
     # First copy from tpch to hive...
     announce(f"populating tables in {hivecat}")
@@ -926,7 +1139,7 @@ def helmInstallAll(env):
     # shouldn't be any files in our filesystem, in order to be in sync. Do this
     # to avoid errors about finding existing files.
     if installed:
-        eraseBucketContents()
+        eraseBucketContents(env)
 
 def helmUninstallAll():
     announce("Uninstalling all helm releases")
@@ -942,11 +1155,8 @@ def awsGetCreds():
     awsSecret = runCollect("aws configure get aws_secret_access_key".split())
     return dict(AWSAccessKey=awsAccess, AWSSecretKey=awsSecret)
 
-def announceReady(env: dict) -> list:
-    w = ["Bastion: {b}".format(b = env["bastion_address"])]
-    for service, port in svcports.items():
-        w.append(f"{service}: localhost:{port}")
-    return w
+def announceReady(bastionIp: str) -> list:
+    return ["Bastion: {b}".format(b = bastionIp)]
 
 def svcStart(skipClusterStart: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the cluster.
@@ -955,17 +1165,40 @@ def svcStart(skipClusterStart: bool = False) -> list:
     env["Region"] = region
     env.update(awsGetCreds())
     helmInstallAll(env)
-    startPortForward()
+    startPortForward(env["bastion_address"])
     loadDatabases(env["object_address"])
-    return announceReady(env)
+    return announceReady(env["bastion_address"])
+
+def isTerraformSettled(tgtResource: str = None) -> bool:
+    tgt = ""
+    if tgtResource != None:
+        tgt = f"-target='{tgtResource}' "
+    r = runTry(f"{tf} plan -input=false {tgt}"
+            "-detailed-exitcode".split()).returncode
+    return r == 0
 
 def svcStop(emptyNodes: bool = False) -> None:
-    stopPortForward()
-    t = time.time()
-    helmUninstallAll()
-    eraseBucketContents()
-    announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
-        time.gmtime(time.time() - t)))
+    # Re-establish the tunnel with the bastion, or our helm and kubectl
+    # commands won't work.
+    announce("Seeing whether Terraform has already run")
+    if isTerraformSettled():
+        announce("Re-establishing bastion tunnel")
+        env = getOutputVars()
+        try:
+            establishBastionTunnel(env)
+            t = time.time()
+            helmUninstallAll()
+            eraseBucketContents(env)
+            announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
+                time.gmtime(time.time() - t)))
+        except CalledProcessError as e:
+            announceBox(textwrap.dedent("""\
+                    Your Terraform is set up, but your bastion host is not
+                    responding. It might be a network issue, or it might be
+                    your public IP address has changed since you set up. I will
+                    try to destroy your terraform without unloading your pods
+                    but you might have trouble on the destroy."""))
+
     if emptyNodes: return
 
     announce(f"Ensuring cluster {clustname} is deleted")
@@ -974,15 +1207,6 @@ def svcStop(emptyNodes: bool = False) -> None:
     runStdout(f"{tf} destroy -auto-approve".split())
     announce("tf destroy completed in " + time.strftime("%Hh%Mm%Ss",
         time.gmtime(time.time() - t)))
-
-def getClusterState() -> tuple:
-    r = runTry(f"{tf} plan -input=false "
-            "-detailed-exitcode".split()).returncode
-    if r == 0:
-        env = getOutputVars()
-        w = ["Bastion: {b}".format(b = env["bastion_address"])]
-        return True, w
-    return False, []
 
 def checkCLISetup() -> None:
     assert target in clouds
@@ -1042,15 +1266,14 @@ def announceSummary() -> None:
 #
 
 p = argparse.ArgumentParser(description=
-        f"""Create your own Starbust demo service in AWS, Azure or GCP, starting
-        from nothing. It's zero to demo in 20 minutes or less. You provide the
-        instance ID of your VPN in {myvarsbf}, your desired CIDR and some other
-        parameters. This script uses terraform to set up a K8S cluster, with its
-        own VPC/VNet and K8S cluster, routes and peering connections, security,
-        etc. Presto is automatically set up and multiple databases and a data
-        lake are set up. It's designed to allow you to control the new setup
-        from your laptop, without necessarily using a bastion server—although a
-        bastion server is also provided as a convenience. The event logger is
+        f"""Create your own Starbust demo service in AWS, Azure or GCP,
+        starting from nothing. It's zero to demo in 20 minutes or less. You
+        provide your target cloud, zone, your desired CIDR and some other
+        parameters. This script uses terraform to set up a K8S cluster, with
+        its own VPC/VNet and K8S cluster, routes and peering connections,
+        security, etc. Presto is automatically set up and multiple databases
+        and a data lake are set up. It's designed to allow you to control the
+        new setup from your laptop using a bastion server. The event logger is
         set up as well as Starburst Insights (running on a PostgreSQL
         database).""")
 
@@ -1059,13 +1282,10 @@ p.add_argument('-c', '--skip-cluster-start', action="store_true",
 p.add_argument('-e', '--empty-nodes', action="store_true",
         help="Unload k8s cluster only. Used with stop or restart.")
 p.add_argument('command',
-        choices = ["start", "stop", "restart", "status", "pfstart", "pfstop"],
+        choices = ["start", "stop", "restart", "status"],
         help="""Command to issue for demo services.
            start/stop/restart: Start/stop/restart the demo environment.
-           status: Show whether the demo environment is running or not.
-           pfstart: Start port-forwarding from local ports to container ports
-                    (happens with start).
-           pfstop: Stop port-forwarding from local ports to container ports.""")
+           status: Show whether the environment is running or not.""")
 
 ns = p.parse_args()
 emptyNodes = ns.empty_nodes
@@ -1076,14 +1296,6 @@ if emptyNodes and command not in ("stop", "restart"):
 
 checkCLISetup()
 checkRSAKey()
-
-if command == "pfstart":
-    startPortForward()
-    sys.exit(0)
-
-if command == "pfstop":
-    stopPortForward()
-    sys.exit(0)
 
 announceSummary()
 
@@ -1096,14 +1308,25 @@ if command in ("stop", "restart"):
 if command in ("start", "restart"):
     w = svcStart(ns.skip_cluster_start)
     started = True
-    announceBox(f"Your {rsaPub} public key has been installed into the bastion "
-            "server, so you can ssh there now (user 'ubuntu').")
+    announceBox(f"Your {rsaPub} public key has been installed into the "
+            "bastion server, so you can ssh there now (user 'ubuntu').")
 
 if command == "status":
     announce("Fetching current status")
-    started, w = getClusterState()
+    started = isTerraformSettled()
+    if started:
+        env = getOutputVars()
+        w = announceReady(env["bastion_address"])
 
 y = ["Service is " + ("started" if started else "stopped")]
 if len(w) > 0:
     y += w
+
+if command in ("start", "restart") and started:
+    y.append("You have the following ssh tunnels running via bastion:")
+    y += [str(i) for i in toreap]
+    announceLoud(y)
+    input("Press return key to quit and terminate tunnels!")
+    sys.exit(0)
+
 announceLoud(y)

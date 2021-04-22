@@ -1,5 +1,5 @@
 variable "tags" {
-  default          = {
+  default = {
     cloud       = "{{Target}}"
     environment = "demo"
     org         = "sales"
@@ -34,28 +34,20 @@ variable "instance_type" {
   default = "{{InstanceType}}"
 }
 
-variable "bastion_instance_type" {
-  default = "{{BastionInstanceType}}"
+variable "bastion_name" {
+  default = "bastion-{{ShortName}}"
 }
 
-variable "forwarder_script" {
-  default = "{{ForwarderScript}}"
+variable "bastion_instance_type" {
+  default = "{{BastionInstanceType}}"
 }
 
 variable "node_count" {
   default = "{{NodeCount}}"
 }
 
-variable "vpn_instance_id" {
-  default = "{{VpnInstanceId}}"
-}
-
-variable "vpn_vnet_resource_group" {
-  default = "{{VpnVnetResourceGroup}}"
-}
-
-variable "vpn_vnet_name" {
-  default = "{{VpnVnetName}}"
+variable "max_pods_per_node" {
+  default = "{{MaxPodsPerNode}}"
 }
 
 variable "evtlog_server_name" {
