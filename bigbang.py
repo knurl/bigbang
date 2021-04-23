@@ -458,10 +458,19 @@ def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:
             readyratio = cols[1].split('/')
             contready = int(readyratio[0])
             conttotal = int(readyratio[1])
-            assert contready <= conttotal
-            assert contready < conttotal or cols[2] == "Running"
-            numer += contready
+            assert contready <= conttotal # common sense
             denom += conttotal
+
+            # Since the cluster is brand-new and launching, we would only
+            # expect pods to be advancing towards the Running/Ready state.
+            # But some of GCP's K8S system pods have a habit of crashing on
+            # start. So we have to check not just the number ready, but that
+            # they're not terminating. https://tinyurl.com/54ramy8k 
+            if cols[2] == "Terminating":
+                continue # None count since they're terminating
+
+            # Now they're either Running or heading there.
+            numer += contready
     denom = max(denom, mincontainers)
     assert numer <= denom
     return float(numer) / float(denom)
@@ -591,7 +600,7 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
             print(' ' * maxlen, end='\r')
             return
         i += 1
-        time.sleep(1.5)
+        time.sleep(1)
 
 # A class for recording ssh tunnels
 class Tunnel:
