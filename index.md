@@ -7,7 +7,7 @@ not officially released by Starburst, nor is it supported by Starburst,
 including by any of Starburst's Enterprise Support Agreements. It is made
 publicly and freely available purely for educational purposes.*
 
-## Important
+## Important!
 
 **NB: Before you run bigbang.py:** Make sure you do the following:
 
