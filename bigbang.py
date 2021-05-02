@@ -221,7 +221,7 @@ modules = ["hive", "ranger", "enterprise"]
 for module in modules:
     templates[module] = f"{module}_v.yaml"
     releases[module] = f"{module}-{shortname}"
-    charts[module] = f"{repo}/starburst-{module}"
+    charts[module] = f"starburst-{module}"
 
 #
 # Important announcements to the user!
@@ -286,10 +286,8 @@ def replaceFile(filepath, contents) -> bool:
             with open(filepath) as fh:
                 fl = fh.readline()
                 if len(fl) > 0:
-                    if match := re.match(r"# md5 ([\da-f]{32}) ver "
-                            "(\d+\.\d+\.\d+)", fl):
-                        if newmd5 == match.group(1) and \
-                                chartversion == match.group(2):
+                    if match := re.match(r"# md5 ([\da-f]{32})", fl):
+                        if newmd5 == match.group(1):
                             # It's the same file. Don't bother writing it.
                             return False # didn't write
         # We have an old file, but the md5 doesn't match, indicating the new
@@ -303,7 +301,7 @@ def replaceFile(filepath, contents) -> bool:
     try:
         with open(os.open(path=filepath, flags=flags, mode=0o600), 'w') as fh:
             if ext in (".yaml", ".tf"):
-                fh.write(f"# md5 {newmd5} ver {chartversion}\n")
+                fh.write(f"# md5 {newmd5}\n")
             fh.write(contents)
     except IOError as e:
         print(f"Couldn't write file {filepath} due to {e}")
@@ -985,17 +983,26 @@ def helmDeleteNamespace() -> None:
             "--current".split())
 
 def helmGetReleases() -> list:
-    releases = []
+    rls = []
     try:
-        releases = helmGet(f"{helmns} ls --short").splitlines()
+        rlsj = json.loads(helmGet(f"{helmns} list -ojson"))
+        rls = { r["name"]: r["chart"] for r in rlsj }
     except CalledProcessError as e:
         print("No helm releases found.")
-    return releases
+    return rls
 
-def helmIsReleaseInstalled(module: str) -> bool:
-    return releases[module] in helmGetReleases()
+def helmWhichChartInstalled(module: str) -> str:
+    chart = None
+    release = releases[module] # Get release name for module name
+    installed = helmGetReleases()
+    if release in installed:
+        chart = installed[release] # Get chart for release
+    return chart
 
+# Returns a bool indicating if the hive postgres database might have been
+# created--either during an install, or because we revved up a version
 def helmInstallRelease(module: str, env = {}) -> bool:
+    hivereset = False
     env.update(myvars)
     env.update({
         "BucketName":        bucket,
@@ -1008,25 +1015,38 @@ def helmInstallRelease(module: str, env = {}) -> bool:
         "target":            target
         })
 
-    # Parameterise the yaml file that configures the helm chart install
+    # Parameterise the yaml file that configures the helm chart install. The
+    # function returns a tuple, indicating whether the helm chart values file
+    # changed, and the location of that same (parameterised) values file.
     changed, yamltmp = parameteriseTemplate(templates[module], tmpdir, env)
 
-    if not helmIsReleaseInstalled(module):
-        announce("Installing release {} using helm".format(releases[module]))
-        helm("{h} install {r} {c} -f {y} --version {v}".format(h = helmns, r =
-            releases[module], c = charts[module], y = yamltmp, v =
-            chartversion))
-        return True # freshly installed
+    chart = helmWhichChartInstalled(module)
+    newchart = charts[module] + "-" + chartversion # which one to install?
 
-    if not changed:
-        print("Values file for {r} unchanged ➼ avoiding helm upgrade".format(r =
-            releases[module]))
-        return False
+    if chart == None: # Nothing installed yet, so we need to install
+        announce(f"Installing chart {newchart} using helm")
+        helm("{h} install {r} {p}/{c} -f {y} --version {v}".format(h = helmns,
+            r = releases[module], p = repo, c = charts[module], y = yamltmp,
+            v = chartversion))
+        if module == "hive":
+            hivereset = True # freshly installed -> new postgres
+    # If either the chart values file changed, or we need to update to a
+    # different version of the chart, then we have to upgrade
+    elif changed or chart != newchart:
+        astr = "Upgrading release {}".format(releases[module])
+        if chart != newchart:
+            astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
+        announce(astr)
+        helm("{h} upgrade {r} {p}/{c} -i -f {y} --version {v}".format(h =
+            helmns, r = releases[module], p = repo, c = charts[module], y =
+            yamltmp, v = chartversion))
 
-    announce("Upgrading release {} using helm".format(releases[module]))
-    helm("{h} upgrade {r} {c} -i -f {y} --version {v}".format(h = helmns, r =
-        releases[module], c = charts[module], y = yamltmp, v = chartversion))
-    return False # upgraded, rather than newly installed
+        # Hive postgres DB will be rebuilt only if we rev a version
+        if module == "hive" and chart != newchart:
+            hivereset = True
+    else:
+        print(f"{chart} values unchanged ➼ avoiding helm upgrade")
+    return hivereset
 
 def helmUninstallRelease(release: str) -> None:
     helm(f"{helmns} uninstall {release}")
@@ -1140,14 +1160,15 @@ def helmInstallAll(env):
     ensureHelmRepoSetUp(repo)
     capacities = planWorkerSize()
     env.update(capacities)
-    installed = False
+    hivereset = False
     for module in modules:
-        installed = helmInstallRelease(module, env) or installed
-    # If we've installed Hive for the first time, then it will have set up fresh
-    # the internal PostgreSQL DB used for metadata, which means there also
-    # shouldn't be any files in our filesystem, in order to be in sync. Do this
-    # to avoid errors about finding existing files.
-    if installed:
+        hivereset = helmInstallRelease(module, env) or hivereset
+    # If we've installed Hive for the first time, or if we revved the version
+    # of the Hive helm chart, then it will have set up fresh the internal
+    # PostgreSQL DB used for metadata, which means there also shouldn't be any
+    # files in our filesystem, in order to be in sync. Do this to avoid errors
+    # about finding existing files.
+    if hivereset:
         eraseBucketContents(env)
 
 def deleteAllServices() -> None:
@@ -1160,9 +1181,9 @@ def deleteAllServices() -> None:
     runStdout(f"{kubens} delete svc --all".split())
 
 def helmUninstallAll():
-    announce("Uninstalling all helm releases")
-    for release in helmGetReleases():
+    for release, chart in helmGetReleases().items():
         try:
+            announce(f"Uninstalling chart {chart}")
             helmUninstallRelease(release)
         except CalledProcessError as e:
             print(f"Unable to uninstall release {release}: {e}")

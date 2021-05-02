@@ -20,7 +20,7 @@ Zone: europe-west1-b # GCP - St. Ghislain, Belgium
 
 # Version of Starburst you want to install. This must match across
 # starburst-presto, starburst-ranger, and starburst-hive.
-ChartVersion: 354.0.0
+ChartVersion: 355.0.0
 
 # number of nodes in K8S cluster
 NodeCount: 4
