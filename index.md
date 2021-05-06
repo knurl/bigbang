@@ -1,5 +1,21 @@
 # bigbang
 
+This is the closest thing you'll find to a Starburst installer. You basically have to edit one file, my-vars.yaml, to specify:
+1. Your choice of cloud target
+2. Your preferred region, in which to install
+3. The version of Starburst you want to set up
+4. How big you want your cluster to be, and what type of instances
+
+Then add a Starburst license and your helm credentials file, and it will start
+installing. 15-20 minutes later your cluster will be ready with a lake, some
+databases, and event-logger and Insights set up. Magic!
+
+To get the installer code, go to some directory and enter:
+
+`git clone https://github.com/knurl/bigbang`
+
+Then follow the instructions in the README.md (also shown below)
+
 ## Disclaimer
 
 **_NB:_** *This release does not form any part of the Starburst product. It is
@@ -22,28 +38,27 @@ publicly and freely available purely for educational purposes.*
 ## Usage
 
 ```
-usage: bigbang.py [-h] [-c] [-e] {start,stop,restart,status,pfstart,pfstop}
+usage: bigbang.py [-h] [-c] [-e] {start,stop,restart,status}
 
-Create your own Starbust demo service in AWS, Azure or GCP, starting from
+Create your own Starbust demo service in AWS, Azure or GCP, starting from 
 nothing. It's zero to demo in 20 minutes or less. You provide your target
-cloud, zone, your desired CIDR and some other parameters. This script uses
-terraform to set up a K8S cluster, with its own VPC/VNet and K8S cluster,
-routes and peering connections, security, etc. Presto is automatically set up
-and multiple databases and a data lake are set up. It's designed to allow you
-to control the new setup from your laptop using a bastion server. The event
-logger is set up as well as Starburst Insights (running on a PostgreSQL
-database).
+cloud, zone/region, version of software, and your cluster size and instance
+type, and everything is set up for you, including Starburst, multiple
+databases, and a data lake. The event logger and Starburst Insights are set up
+too. This script uses terraform to set up a K8S cluster, with its own VPC/VNet
+and K8S cluster, routes and peering connections, security, etc. It's designed
+to allow you to control the new setup from your laptop using a bastion server.
 
 positional arguments:
   {start,stop,restart,status}
-			Command to issue for demo services. start/stop/restart:
-			Start/stop/restart the demo environment.
-			status: Show whether the environment is running or not.
+                        Command to issue for demo services. start/stop/restart: 
+                        Start/stop/restart the demo environment. status: Show
+                        whether the environment is running or not.
 
 optional arguments:
   -h, --help            show this help message and exit
   -c, --skip-cluster-start
-                        Skip checking to see if cluster needs to be started
+                        Skip checking to see if cluster needs to be started.
   -e, --empty-nodes     Unload k8s cluster only. Used with stop or restart.
 ```
 
