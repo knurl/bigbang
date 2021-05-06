@@ -1,6 +1,7 @@
 # bigbang
 
-This is the closest thing you'll find to a Starburst installer. You basically have to edit one file, my-vars.yaml, to specify:
+This is the closest thing you'll find to a Starburst installer. You basically
+have to edit one file, my-vars.yaml, to specify:
 1. Your choice of cloud target
 2. Your preferred region, in which to install
 3. The version of Starburst you want to set up
@@ -14,7 +15,10 @@ To get the installer code, go to some directory and enter:
 
 `git clone https://github.com/knurl/bigbang`
 
-Then follow the instructions in the README.md (also shown below)
+Then follow the instructions in the README.md (also shown below).
+
+![](https://github.com/knurl/bigbang/blob/gh-pages/screenshot1.png)
+![](https://github.com/knurl/bigbang/blob/gh-pages/screenshot2.png)
 
 ## Disclaimer
 
@@ -40,7 +44,7 @@ publicly and freely available purely for educational purposes.*
 ```
 usage: bigbang.py [-h] [-c] [-e] {start,stop,restart,status}
 
-Create your own Starbust demo service in AWS, Azure or GCP, starting from 
+Create your own Starbust demo service in AWS, Azure or GCP, starting from
 nothing. It's zero to demo in 20 minutes or less. You provide your target
 cloud, zone/region, version of software, and your cluster size and instance
 type, and everything is set up for you, including Starburst, multiple
@@ -97,18 +101,18 @@ Secret Access Key, your default region, and your default output format (which
 should probably be json). This will create a `~/.aws` directory, containing a
 `config` file with your default region and output format, and a `.credentials`
 file containing your access key ID and secret access key. You'll never need to
-change the `.credentials` file, but you will need to update the `config` file if
-you want to work in a different region.
+change the `.credentials` file, but you will need to update the `config` file
+if you want to work in a different region.
 
 See [this link](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config)
 for the full instructions.
 
 ### Azure CLI
 
-After the installation of `azure-cli`, you now need to configure, by running `az
-configure`, and you'll need to login, by running `az login`. When you log in, it
-will fire up your default browser and have you log into the Azure Portal with
-your Microsoft credentials. After running these commands you'll have a
+After the installation of `azure-cli`, you now need to configure, by running
+`az configure`, and you'll need to login, by running `az login`. When you log
+in, it will fire up your default browser and have you log into the Azure Portal
+with your Microsoft credentials. After running these commands you'll have a
 `~/.azure` directory created with your settings and access tokens inside.
 
 See [this link](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-macos)
@@ -127,9 +131,9 @@ for the full instructions.
 ### Python
 
 Next, you will need python 3.8.5 or higher. On a Mac, the built-in ("system")
-zversion of python that comes with the OS is 2.7.x, which obviously won't do. If
-you type `which python`, you'll probably get `/usr/bin/python`. You can check
-the version with `python -V`. You'll probably see something like this:
+zversion of python that comes with the OS is 2.7.x, which obviously won't do.
+If you type `which python`, you'll probably get `/usr/bin/python`. You can
+check the version with `python -V`. You'll probably see something like this:
 
 ```
 ~ % which python
