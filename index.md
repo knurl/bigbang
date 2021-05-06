@@ -17,8 +17,8 @@ To get the installer code, go to some directory and enter:
 
 Then follow the instructions in the README.md (also shown below).
 
-![](https://github.com/knurl/bigbang/blob/gh-pages/screenshot1.png)
-![](https://github.com/knurl/bigbang/blob/gh-pages/screenshot2.png)
+![](screenshot1.png)
+![](screenshot2.png)
 
 ## Disclaimer
 
