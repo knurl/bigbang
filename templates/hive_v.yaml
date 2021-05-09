@@ -23,25 +23,20 @@ resources:
     cpu: {{hive_cpu}}
 
 objectStorage:
-  # Azure
   {% if target == "aws" %}
   awsS3:
     region: {{Region}}
     endpoint: s3.{{Region}}.amazonaws.com
     accessKey: {{AWSAccessKey}} 
     secretKey: {{AWSSecretKey}}
-  {% endif %}
-  # Azure
-  {% if target == "az" %}
+  {% elif target == "az" %}
   azure:
     abfs:
       authType: "accessKey"
       accessKey:
         storageAccount: {{StorageAccount}}
         accessKey: {{adls_access_key}}
-  {% endif %}
-  # GCS
-  {% if target == "gcp" %}
+  {% elif target == "gcp" %}
   gs:
     cloudKeyFileSecret: {{gcskeyname}}
   {% endif %}
