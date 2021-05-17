@@ -111,7 +111,7 @@ for the full instructions.
 
 ### Python
 
-Next, you will need python 3.8.5 or higher. On a Mac, the built-in ("system")
+Next, you will need python 3.9.1 or higher. On a Mac, the built-in ("system")
 zversion of python that comes with the OS is 2.7.x, which obviously won't do. If
 you type `which python`, you'll probably get `/usr/bin/python`. You can check
 the version with `python -V`. You'll probably see something like this:
@@ -133,8 +133,8 @@ to install the right version of python.
 
 ```
 brew install pyenv
-pyenv install 3.8.5
-pyenv global 3.8.5
+pyenv install 3.9.1
+pyenv global 3.9.1
 ```
 
 Then once you've got that installed, you should install the required python

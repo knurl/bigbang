@@ -6,9 +6,14 @@ registryCredentials:
 
 starburstPlatformLicense: {{LicenseName}}
 
+# How the starburst service will be exposed.
 expose:
   type: loadBalancer
   loadBalancer:
+    name: "starburst"
+    ports:
+      https:
+        port: 8443
     annotations:
       {% if target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
@@ -18,36 +23,72 @@ expose:
       networking.gke.io/load-balancer-type: "Internal"
       {% endif %}
 
+{% if RequireInternalTls %}
+# Shared secret for internal communication.
+sharedSecret: secretRef.sharedsecret.sharedsecret
+
+internal:
+  ports:
+    https:
+      port: 8443
+    http: null
+{% endif %}
+
 coordinator:
   etcFiles:
     properties:
-      access-control.properties: |
-        access-control.name = ranger
-        ranger.authentication-type = BASIC
-        ranger.username = presto_service
-        ranger.password = RangerPassword1
-        ranger.service-name = starburst-enterprise-presto
-        ranger.policy-rest-url = http://ranger:6080
-        ranger.policy-refresh-interval = 10s
       config.properties: |
-        coordinator = true
-        node-scheduler.include-coordinator = false
-        http-server.http.port = 8080
-        discovery-server.enabled = true
-        discovery.uri = http://localhost:8080
-        insights.persistence-enabled = true
-        insights.metrics-persistence-enabled = true
-        insights.jdbc.url = jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
-        insights.jdbc.user = {{evtlog_user}}
-        insights.jdbc.password = {{DBPassword}}
+        coordinator=true
+        node-scheduler.include-coordinator=false
+        http-server.http.port=8080
+        discovery-server.enabled=true
+        http-server.http.enabled=true
+        # allow access to non-ssl for demo purposes
+        discovery.uri=http://localhost:8080
+        exchange.http-client.max-connections=5000
+        exchange.http-client.max-connections-per-server=5000
+        scheduler.http-client.max-connections=5000
+        scheduler.http-client.max-requests-queued-per-destination=5000
+        scheduler.http-client.max-connections-per-server=5000
+{% if RequireCoordTls or RequireInternalTls %}
+        http-server.https.enabled=true
+        http-server.https.port=8443
+        http-server.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
+        http-server.https.keystore.key=test123
+        # TODO Are the next two lines needed?
+        http-server.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
+        http-server.https.truststore.key=test123
+        http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
+{% endif %}
+{% if RequireInternalTls %}
+        node.internal-address-source=FQDN
+        internal-communication.https.required=true
+        internal-communication.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.keystore.key=test123
+        internal-communication.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.truststore.key=test123
+{% endif %}
+        insights.persistence-enabled=true
+        insights.metrics-persistence-enabled=true
+        insights.jdbc.url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
+        insights.jdbc.user={{evtlog_user}}
+        insights.jdbc.password={{DBPassword}}
         insights.metrics-collection-interval=15s
         insights.metrics-persistence-interval=60s
-        insights.authorized-users = .*
+        insights.authorized-users=.*
       event-listener.properties: |
-        event-listener.name = event-logger
-        jdbc.url = jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
-        jdbc.user = {{evtlog_user}}
-        jdbc.password = {{DBPassword}}
+        event-listener.name=event-logger
+        jdbc.url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
+        jdbc.user={{evtlog_user}}
+        jdbc.password={{DBPassword}}
+      access-control.properties: |
+        access-control.name=ranger
+        ranger.authentication-type=BASIC
+        ranger.username=presto_service
+        ranger.password=RangerPassword1
+        ranger.service-name=starburst-enterprise-presto
+        ranger.policy-rest-url=http://ranger:6080
+        ranger.policy-refresh-interval=10s
   resources:
     requests:
       memory: {{coordinator_mem}}
@@ -57,7 +98,7 @@ coordinator:
       cpu: {{coordinator_cpu}}
 
 worker:
-  count: {{workerCount}}
+  replicas: {{workerCount}}
   resources:
     requests:
       memory: {{worker_mem}}
@@ -65,9 +106,66 @@ worker:
     limits:
       memory: {{worker_mem}}
       cpu: {{worker_cpu}}
+  etcFiles:
+    properties:
+      config.properties: |
+        exchange.http-client.max-connections=5000
+        exchange.http-client.max-connections-per-server=5000
+        coordinator=false
+        http-server.http.port=8080
+        discovery.uri=http://{{ "{{ " }}include "starburst.service.name" . }}:8080
+{% if RequireInternalTls %}
+        # When enabling TLS for internal communication don't set node.internal-address since
+        # it'll be set automatically to <pod-ip>.worker.<namespace>.svc.
+        # Add DNS:starburst, DNS:coordinator.<namespace>.svc and DNS:*.worker.<namespace>.svc as SAN in your certs
+        http-server.https.enabled=true
+        http-server.https.port=8443
+        http-server.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
+        http-server.https.keystore.key=test123
+        http-server.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
+        http-server.https.truststore.key=test123
+        node.internal-address-source=FQDN
+        internal-communication.https.required=true
+        internal-communication.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.keystore.key=test123
+        internal-communication.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.truststore.key=test123
+{% endif %}
+
+# How many queries per node
+query:
+  maxConcurrentQueries: 200
+
+# It's handy to have the certificate in the containers as well
+extraSecret:
+  name: presto.pem
+  file: presto.pem
+
+# automatically enables password authenticator
+userDatabase:
+  enabled: true
+  users:
+    - username: {{TrinoUser}}
+      password: {{TrinoPass}}
+
+{% if RequireInternalTls %}
+readinessProbe:
+  exec:
+    command:
+      - /bin/sh
+      - -c
+      - curl -k --max-time 5 -s https://localhost:8443/v1/info | grep \"starting\":false
+
+livenessProbe:
+  exec:
+    command:
+      - /bin/sh
+      - -c
+      - curl -k --max-time 5 -s https://localhost:8443/v1/info | grep \"starting\":false
+{% endif %}
 
 catalogs:
-  hive: |-
+  hive: |
     connector.name=hive-hadoop2
     hive.metastore.uri=thrift://hive:9083
     hive.non-managed-table-creates-enabled=true
@@ -103,3 +201,33 @@ catalogs:
     connection-user={{evtlog_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
+  remote_hive: |
+    connector.name=starburst-remote
+    connection-url=jdbc:presto://{{PrestoHost}}:{{PrestoPort}}/hive
+    connection-user={{TrinoUser}}
+    {% if RequireCoordTls %}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+    {% else %}
+    ssl.enabled=false
+    {% endif %}
+  remote_postgresql: |
+    connector.name=starburst-remote
+    connection-url=jdbc:presto://{{PrestoHost}}:{{PrestoPort}}/postgresql
+    connection-user={{TrinoUser}}
+    {% if RequireCoordTls %}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+    {% else %}
+    ssl.enabled=false
+    {% endif %}
+  remote_mysql: |
+    connector.name=starburst-remote
+    connection-url=jdbc:presto://{{PrestoHost}}:{{PrestoPort}}/mysql
+    connection-user={{TrinoUser}}
+    {% if RequireCoordTls %}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+    {% else %}
+    ssl.enabled=false
+    {% endif %}
