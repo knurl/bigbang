@@ -5,7 +5,7 @@ import subprocess, ipaddress, glob, threading, time, concurrent.futures, jinja2
 import atexit, psutil # type: ignore
 from run import run, runShell, runTry, runStdout, runCollect
 from subprocess import CalledProcessError
-from typing import Tuple, Iterable, Callable
+from typing import List, Tuple, Iterable, Callable, Optional, Any
 from urllib.parse import urlparse
 
 # Do this just to get rid of the warning when we try to read from the
@@ -27,42 +27,85 @@ def writeableDir(p):
 #
 # Global variables.
 #
-clouds      = ("aws", "az", "gcp")
-templatedir = where("templates")
-tmpdir      = "/tmp"
-rsa         = os.path.expanduser("~/.ssh/id_rsa")
-rsaPub      = os.path.expanduser("~/.ssh/id_rsa.pub")
-knownhosts  = os.path.expanduser("~/.ssh/known_hosts")
-tfvars      = "variables.tf" # basename only, no path!
-awsauthcm   = "aws-auth-cm.yaml" # basename only, no path!
-apisrvport  = 443
-apisrvportl = 8443
-svcports    = { "starburst": 8080, "ranger": 6080 }
-dbports     = { "mysql": 3306, "postgres": 5432 }
-tpchschema  = "tiny"
-tpchcat     = "tpch"
-hivecat     = "hive"
-syscat      = "system"
-gcskeyname  = "gcs-keyfile"
-gcskeyfbn   = f"key.json"
-evtlogcat   = "postgresqlel"
-bqcat       = "bigquery" # for now, connector doesn't support INSERT or CTAS
-avoidcat    = [tpchcat, syscat, evtlogcat, bqcat]
-dbschema    = "fdd"
-dbevtlog    = "evtlog" # event logger PostgreSQL instance
-dbuser      = "fdd"
-dbpwd       = "a029fjg!>dfgBiO8"
-namespace   = "starburst"
-helmns      = f"-n {namespace}"
-kube        = "kubectl"
-kubecfgf    = os.path.expanduser("~/.kube/config")
-kubens      = f"{kube} -n {namespace}"
-minnodes    = 2
-maxpodpnode = 16
-toreap      = [] # Accumulate tunnels to destroy
-awsdir = os.path.expanduser("~/.aws")
-awsconfig = os.path.expanduser("~/.aws/config")
-awscreds = os.path.expanduser("~/.aws/credentials")
+clouds         = ("aws", "az", "gcp")
+templatedir    = where("templates")
+tmpdir         = "/tmp"
+rsa            = os.path.expanduser("~/.ssh/id_rsa")
+rsaPub         = os.path.expanduser("~/.ssh/id_rsa.pub")
+knownhosts     = os.path.expanduser("~/.ssh/known_hosts")
+tfvars         = "variables.tf" # basename only, no path!
+awsauthcm      = "aws-auth-cm.yaml" # basename only, no path!
+dbports        = { "mysql": 3306, "postgres": 5432 }
+tpchschema     = "tiny"
+gcskeyname     = "gcs-keyfile"
+gcskeyfbn      = f"key.json"
+tpchcat        = "tpch"
+hivecat        = "hive"
+syscat         = "system"
+evtlogcat      = "postgresqlel"
+bqcat          = "bigquery" # for now, connector doesn't support INSERT or CTAS
+remote_cats    = ["remote_hive", "remote_postgresql", "remote_mysql"]
+avoidcat       = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats
+trinouser      = "presto_service"
+trinopass      = "test"
+dbschema       = "fdd"
+dbevtlog       = "evtlog" # event logger PostgreSQL instance
+dbuser         = "fdd"
+dbpwd          = "a029fjg!>dfgBiO8"
+namespace      = "starburst"
+helmns         = f"-n {namespace}"
+kube           = "kubectl"
+kubecfgf       = os.path.expanduser("~/.kube/config")
+kubens         = f"{kube} -n {namespace}"
+minnodes       = 2
+maxpodpnode    = 16
+toreap         = [] # Accumulate tunnels to destroy
+awsdir         = os.path.expanduser("~/.aws")
+awsconfig      = os.path.expanduser("~/.aws/config")
+awscreds       = os.path.expanduser("~/.aws/credentials")
+thishost       = "localhost"
+prestohost     = "presto.az.starburstdata.net"
+sharedsecbf    = "sharedsecret"
+sharedsecf     = where(sharedsecbf)
+keystorebf     = "presto.pkcs12"
+keystoref      = where(keystorebf)
+patchfilebf    = "starburst-enterprise.diff"
+patchfile      = where(patchfilebf)
+
+#
+# Start of execution. Handle commandline args.
+#
+
+p = argparse.ArgumentParser(description=
+        f"""Create your own Starbust demo service in AWS, Azure or GCP,
+        starting from nothing. It's zero to demo in 20 minutes or less. You
+        provide your target cloud, zone/region, version of software, and your
+        cluster size and instance type, and everything is set up for you,
+        including Starburst, multiple databases, and a data lake. The event
+        logger and Starburst Insights are set up too. This script uses
+        terraform to set up a K8S cluster, with its own VPC/VNet and K8S
+        cluster, routes and peering connections, security, etc. It's designed
+        to allow you to control the new setup from your laptop using a bastion
+        server.""")
+
+p.add_argument('-c', '--skip-cluster-start', action="store_true",
+        help="Skip checking to see if cluster needs to be started.")
+p.add_argument('-e', '--empty-nodes', action="store_true",
+        help="Unload k8s cluster only. Used with stop or restart.")
+p.add_argument('-t', '--target', action="store",
+        help="Force cloud target to specified value.")
+p.add_argument('-z', '--zone', action="store",
+        help="Force zone/region to specified value.")
+p.add_argument('command',
+        choices = ["start", "stop", "restart", "status"],
+        help="""Command to issue for demo services.
+           start/stop/restart: Start/stop/restart the demo environment.
+           status: Show whether the environment is running or not.""")
+
+ns = p.parse_args()
+
+if ns.empty_nodes and ns.command not in ("stop", "restart"):
+    p.error("-e, --empty-nodes is only used with stop and restart")
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -82,16 +125,91 @@ except IOError as e:
     sys.exit(f"Couldn't read user variables file {e}")
 
 try:
+    # Allow a commandline override of what's in the vars file
+    target = myvars[targetlabel] if ns.target == None else ns.target
+    zone = myvars["Zone"] if ns.zone == None else ns.zone
+
     email        = myvars["Email"]
-    target       = myvars[targetlabel]
-    zone         = myvars["Zone"]
     chartversion = myvars[chartvlabel]
     nodeCount    = myvars[nodecountlabel]
     license      = myvars["LicenseName"]
     repo         = myvars["HelmRepo"]
     repoloc      = myvars["HelmRepoLocation"]
+    tlscoord     = myvars["RequireCoordTls"]
+    tlsinternal  = myvars["RequireInternalTls"]
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
+
+def checkCLISetup() -> None:
+    assert target in clouds
+    if target == "aws":
+        badAws = False
+        if not writeableDir(awsdir):
+            badAws = True
+            err = f"Directory {awsdir} doesn't exist or has bad permissions."
+        elif not readableFile(awsconfig):
+            badAws = True
+            err = f"File {awsconfig} doesn't exist or isn't readable."
+        elif not readableFile(awscreds):
+            badAws = True
+            err = f"File {awscreds} doesn't exist or isn't readable."
+        if badAws:
+            print(err)
+            sys.exit("Have you run aws configure?")
+    elif target == "az":
+        azuredir = os.path.expanduser("~/.azure")
+        if not writeableDir(azuredir):
+            print(f"Directory {azuredir} doesn't exist or isn't readable.")
+            sys.exit("Have you run az login and az configure?")
+    elif target == "gcp":
+        gcpdir = os.path.expanduser("~/.config/gcloud")
+        if not writeableDir(gcpdir):
+            print("Directory {gcpdir} doesn't exist or isn't readable.")
+            sys.exit("Have you run gcloud init?")
+
+checkCLISetup()
+
+# Set the region and zone from the location. We assume zone is more precise and
+# infer the region from the zone.
+def getRegionFromZone(zone: str) -> str:
+    region = zone
+    if target == "gcp":
+        assert re.fullmatch(r"-[a-e]", zone[-2:]) != None
+        region = zone[:-2]
+
+    # Azure and GCP assume the user is working potentially with multiple
+    # locations. On the other hand, AWS assumes a single region in the config
+    # file, so make sure that the region in the AWS config file and the one set
+    # in my-vars are consistent, just to avoid accidents.
+    if target == "aws":
+        awsregion = runCollect("aws configure get region".split())
+        if awsregion != region:
+            sys.exit(textwrap.dedent(f"""\
+                    Region {awsregion} specified in your {awsconfig} doesn't
+                    match region {region} set in your {myvarsbf} file. Cannot
+                    continue execution. Please ensure these match and
+                    re-run."""))
+
+    return region
+
+region = getRegionFromZone(zone)
+
+def checkRSAKey() -> None:
+    if readableFile(rsa) and readableFile(rsaPub):
+        return
+
+    print(f"You do not have readable {rsa} and {rsaPub} files.")
+    yn = input("Would you like me to generate them? [y/N] -> ")
+    if yn.lower() in ("y", "yes"):
+        rc = runShell(f"ssh-keygen -q -t rsa -N '' -f {rsa} <<<y")
+        if rc == 0:
+            print(f"Generated {rsa} file.")
+            return
+        else:
+            print(f"Unable to write {rsa}. Try yourself?")
+    sys.exit(f"Script cannot continue without {rsa} file.")
+
+checkRSAKey()
 
 # Verify the email looks right, and extract username from it
 # NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
@@ -118,25 +236,6 @@ else:
     sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
             "{c}".format(t = target, tl = targetlabel, m = myvarsbf,
                 c = ", ".join(clouds)))
-
-# Set the region and zone from the location. We assume zone is more precise and
-# infer the region from the zone.
-region = zone
-if target == "gcp":
-    assert re.fullmatch(r"-[a-e]", zone[-2:]) != None
-    region = zone[:-2]
-
-# Azure and GCP assume the user is working potentially with multiple locations.
-# On the other hand, AWS assumes a single region in the config file, so make
-# sure that the region in the AWS config file and the one set in my-vars are
-# consistent, just to avoid accidents.
-if target == "aws":
-    awsregion = runCollect("aws configure get region".split())
-    if awsregion != region:
-        sys.exit(textwrap.dedent(f"""\
-                Region {awsregion} specified in your {awsconfig} doesn't match
-                region {region} set in your {myvarsbf} file. Cannot continue
-                execution. Please ensure these match and re-run."""))
 
 # Terraform files are in a directory named for target
 tfdir       = where(target)
@@ -204,7 +303,7 @@ try:
     repopass     = helmcreds["HelmRepoPassword"]
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {helmcredsf}")
-myvars.update(helmcreds)
+myvars |= helmcreds
 
 #
 # Create some names for some cloud resources we'll need
@@ -222,6 +321,28 @@ for module in modules:
     templates[module] = f"{module}_v.yaml"
     releases[module] = f"{module}-{shortname}"
     charts[module] = f"starburst-{module}"
+
+# Portfinder service
+
+starburstsrv = [ "starburst", "ranger" ]
+svcports    = {
+        "ranger":    { "local": 6080, "remote": 6080 },
+        "apiserv":   { "local": 2153, "remote": 443  }
+        }
+if tlscoord:
+    svcports |= { "starburst": { "local": 8443, "remote": 8443 } }
+else:
+    svcports |= { "starburst": { "local": 8080, "remote": 8080 } }
+
+portoffset = { "aws": 0, "az": 1, "gcp": 2 }
+
+# Local connections are on workstation, so offset to avoid collision
+def getLclPort(service: str) -> int:
+    return svcports[service]["local"] + portoffset[target]
+
+# Remote connections are all to different machines, so they don't need offset
+def getRmtPort(service: str) -> int:
+    return svcports[service]["remote"]
 
 #
 # Important announcements to the user!
@@ -324,8 +445,12 @@ def parameteriseTemplate(template, targetDir, varsDict):
 
     # temporary file where we'll write the filled-in template
     yamltmp = f"{targetDir}/{root}-{shortname}{ext}"
-    similar = f"{targetDir}/{root}-*{ext}"
-    removeOldVersions(yamltmp, similar)
+
+    # if we're writing a Terraform file, make sure to clean up older,
+    # similar-looking Terraform files as these will cause Terraform to fail
+    if ext == ".tf":
+        similar = f"{targetDir}/{root}-*{ext}"
+        removeOldVersions(yamltmp, similar)
 
     # render the template with the parameters, and capture the result
     try:
@@ -390,8 +515,9 @@ def updateKubeConfig(kubecfg: str = None) -> None:
         if columns[0] == "*":
             # get the cluster name
             cluster = columns[2]
-            runStdout(f"kubectl config set clusters.{cluster}.server "
-                    f"https://localhost:{apisrvportl}".split())
+            runStdout("kubectl config set clusters.{c}.server "
+                    "https://{h}:{p}".format(c = cluster, h = thishost, p =
+                        getLclPort("apiserv")).split())
             runStdout(f"kubectl config set-cluster {cluster} "
                     "--insecure-skip-tls-verify=true".split())
             return
@@ -408,8 +534,6 @@ def getMyPublicIp() -> str:
 
     try:
         myIp = ipaddress.ip_address(i)
-        # TODO: This statement won't actually be true until we exclude VPN
-        # access for AWS and GCP, and restrict home access for Azure too.
         text = announceBox(f"Your visible IP address is {myIp}. Ingress to "
                 "your newly-created bastion server will be limited to this "
                 "address exclusively.")
@@ -495,20 +619,23 @@ def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
     return float(numer) / float(denom)
 
 def loadBalancerResponding(service: str) -> bool:
-    port = svcports[service]
+    assert service in starburstsrv
+    port = getLclPort(service)
 
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
     if service == "starburst":
-        url = f"http://localhost:{port}/ui/login.html"
+        url = "{m}://{h}:{p}/ui/login.html".format(m = "https" if
+                tlscoord else "http", h = prestohost, p = port)
     elif service == "ranger":
-        url = f"http://localhost:{port}/login.jsp"
+        url = f"http://{thishost}:{port}/login.jsp"
 
     try:
         r = requests.get(url)
         return r.status_code == 200
     except requests.exceptions.ConnectionError as e:
-        return False
+        pass
+    return False
 
 def waitUntilLoadBalancersUp(services: list, namespace: str = None,
         checkConnectivity: bool = False) -> float:
@@ -564,7 +691,7 @@ def waitUntilLoadBalancersUp(services: list, namespace: str = None,
 def waitUntilApiServerResponding() -> float:
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
-    url = f"https://localhost:{apisrvportl}/"
+    url = "https://{h}:{p}/".format(h = thishost, p = getLclPort("apiserv"))
     try:
         r = requests.get(url, verify = False) # ignore certificate
         # Either forbidden (403), unauthorised (403) or 200 are acceptable
@@ -622,10 +749,12 @@ class Tunnel:
             self.p.terminate()
 
     def __str__(self):
+        tgtname = self.shortname
+        if len(self.raddr) < 16:
+            tgtname = "[{n}]{h}".format(n = self.shortname, h = self.raddr)
         return "PID {p}: localhost:{l} -> {ra}:{rp}".format(p =
-                self.p.pid if self.p != None else "UNKNOWN", l = self.lport, ra
-                = self.raddr if len(self.raddr) < 16 else self.shortname, rp =
-                self.rport)
+                self.p.pid if self.p != None else "UNKNOWN", l = self.lport,
+                ra = tgtname, rp = self.rport)
 
 # Input dictionary is the output variables from Terraform.
 def establishBastionTunnel(env: dict) -> Tunnel:
@@ -646,8 +775,9 @@ def establishBastionTunnel(env: dict) -> Tunnel:
     appendToFile(knownhosts, hostkeys)
 
     # Start up the tunnel to the Kubernetes API server
-    tun = Tunnel("k8s-apiserver", env["bastion_address"], apisrvportl,
-            env["k8s_api_server"], apisrvport)
+    tun = Tunnel("k8s-apiserver", env["bastion_address"],
+            getLclPort("apiserv"), env["k8s_api_server"],
+            getRmtPort("apiserv"))
 
     # Now that the tunnel is in place, update our kubecfg with the address to
     # the tunnel, keeping everything else in place
@@ -674,7 +804,7 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
 
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars
-    env.update({
+    env |= {
         "BastionInstanceType": bastionInstanceType,
         "BucketName":          bucket,
         "ClusterName":         clustname,
@@ -693,7 +823,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
         "Target":              target,
         "UserName":            username,
         "Zone":                zone
-        })
+        }
     assert target in clouds
     if target == "az":
         env["ResourceGroup"] = resourcegrp
@@ -703,7 +833,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     if not skipClusterStart:
         announce("Starting terraform run")
         t = time.time()
-        runStdout(f"{tf} init -input=false -upgrade".split())
+        runStdout(f"{tf} init -input=false".split())
         runStdout(f"{tf} apply -auto-approve -input=false".split())
         announce("terraform run completed in " + time.strftime("%Hh%Mm%Ss",
             time.gmtime(time.time() - t)))
@@ -741,6 +871,20 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     spinWait(lambda: waitUntilPodsReady(nodeCount*2, "kube-system"))
     return env
 
+# Starburst pods sometimes get stuck in Terminating phase after a helm upgrade.
+# Kill these off immediately to save time and they will restart quickly.
+def killAllTerminatingPods() -> None:
+    lines = runCollect(f"{kubens} get pods --no-headers".split()).splitlines()
+    for l in lines:
+        col = l.split()
+        name = col[0]
+        status = col[2]
+        if status == "Terminating":
+            r = runTry(f"{kubens} delete pod {name} --force "
+                    "--grace-period=0".split())
+            if r.returncode == 0:
+                print(f"Terminated pod {name}")
+
 def startPortForward(bastionIp: str) -> None:
     # should be nodeCount - 1 workers with 1 container each, 2 containers for
     # the coordinator, and 2 containers each for Hive and Ranger
@@ -753,15 +897,14 @@ def startPortForward(bastionIp: str) -> None:
 
     # now the load balancers need to be running with their IPs assigned
     announce("Waiting for load-balancers to launch")
-    spinWait(lambda: waitUntilLoadBalancersUp(list(svcports.keys()),
-        namespace))
+    spinWait(lambda: waitUntilLoadBalancersUp(starburstsrv, namespace))
 
     #
     # Get the DNS name of the load balancers we've created
     #
     lbs = {}
-    ksvcs = json.loads(runCollect(f"{kubens} get services --output=json".split()
-        + list(svcports.keys())))
+    ksvcs = json.loads(runCollect(f"{kubens} get services "
+        "--output=json".split() + starburstsrv))
 
     # Go through the named K8S services and find the loadBalancers
     for ksvc in ksvcs["items"]:
@@ -776,14 +919,15 @@ def startPortForward(bastionIp: str) -> None:
             sys.exit("Could not find either hostname or ip in {ingress}")
 
     # we should have a load balancer for every service we'll forward
-    assert len(lbs) == len(svcports)
-    for svc, port in svcports.items():
-        toreap.append(Tunnel(svc, bastionIp, port, lbs[svc], port))
+    assert len(lbs) == len(starburstsrv)
+    for svc in starburstsrv:
+        toreap.append(Tunnel(svc, bastionIp, getLclPort(svc), lbs[svc],
+            getRmtPort(svc)))
 
     # make sure the load balancers are actually responding
     announce("Waiting for load-balancers to start responding")
-    spinWait(lambda: waitUntilLoadBalancersUp(list(svcports.keys()),
-        namespace, checkConnectivity = True))
+    spinWait(lambda: waitUntilLoadBalancersUp(starburstsrv, namespace,
+        checkConnectivity = True))
 
 class ApiError(Exception):
     pass
@@ -813,10 +957,15 @@ def retry(f, maxretries: int, err: str) -> requests.Response:
 def issuePrestoCommand(command: str, verbose = False) -> list:
     httpmaxretries = 10
     if verbose: announceSqlStart(command)
-    url = "http://localhost:{}/v1/statement".format(svcports["starburst"])
-    headers = { "X-Trino-User": "presto_service" }
-    r = retry(lambda: requests.post(url, headers = headers, data = command),
-            maxretries = httpmaxretries, err = f"POST [{command}]")
+    url = "{m}://{h}:{p}/v1/statement".format(m = "https" if tlscoord
+            else "http", h = prestohost, p = getLclPort("starburst"))
+    hdr = { "X-Trino-User": trinouser }
+    if tlscoord:
+        authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
+    else:
+        authtype = None
+    r = retry(lambda: requests.post(url, headers = hdr, auth = authtype, data =
+        command), maxretries = httpmaxretries, err = f"POST [{command}]")
 
     data = []
     while True:
@@ -831,8 +980,8 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
                     command, e = str(j["error"])))
             if verbose: announceSqlEnd(command)
             return data # the only way out is success, or an exception
-        r = retry(lambda: requests.get(j["nextUri"], headers = headers),
-                maxretries = httpmaxretries, err = f"GET nextUri [{command}]")
+        r = retry(lambda: requests.get(j["nextUri"], headers = hdr), maxretries
+                = httpmaxretries, err = f"GET nextUri [{command}]")
 
 def copySchemaTables(srcCatalog: str, srcSchema: str,
         dstCatalogs: list, dstSchema: str, hiveTarget: str):
@@ -982,8 +1131,8 @@ def helmDeleteNamespace() -> None:
     runStdout(f"{kube} config set-context --namespace=default "
             "--current".split())
 
-def helmGetReleases() -> list:
-    rls = []
+def helmGetReleases() -> dict:
+    rls = {}
     try:
         rlsj = json.loads(helmGet(f"{helmns} list -ojson"))
         rls = { r["name"]: r["chart"] for r in rlsj }
@@ -991,7 +1140,7 @@ def helmGetReleases() -> list:
         print("No helm releases found.")
     return rls
 
-def helmWhichChartInstalled(module: str) -> str:
+def helmWhichChartInstalled(module: str) -> Optional[Any]:
     chart = None
     release = releases[module] # Get release name for module name
     installed = helmGetReleases()
@@ -1003,17 +1152,22 @@ def helmWhichChartInstalled(module: str) -> str:
 # created--either during an install, or because we revved up a version
 def helmInstallRelease(module: str, env = {}) -> bool:
     hivereset = False
-    env.update(myvars)
-    env.update({
-        "BucketName":        bucket,
-        "DBName":            dbschema,
-        "DBNameEventLogger": dbevtlog,
-        "DBPassword":        dbpwd,
-        "StorageAccount":    storageacct,
-        "mysql_port":        dbports["mysql"],
-        "postgres_port":     dbports["postgres"],
-        "target":            target
-        })
+
+    env |= myvars | \
+            { "BucketName":         bucket,
+              "DBName":             dbschema,
+              "DBNameEventLogger":  dbevtlog,
+              "DBPassword":         dbpwd,
+              "PrestoHost":         prestohost,
+              "PrestoPort":         getRmtPort("starburst"),
+              "RequireCoordTls":    tlscoord,
+              "RequireInternalTls": tlsinternal,
+              "StorageAccount":     storageacct,
+              "TrinoUser":          trinouser,
+              "TrinoPass":          trinopass,
+              "mysql_port":         dbports["mysql"],
+              "postgres_port":      dbports["postgres"],
+              "target":             target }
 
     # Parameterise the yaml file that configures the helm chart install. The
     # function returns a tuple, indicating whether the helm chart values file
@@ -1023,11 +1177,24 @@ def helmInstallRelease(module: str, env = {}) -> bool:
     chart = helmWhichChartInstalled(module)
     newchart = charts[module] + "-" + chartversion # which one to install?
 
+    workingrepo = repo
+    # There is a bug in Starburst's helm charts where load-balancers can only
+    # be on the unsecured port 8080. Fix this manually here.
+    if module == "enterprise" and (tlscoord or tlsinternal):
+        # Only write if the directory doesn't yet exist
+        targetdir = f"/tmp/repo-{repo}-{chartversion}"
+        if not os.path.exists(targetdir):
+            helm("pull {p}/{c} --version {v} --untar --untardir {d}".format(p =
+                repo, c = charts[module], v = chartversion, d = targetdir))
+            runStdout(f"patch -d {targetdir} -p1 -i {patchfile}".split())
+            changed = True
+        workingrepo = targetdir
+
     if chart == None: # Nothing installed yet, so we need to install
         announce(f"Installing chart {newchart} using helm")
-        helm("{h} install {r} {p}/{c} -f {y} --version {v}".format(h = helmns,
-            r = releases[module], p = repo, c = charts[module], y = yamltmp,
-            v = chartversion))
+        helm("{h} install {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
+            r = releases[module], w = workingrepo, c = charts[module], y =
+            yamltmp, v = chartversion))
         if module == "hive":
             hivereset = True # freshly installed -> new postgres
     # If either the chart values file changed, or we need to update to a
@@ -1037,8 +1204,8 @@ def helmInstallRelease(module: str, env = {}) -> bool:
         if chart != newchart:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         announce(astr)
-        helm("{h} upgrade {r} {p}/{c} -i -f {y} --version {v}".format(h =
-            helmns, r = releases[module], p = repo, c = charts[module], y =
+        helm("{h} upgrade {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
+            r = releases[module], w = workingrepo, c = charts[module], y =
             yamltmp, v = chartversion))
 
         # Hive postgres DB will be rebuilt only if we rev a version
@@ -1131,8 +1298,10 @@ def planWorkerSize() -> dict:
     mem["worker"] = mem["coordinator"] = (m >> 3) * 7
     print("Workers & coordinator get {c}m CPU and {m}Mi mem".format(c =
         cpu["worker"], m = mem["worker"] >> 10))
-    cpu["ranger_admin"] = cpu["ranger_db"] = cpu["hive"] = cpu["hive_db"] = c >> 4
-    mem["ranger_admin"] = mem["ranger_db"] = mem["hive"] = mem["hive_db"] = m >> 4
+    cpu["ranger_admin"] = cpu["ranger_db"] = cpu["hive"] = cpu["hive_db"] = \
+            c >> 4
+    mem["ranger_admin"] = mem["ranger_db"] = mem["hive"] = mem["hive_db"] = \
+            m >> 4
     assert cpu["worker"] + cpu["hive"] + cpu["hive_db"] <= c
     assert mem["worker"] + mem["hive"] + mem["hive_db"] <= m
     assert cpu["worker"] + cpu["ranger_admin"] + cpu["ranger_db"] <= c
@@ -1142,7 +1311,8 @@ def planWorkerSize() -> dict:
     print("Ranger gets {c}m CPU and {m}Mi mem".format(c = cpu["ranger_admin"] +
         cpu["ranger_db"], m = (mem["ranger_admin"] + mem["ranger_db"]) >> 10))
     env = {f"{k}_cpu": f"{v}m" for k, v in cpu.items()}
-    env.update({f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in mem.items()})
+    env |= {f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in
+        mem.items()}
     assert nodeCount >= minnodes
     env["workerCount"] = nodeCount - 1
     return env
@@ -1150,6 +1320,10 @@ def planWorkerSize() -> dict:
 def helmInstallAll(env):
     helmCreateNamespace()
     installSecret(repo, licensef)
+    if tlscoord or tlsinternal:
+        installSecret(keystorebf, keystoref)
+    if tlsinternal:
+        installSecret(sharedsecbf, sharedsecf)
 
     # For GCP, we'll need to store the secret for our GCS access in K8S
     if target == "gcp":
@@ -1159,7 +1333,7 @@ def helmInstallAll(env):
 
     ensureHelmRepoSetUp(repo)
     capacities = planWorkerSize()
-    env.update(capacities)
+    env |= capacities
     hivereset = False
     for module in modules:
         hivereset = helmInstallRelease(module, env) or hivereset
@@ -1170,6 +1344,9 @@ def helmInstallAll(env):
     # about finding existing files.
     if hivereset:
         eraseBucketContents(env)
+
+    # Speed up the deployment of the updated pods by killing the old ones
+    killAllTerminatingPods()
 
 def deleteAllServices() -> None:
     # Explicitly deleting services gets rid of load balancers, which eliminates
@@ -1199,10 +1376,10 @@ def announceReady(bastionIp: str) -> list:
 
 def svcStart(skipClusterStart: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the cluster.
-    # This can take a long time. This will create the control plane and workers.
+    # This will create the control plane and workers.
     env = ensureClusterIsStarted(skipClusterStart)
     env["Region"] = region
-    env.update(awsGetCreds())
+    env |= awsGetCreds()
     helmInstallAll(env)
     startPortForward(env["bastion_address"])
     loadDatabases(env["object_address"])
@@ -1247,121 +1424,46 @@ def svcStop(emptyNodes: bool = False) -> None:
         announce("tf destroy completed in " + time.strftime("%Hh%Mm%Ss",
             time.gmtime(time.time() - t)))
 
-def checkCLISetup() -> None:
-    assert target in clouds
-    if target == "aws":
-        badAws = False
-        if not writeableDir(awsdir):
-            badAws = True
-            err = f"Directory {awsdir} doesn't exist or has bad permissions."
-        elif not readableFile(awsconfig):
-            badAws = True
-            err = f"File {awsconfig} doesn't exist or isn't readable."
-        elif not readableFile(awscreds):
-            badAws = True
-            err = f"File {awscreds} doesn't exist or isn't readable."
-        if badAws:
-            print(err)
-            sys.exit("Have you run aws configure?")
-    elif target == "az":
-        azuredir = os.path.expanduser("~/.azure")
-        if not writeableDir(azuredir):
-            print(f"Directory {azuredir} doesn't exist or isn't readable.")
-            sys.exit("Have you run az login and az configure?")
-    elif target == "gcp":
-        gcpdir = os.path.expanduser("~/.config/gcloud")
-        if not writeableDir(gcpdir):
-            print("Directory {gcpdir} doesn't exist or isn't readable.")
-            sys.exit("Have you run gcloud init?")
-
-def checkRSAKey() -> None:
-    if readableFile(rsa) and readableFile(rsaPub):
-        return
-
-    print(f"You do not have readable {rsa} and {rsaPub} files.")
-    yn = input("Would you like me to generate them? [y/N] -> ")
-    if yn.lower() in ("y", "yes"):
-        rc = runShell(f"ssh-keygen -q -t rsa -N '' -f {rsa} <<<y")
-        if rc == 0:
-            print(f"Generated {rsa} file.")
-            return
-        else:
-            print(f"Unable to write {rsa}. Try yourself?")
-    sys.exit(f"Script cannot continue without {rsa} file.")
-
-def announceSummary() -> None:
+def getCloudSummary() -> List[str]:
     if target == "aws":
         cloud = "Amazon Web Services"
     elif target == "az":
         cloud = "Microsoft Azure"
     else:
         cloud = "Google Cloud Services"
-    announceLoud([f"Cloud: {cloud}",
+    return [f"Cloud: {cloud}",
         f"Region: {region}",
-        f"Cluster: {nodeCount} × {instanceType}"])
+        f"Cluster: {nodeCount} × {instanceType}"]
 
-#
-# Start of execution. Handle commandline args.
-#
-
-p = argparse.ArgumentParser(description=
-        f"""Create your own Starbust demo service in AWS, Azure or GCP,
-        starting from nothing. It's zero to demo in 20 minutes or less. You
-        provide your target cloud, zone, your desired CIDR and some other
-        parameters. This script uses terraform to set up a K8S cluster, with
-        its own VPC/VNet and K8S cluster, routes and peering connections,
-        security, etc. Presto is automatically set up and multiple databases
-        and a data lake are set up. It's designed to allow you to control the
-        new setup from your laptop using a bastion server. The event logger is
-        set up as well as Starburst Insights (running on a PostgreSQL
-        database).""")
-
-p.add_argument('-c', '--skip-cluster-start', action="store_true",
-        help="Skip checking to see if cluster needs to be started")
-p.add_argument('-e', '--empty-nodes', action="store_true",
-        help="Unload k8s cluster only. Used with stop or restart.")
-p.add_argument('command',
-        choices = ["start", "stop", "restart", "status"],
-        help="""Command to issue for demo services.
-           start/stop/restart: Start/stop/restart the demo environment.
-           status: Show whether the environment is running or not.""")
-
-ns = p.parse_args()
-emptyNodes = ns.empty_nodes
-command = ns.command
-
-if emptyNodes and command not in ("stop", "restart"):
-    p.error("-e, --empty-nodes is only used with stop and restart")
-
-checkCLISetup()
-checkRSAKey()
+def announceSummary() -> None:
+    announceLoud(getCloudSummary())
 
 announceSummary()
 
 w = []
 started = False
 
-if command in ("stop", "restart"):
-    svcStop(emptyNodes)
+if ns.command in ("stop", "restart"):
+    svcStop(ns.empty_nodes)
 
-if command in ("start", "restart"):
+if ns.command in ("start", "restart"):
     w = svcStart(ns.skip_cluster_start)
     started = True
     announceBox(f"Your {rsaPub} public key has been installed into the "
             "bastion server, so you can ssh there now (user 'ubuntu').")
 
-if command == "status":
+if ns.command == "status":
     announce("Fetching current status")
     started = isTerraformSettled()
     if started:
         env = getOutputVars()
         w = announceReady(env["bastion_address"])
 
-y = ["Service is " + ("started" if started else "stopped")]
+y = getCloudSummary() + ["Service is " + ("started" if started else "stopped")]
 if len(w) > 0:
     y += w
 
-if command in ("start", "restart") and started:
+if ns.command in ("start", "restart") and started:
     y.append("These ssh tunnels are now running:")
     y += [str(i) for i in toreap]
     announceLoud(y)

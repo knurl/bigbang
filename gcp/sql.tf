@@ -30,7 +30,7 @@ resource "google_sql_database_instance" "sql_evtlog" {
     }
 
     ip_configuration {
-      ipv4_enabled    = true
+      ipv4_enabled    = false
       private_network = data.google_compute_network.vpc.id
     }
 
@@ -56,7 +56,7 @@ resource "google_sql_database_instance" "sql_postgres" {
     }
 
     ip_configuration {
-      ipv4_enabled    = true
+      ipv4_enabled    = false
       private_network = data.google_compute_network.vpc.id
     }
 
@@ -82,7 +82,7 @@ resource "google_sql_database_instance" "sql_mysql" {
     }
 
     ip_configuration {
-      ipv4_enabled    = true
+      ipv4_enabled    = false
       private_network = data.google_compute_network.vpc.id
     }
 
