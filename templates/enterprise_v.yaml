@@ -10,10 +10,12 @@ starburstPlatformLicense: {{LicenseName}}
 expose:
   type: loadBalancer
   loadBalancer:
-    name: "starburst"
+  {% if RequireInternalTls or RequireCoordTls %}
     ports:
       https:
         port: 8443
+      http: null
+  {% endif %}
     annotations:
       {% if target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
@@ -27,6 +29,7 @@ expose:
 # Shared secret for internal communication.
 sharedSecret: secretRef.sharedsecret.sharedsecret
 
+# Use only https and port 8443 for internal communication.
 internal:
   ports:
     https:
@@ -42,32 +45,48 @@ coordinator:
         node-scheduler.include-coordinator=false
         http-server.http.port=8080
         discovery-server.enabled=true
-        http-server.http.enabled=true
         # allow access to non-ssl for demo purposes
-        discovery.uri=http://localhost:8080
         exchange.http-client.max-connections=5000
         exchange.http-client.max-connections-per-server=5000
         scheduler.http-client.max-connections=5000
         scheduler.http-client.max-requests-queued-per-destination=5000
         scheduler.http-client.max-connections-per-server=5000
-{% if RequireCoordTls or RequireInternalTls %}
+        http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
+        # TLS everywhere
+        {% if RequireInternalTls %}
+        http-server.http.enabled=false
         http-server.https.enabled=true
         http-server.https.port=8443
+        # Coordinator cert does have localhost, so https OK
+        discovery.uri=https://localhost:8443
+        # TLS for coordinator only
+        {% elif RequireCoordTls %}
+        http-server.http.enabled=true
+        http-server.https.enabled=true
+        http-server.https.port=8443
+        # Coordinator cert doesn't have localhost, so can't use https
+        discovery.uri=http://localhost:8080
+        # No TLS anywhere
+        {% else %}
+        http-server.http.enabled=true
+        http-server.https.enabled=false
+        discovery.uri=http://localhost:8080
+        {% endif %}
+        {% if RequireInternalTls %}
+        http-server.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
+        http-server.https.keystore.key=test123
+        {% elif RequireCoordTls %}
         http-server.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
         http-server.https.keystore.key=test123
-        # TODO Are the next two lines needed?
-        http-server.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
-        http-server.https.truststore.key=test123
-        http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
-{% endif %}
-{% if RequireInternalTls %}
+        {% endif %}
+        {% if RequireInternalTls %}
         node.internal-address-source=FQDN
         internal-communication.https.required=true
-        internal-communication.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
         internal-communication.https.keystore.key=test123
-        internal-communication.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.truststore.path=secretRef:starburst.svc.p12:starburst.svc.p12
         internal-communication.https.truststore.key=test123
-{% endif %}
+        {% endif %}
         insights.persistence-enabled=true
         insights.metrics-persistence-enabled=true
         insights.jdbc.url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
@@ -112,25 +131,37 @@ worker:
         exchange.http-client.max-connections=5000
         exchange.http-client.max-connections-per-server=5000
         coordinator=false
+        # TLS on coordinator only, or no TLS
+        {% if not RequireInternalTls %}
+        # If we are using TLS on the coordinator only, then our cert doesn't
+        # include the coordinator service name as a SAN, which means we'll get a
+        # host mismatch when we try to connect. Therefore in this case we'll
+        # have to leave port 8080 open and have the workers connect there.
+        discovery.uri=http://coordinator.starburst.svc:8080
+        # TLS everywhere
+        {% else %}
+        # The cert _does_ include a SAN for the coordinator service name
+        discovery.uri=https://coordinator.starburst.svc:8443
+        {% endif %}
+        {% if not RequireInternalTls %}
+        http-server.http.enabled=true
         http-server.http.port=8080
-        discovery.uri=http://{{ "{{ " }}include "starburst.service.name" . }}:8080
-{% if RequireInternalTls %}
+        {% else %}
         # When enabling TLS for internal communication don't set node.internal-address since
         # it'll be set automatically to <pod-ip>.worker.<namespace>.svc.
         # Add DNS:starburst, DNS:coordinator.<namespace>.svc and DNS:*.worker.<namespace>.svc as SAN in your certs
+        http-server.http.enabled=false
         http-server.https.enabled=true
         http-server.https.port=8443
-        http-server.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
+        http-server.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
         http-server.https.keystore.key=test123
-        http-server.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
-        http-server.https.truststore.key=test123
         node.internal-address-source=FQDN
         internal-communication.https.required=true
-        internal-communication.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
         internal-communication.https.keystore.key=test123
-        internal-communication.https.truststore.path=secretRef:presto.pkcs12:presto.pkcs12
+        internal-communication.https.truststore.path=secretRef:starburst.svc.p12:starburst.svc.p12
         internal-communication.https.truststore.key=test123
-{% endif %}
+        {% endif %}
 
 # How many queries per node
 query:
