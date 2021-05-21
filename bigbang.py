@@ -69,6 +69,10 @@ sharedsecbf    = "sharedsecret"
 sharedsecf     = where(sharedsecbf)
 keystorebf     = "presto.pkcs12"
 keystoref      = where(keystorebf)
+wildkeystorebf = "starburst.svc.p12"
+wildkeystoref  = where(wildkeystorebf)
+wildkeycertbf  = "starburst.svc.pem"
+wildkeycertf   = where(wildkeycertbf)
 patchfilebf    = "starburst-enterprise.diff"
 patchfile      = where(patchfilebf)
 
@@ -118,6 +122,8 @@ myvarsf  = where("my-vars.yaml")
 targetlabel = "Target"
 nodecountlabel = "NodeCount"
 chartvlabel = "ChartVersion"
+tlscoordlabel = "RequireCoordTls"
+tlsinternallabel = "RequireInternalTls"
 try:
     with open(myvarsf) as mypf:
         myvars = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -135,8 +141,8 @@ try:
     license      = myvars["LicenseName"]
     repo         = myvars["HelmRepo"]
     repoloc      = myvars["HelmRepoLocation"]
-    tlscoord     = myvars["RequireCoordTls"]
-    tlsinternal  = myvars["RequireInternalTls"]
+    tlscoord     = myvars[tlscoordlabel]
+    tlsinternal  = myvars[tlsinternallabel]
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
 
@@ -255,6 +261,9 @@ if len(components) != 3 or not all(map(str.isdigit, components)):
 if nodeCount < 2:
     sys.exit(f"Must have at least {minnodes} nodes; {nodeCount} set for "
             f"{nodecountlabel} in {myvarsbf}.")
+
+if tlsinternal and not tlscoord:
+    sys.exit(f"If {tlsinternallabel} is enabled, so must {tlscoordlabel} be")
 
 # Check the license file
 licensebf = f"{license}.license"
@@ -626,12 +635,14 @@ def loadBalancerResponding(service: str) -> bool:
     # have been established between the localhost and the bastion host
     if service == "starburst":
         url = "{m}://{h}:{p}/ui/login.html".format(m = "https" if
-                tlscoord else "http", h = prestohost, p = port)
+                tlscoord else "http", h = thishost if tlsinternal else
+                prestohost, p = port)
     elif service == "ranger":
         url = f"http://{thishost}:{port}/login.jsp"
 
     try:
-        r = requests.get(url)
+        r = requests.get(url, verify = wildkeycertf if service == "starburst"
+                and tlsinternal else None)
         return r.status_code == 200
     except requests.exceptions.ConnectionError as e:
         pass
@@ -958,14 +969,16 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
     httpmaxretries = 10
     if verbose: announceSqlStart(command)
     url = "{m}://{h}:{p}/v1/statement".format(m = "https" if tlscoord
-            else "http", h = prestohost, p = getLclPort("starburst"))
+            else "http", h = thishost if tlsinternal else prestohost,
+            p = getLclPort("starburst"))
     hdr = { "X-Trino-User": trinouser }
     if tlscoord:
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
     else:
         authtype = None
-    r = retry(lambda: requests.post(url, headers = hdr, auth = authtype, data =
-        command), maxretries = httpmaxretries, err = f"POST [{command}]")
+    f = lambda: requests.post(url, headers = hdr, auth = authtype, data =
+            command, verify = wildkeycertf if tlsinternal else None)
+    r = retry(f, maxretries = httpmaxretries, err = f"POST [{command}]")
 
     data = []
     while True:
@@ -976,12 +989,17 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
             data += j["data"]
         if "nextUri" not in j:
             if "error" in j:
-                raise ApiError("Error executing SQL '{s}': error {e}".format(s =
-                    command, e = str(j["error"])))
+                raise ApiError("Error executing SQL '{s}': error {e}".format(s
+                    = command, e = str(j["error"])))
             if verbose: announceSqlEnd(command)
             return data # the only way out is success, or an exception
-        r = retry(lambda: requests.get(j["nextUri"], headers = hdr), maxretries
-                = httpmaxretries, err = f"GET nextUri [{command}]")
+        if tlsinternal:
+            f = lambda: requests.get(j["nextUri"], headers = hdr, verify =
+                    wildkeycertf)
+        else:
+            f = lambda: requests.get(j["nextUri"], headers = hdr, verify = None)
+        r = retry(f, maxretries = httpmaxretries, 
+                err = f"GET nextUri [{command}]")
 
 def copySchemaTables(srcCatalog: str, srcSchema: str,
         dstCatalogs: list, dstSchema: str, hiveTarget: str):
@@ -1320,10 +1338,15 @@ def planWorkerSize() -> dict:
 def helmInstallAll(env):
     helmCreateNamespace()
     installSecret(repo, licensef)
-    if tlscoord or tlsinternal:
-        installSecret(keystorebf, keystoref)
+
+    # For internal SSL, we need a wildcard cert--which unfortunately can't be
+    # signed, which makes it less convenient. Limit use of unsigned cert to
+    # this one case, and in the regular case, use the CA-signed cert.
     if tlsinternal:
+        installSecret(wildkeystorebf, wildkeystoref)
         installSecret(sharedsecbf, sharedsecf)
+    elif tlscoord:
+        installSecret(keystorebf, keystoref)
 
     # For GCP, we'll need to store the secret for our GCS access in K8S
     if target == "gcp":

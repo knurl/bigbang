@@ -22,13 +22,13 @@ Zone: eu-west-3 # AWS - Paris, France
 # starburst-presto, starburst-ranger, and starburst-hive.
 ChartVersion: 356.0.0
 
-# number of nodes in K8S cluster
+# Number of nodes in K8S cluster.
 NodeCount: 4
 
-# require TLS on client <-> coordinator connection
-RequireCoordTls: True
+# Require TLS on client <-> coordinator connection.
+RequireCoordTls: False
 
-# require TLS on coordinator <-> worker connections
+# Require TLS on coordinator <-> worker connections. Implies RequireCoordTls.
 RequireInternalTls: False
 
 # Name of your license file (./${LicenseName}.license)
