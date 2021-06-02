@@ -19,30 +19,23 @@ announceSqlEnd	bigbang.py	/^def announceSqlEnd(s):$/;"	f
 announceSqlStart	bigbang.py	/^def announceSqlStart(s):$/;"	f
 announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
 appendToFile	bigbang.py	/^def appendToFile(filepath, contents) -> None:$/;"	f
-avoidcat	bigbang.py	/^avoidcat       = [tpchcat, syscat, evtlogcat, bqcat, awshivecat,$/;"	v
+avoidcat	bigbang.py	/^avoidcat       = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats$/;"	v
 awsGetCreds	bigbang.py	/^def awsGetCreds():$/;"	f
 awsauthcm	bigbang.py	/^awsauthcm      = "aws-auth-cm.yaml" # basename only, no path!$/;"	v
 awsconfig	bigbang.py	/^awsconfig      = os.path.expanduser("~\/.aws\/config")$/;"	v
 awscreds	bigbang.py	/^awscreds       = os.path.expanduser("~\/.aws\/credentials")$/;"	v
 awsdir	bigbang.py	/^awsdir         = os.path.expanduser("~\/.aws")$/;"	v
-awshivecat	bigbang.py	/^awshivecat     = "awshive"$/;"	v
-awsmysqlcat	bigbang.py	/^awsmysqlcat    = "awsmysql"$/;"	v
-awspostgrescat	bigbang.py	/^awspostgrescat = "awspostgresql"$/;"	v
-azhivecat	bigbang.py	/^azhivecat      = "azhive"$/;"	v
-azmysqlcat	bigbang.py	/^azmysqlcat     = "azmysql"$/;"	v
-azpostgrescat	bigbang.py	/^azpostgrescat  = "azpostgresql"$/;"	v
 bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AWSBastionInstanceType"]$/;"	v
 bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AzureBastionVMType"]$/;"	v
 bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["GCPBastionMachineType"]$/;"	v
 bqcat	bigbang.py	/^bqcat          = "bigquery" # for now, connector doesn't support INSERT or CTAS$/;"	v
 bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 c	bigbang.py	/^                c = ", ".join(clouds)))$/;"	v
-certbf	bigbang.py	/^certbf         = "starburst.svc.cer"$/;"	v
-certf	bigbang.py	/^certf          = where(certbf)$/;"	v
 charts	bigbang.py	/^charts = {}$/;"	v
 chartversion	bigbang.py	/^    chartversion = myvars[chartvlabel]$/;"	v
 chartvlabel	bigbang.py	/^chartvlabel = "ChartVersion"$/;"	v
 checkCLISetup	bigbang.py	/^def checkCLISetup() -> None:$/;"	f
+checkEtcHosts	bigbang.py	/^def checkEtcHosts() -> None:$/;"	f
 checkRSAKey	bigbang.py	/^def checkRSAKey() -> None:$/;"	f
 choices	bigbang.py	/^        choices = ["start", "stop", "restart", "status"],$/;"	v
 clouds	bigbang.py	/^clouds         = ("aws", "az", "gcp")$/;"	v
@@ -70,6 +63,7 @@ gcskeyfile	bigbang.py	/^gcskeyfile  = tfdir + "\/" + gcskeyfbn$/;"	v
 gcskeyname	bigbang.py	/^gcskeyname     = "gcs-keyfile"$/;"	v
 generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
+getApiservUrl	bigbang.py	/^def getApiservUrl() -> str:$/;"	f
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f
 getLclPort	bigbang.py	/^def getLclPort(service: str) -> int:$/;"	f
 getMinNodeResources	bigbang.py	/^def getMinNodeResources() -> tuple:$/;"	f
@@ -98,13 +92,14 @@ help	bigbang.py	/^        help="Force cloud target to specified value.")$/;"	v
 help	bigbang.py	/^        help="Force zone\/region to specified value.")$/;"	v
 help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
 hivecat	bigbang.py	/^hivecat        = "hive"$/;"	v
+hostsf	bigbang.py	/^hostsf         = "\/etc\/hosts"$/;"	v
 installSecret	bigbang.py	/^def installSecret(name, file):$/;"	f
 instanceType	bigbang.py	/^    instanceType = myvars["AWSInstanceType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["AzureVMType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["GCPMachineType"]$/;"	v
 isTerraformSettled	bigbang.py	/^def isTerraformSettled(tgtResource: str = None) -> bool:$/;"	f
 issuePrestoCommand	bigbang.py	/^def issuePrestoCommand(command: str, verbose = False) -> list:$/;"	f
-keystorebf	bigbang.py	/^keystorebf     = "starburst.svc.p12"$/;"	v
+keystorebf	bigbang.py	/^keystorebf     = "presto.pkcs12"$/;"	v
 keystoref	bigbang.py	/^keystoref      = where(keystorebf)$/;"	v
 killAllTerminatingPods	bigbang.py	/^def killAllTerminatingPods() -> None:$/;"	f
 knownhosts	bigbang.py	/^knownhosts     = os.path.expanduser("~\/.ssh\/known_hosts")$/;"	v
@@ -116,6 +111,8 @@ licensebf	bigbang.py	/^licensebf = f"{license}.license"$/;"	v
 licensef	bigbang.py	/^licensef = where(licensebf)$/;"	v
 loadBalancerResponding	bigbang.py	/^def loadBalancerResponding(service: str) -> bool:$/;"	f
 loadDatabases	bigbang.py	/^def loadDatabases(hive_location):$/;"	f
+localhost	bigbang.py	/^localhost      = "localhost"$/;"	v
+localhostip	bigbang.py	/^localhostip    = "127.0.0.1"$/;"	v
 maxpodpnode	bigbang.py	/^maxpodpnode    = 16$/;"	v
 minnodes	bigbang.py	/^minnodes       = 2$/;"	v
 modules	bigbang.py	/^modules = ["hive", "ranger", "enterprise"]$/;"	v
@@ -137,10 +134,12 @@ patchfile	bigbang.py	/^patchfile      = where(patchfilebf)$/;"	v
 patchfilebf	bigbang.py	/^patchfilebf    = "starburst-enterprise.diff"$/;"	v
 planWorkerSize	bigbang.py	/^def planWorkerSize() -> dict:$/;"	f
 portoffset	bigbang.py	/^portoffset = { "aws": 0, "az": 1, "gcp": 2 }$/;"	v
+prestohost	bigbang.py	/^prestohost     = "presto.az.starburstdata.net"$/;"	v
 readableDir	bigbang.py	/^def readableDir(p):$/;"	f
 readableFile	bigbang.py	/^def readableFile(p):$/;"	f
 region	bigbang.py	/^region = getRegionFromZone(zone)$/;"	v
 releases	bigbang.py	/^releases = {}$/;"	v
+remote_cats	bigbang.py	/^remote_cats    = ["remote_hive", "remote_postgresql", "remote_mysql"]$/;"	v
 removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
 replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
 repo	bigbang.py	/^    repo         = myvars["HelmRepo"]$/;"	v
@@ -164,6 +163,7 @@ spinWait	bigbang.py	/^def spinWait(waitFunc: Callable[[], float]) -> None:$/;"	f
 sqlstr	bigbang.py	/^sqlstr = "Issued 🢩 "$/;"	v
 starburstsrv	bigbang.py	/^starburstsrv = [ "starburst", "ranger" ]$/;"	v
 startPortForward	bigbang.py	/^def startPortForward(bastionIp: str) -> None:$/;"	f
+started	bigbang.py	/^    started = True$/;"	v
 started	bigbang.py	/^    started = isTerraformSettled()$/;"	v
 started	bigbang.py	/^started = False$/;"	v
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
@@ -176,8 +176,10 @@ templatedir	bigbang.py	/^templatedir    = where("templates")$/;"	v
 templates	bigbang.py	/^templates = {}$/;"	v
 tfdir	bigbang.py	/^tfdir       = where(target)$/;"	v
 tfvars	bigbang.py	/^tfvars         = "variables.tf" # basename only, no path!$/;"	v
-tlscoord	bigbang.py	/^    tlscoord     = myvars["RequireCoordTls"]$/;"	v
-tlsinternal	bigbang.py	/^    tlsinternal  = myvars["RequireInternalTls"]$/;"	v
+tlscoord	bigbang.py	/^    tlscoord     = myvars[tlscoordlabel]$/;"	v
+tlscoordlabel	bigbang.py	/^tlscoordlabel = "RequireCoordTls"$/;"	v
+tlsinternal	bigbang.py	/^    tlsinternal  = myvars[tlsinternallabel]$/;"	v
+tlsinternallabel	bigbang.py	/^tlsinternallabel = "RequireInternalTls"$/;"	v
 tmpdir	bigbang.py	/^tmpdir         = "\/tmp"$/;"	v
 toreap	bigbang.py	/^toreap         = [] # Accumulate tunnels to destroy$/;"	v
 tpchcat	bigbang.py	/^tpchcat        = "tpch"$/;"	v
@@ -187,6 +189,7 @@ trinouser	bigbang.py	/^trinouser      = "presto_service"$/;"	v
 updateKubeConfig	bigbang.py	/^def updateKubeConfig(kubecfg: str = None) -> None:$/;"	f
 username	bigbang.py	/^username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035$/;"	v
 w	bigbang.py	/^        w = announceReady(env["bastion_address"])$/;"	v
+w	bigbang.py	/^    w = svcStart(ns.skip_cluster_start)$/;"	v
 w	bigbang.py	/^w = []$/;"	v
 waitUntilApiServerResponding	bigbang.py	/^def waitUntilApiServerResponding() -> float:$/;"	f
 waitUntilDeploymentsAvail	bigbang.py	/^        -> float:$/;"	f
@@ -194,5 +197,9 @@ waitUntilLoadBalancersUp	bigbang.py	/^def waitUntilLoadBalancersUp(services: lis
 waitUntilNodesReady	bigbang.py	/^def waitUntilNodesReady(minnodes: int) -> float:$/;"	f
 waitUntilPodsReady	bigbang.py	/^def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:$/;"	f
 where	bigbang.py	/^def where(leaf):$/;"	f
+wildkeycertbf	bigbang.py	/^wildkeycertbf  = "starburst.svc.pem"$/;"	v
+wildkeycertf	bigbang.py	/^wildkeycertf   = where(wildkeycertbf)$/;"	v
+wildkeystorebf	bigbang.py	/^wildkeystorebf = "starburst.svc.p12"$/;"	v
+wildkeystoref	bigbang.py	/^wildkeystoref  = where(wildkeystorebf)$/;"	v
 writeableDir	bigbang.py	/^def writeableDir(p):$/;"	f
 y	bigbang.py	/^y = getCloudSummary() + ["Service is " + ("started" if started else "stopped")]$/;"	v

@@ -12,8 +12,8 @@ Target: aws
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
 #
-Zone: eu-west-3 # AWS - Paris, France
-#Zone: eu-west-2 # AWS - London, UK
+#Zone: eu-west-3 # AWS - Paris, France
+Zone: eu-west-2 # AWS - London, UK
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: francecentral # Azure - Paris, France
 #Zone: europe-west1-b # GCP - St. Ghislain, Belgium
@@ -26,10 +26,10 @@ ChartVersion: 356.0.0
 NodeCount: 4
 
 # Require TLS on client <-> coordinator connection.
-RequireCoordTls: False
+RequireCoordTls: True
 
 # Require TLS on coordinator <-> worker connections. Implies RequireCoordTls.
-RequireInternalTls: False
+RequireInternalTls: True
 
 # Name of your license file (./${LicenseName}.license)
 LicenseName: starburstdata

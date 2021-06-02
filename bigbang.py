@@ -63,7 +63,8 @@ toreap         = [] # Accumulate tunnels to destroy
 awsdir         = os.path.expanduser("~/.aws")
 awsconfig      = os.path.expanduser("~/.aws/config")
 awscreds       = os.path.expanduser("~/.aws/credentials")
-thishost       = "localhost"
+localhost      = "localhost"
+localhostip    = "127.0.0.1"
 prestohost     = "presto.az.starburstdata.net"
 sharedsecbf    = "sharedsecret"
 sharedsecf     = where(sharedsecbf)
@@ -75,6 +76,7 @@ wildkeycertbf  = "starburst.svc.pem"
 wildkeycertf   = where(wildkeycertbf)
 patchfilebf    = "starburst-enterprise.diff"
 patchfile      = where(patchfilebf)
+hostsf         = "/etc/hosts"
 
 #
 # Start of execution. Handle commandline args.
@@ -146,35 +148,6 @@ try:
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
 
-def checkCLISetup() -> None:
-    assert target in clouds
-    if target == "aws":
-        badAws = False
-        if not writeableDir(awsdir):
-            badAws = True
-            err = f"Directory {awsdir} doesn't exist or has bad permissions."
-        elif not readableFile(awsconfig):
-            badAws = True
-            err = f"File {awsconfig} doesn't exist or isn't readable."
-        elif not readableFile(awscreds):
-            badAws = True
-            err = f"File {awscreds} doesn't exist or isn't readable."
-        if badAws:
-            print(err)
-            sys.exit("Have you run aws configure?")
-    elif target == "az":
-        azuredir = os.path.expanduser("~/.azure")
-        if not writeableDir(azuredir):
-            print(f"Directory {azuredir} doesn't exist or isn't readable.")
-            sys.exit("Have you run az login and az configure?")
-    elif target == "gcp":
-        gcpdir = os.path.expanduser("~/.config/gcloud")
-        if not writeableDir(gcpdir):
-            print("Directory {gcpdir} doesn't exist or isn't readable.")
-            sys.exit("Have you run gcloud init?")
-
-checkCLISetup()
-
 # Set the region and zone from the location. We assume zone is more precise and
 # infer the region from the zone.
 def getRegionFromZone(zone: str) -> str:
@@ -199,23 +172,6 @@ def getRegionFromZone(zone: str) -> str:
     return region
 
 region = getRegionFromZone(zone)
-
-def checkRSAKey() -> None:
-    if readableFile(rsa) and readableFile(rsaPub):
-        return
-
-    print(f"You do not have readable {rsa} and {rsaPub} files.")
-    yn = input("Would you like me to generate them? [y/N] -> ")
-    if yn.lower() in ("y", "yes"):
-        rc = runShell(f"ssh-keygen -q -t rsa -N '' -f {rsa} <<<y")
-        if rc == 0:
-            print(f"Generated {rsa} file.")
-            return
-        else:
-            print(f"Unable to write {rsa}. Try yourself?")
-    sys.exit(f"Script cannot continue without {rsa} file.")
-
-checkRSAKey()
 
 # Verify the email looks right, and extract username from it
 # NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
@@ -525,7 +481,7 @@ def updateKubeConfig(kubecfg: str = None) -> None:
             # get the cluster name
             cluster = columns[2]
             runStdout("kubectl config set clusters.{c}.server "
-                    "https://{h}:{p}".format(c = cluster, h = thishost, p =
+                    "https://{h}:{p}".format(c = cluster, h = localhost, p =
                         getLclPort("apiserv")).split())
             runStdout(f"kubectl config set-cluster {cluster} "
                     "--insecure-skip-tls-verify=true".split())
@@ -627,18 +583,31 @@ def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
     assert numer <= denom
     return float(numer) / float(denom)
 
+def getApiservUrl() -> str:
+    scheme = "http"
+    host = localhost
+    port = getLclPort("starburst")
+
+    # If we are TLS-protected to the coordinator...
+    if tlscoord:
+        scheme = "https"
+        # If we are TLS-protecting the coordinator connection, but not
+        # internal connections, then the cert will require us to use the
+        # presto hostname, as that is the only valid name in that cert.
+        if not tlsinternal:
+            host = prestohost
+    return f"{scheme}://{host}:{port}"
+
 def loadBalancerResponding(service: str) -> bool:
     assert service in starburstsrv
-    port = getLclPort(service)
 
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
     if service == "starburst":
-        url = "{m}://{h}:{p}/ui/login.html".format(m = "https" if
-                tlscoord else "http", h = thishost if tlsinternal else
-                prestohost, p = port)
+        url = getApiservUrl() + "/ui/login.html"
     elif service == "ranger":
-        url = f"http://{thishost}:{port}/login.jsp"
+        port = getLclPort("ranger")
+        url = f"http://{localhost}:{port}/login.jsp"
 
     try:
         r = requests.get(url, verify = wildkeycertf if service == "starburst"
@@ -651,7 +620,7 @@ def loadBalancerResponding(service: str) -> bool:
 def waitUntilLoadBalancersUp(services: list, namespace: str = None,
         checkConnectivity: bool = False) -> float:
     numer = 0
-    denom = 0
+    denom = len(services)
     ns = f" --namespace {namespace}" if namespace != None else ""
     r = runTry(f"{kube}{ns} get svc -ojson".split())
     if r.returncode == 0:
@@ -665,7 +634,6 @@ def waitUntilLoadBalancersUp(services: list, namespace: str = None,
             name = meta["name"]
             if not name in services:
                 continue
-            denom += 1 # found one we care about it
 
             # Status section - now see if its IP is allocated yet
             if not "status" in s:
@@ -702,7 +670,7 @@ def waitUntilLoadBalancersUp(services: list, namespace: str = None,
 def waitUntilApiServerResponding() -> float:
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
-    url = "https://{h}:{p}/".format(h = thishost, p = getLclPort("apiserv"))
+    url = "https://{h}:{p}/".format(h = localhost, p = getLclPort("apiserv"))
     try:
         r = requests.get(url, verify = False) # ignore certificate
         # Either forbidden (403), unauthorised (403) or 200 are acceptable
@@ -968,9 +936,7 @@ def retry(f, maxretries: int, err: str) -> requests.Response:
 def issuePrestoCommand(command: str, verbose = False) -> list:
     httpmaxretries = 10
     if verbose: announceSqlStart(command)
-    url = "{m}://{h}:{p}/v1/statement".format(m = "https" if tlscoord
-            else "http", h = thishost if tlsinternal else prestohost,
-            p = getLclPort("starburst"))
+    url = getApiservUrl() + "/v1/statement"
     hdr = { "X-Trino-User": trinouser }
     if tlscoord:
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
@@ -1461,7 +1427,87 @@ def getCloudSummary() -> List[str]:
 def announceSummary() -> None:
     announceLoud(getCloudSummary())
 
+def checkCLISetup() -> None:
+    assert target in clouds
+    if target == "aws":
+        badAws = False
+        if not writeableDir(awsdir):
+            badAws = True
+            err = f"Directory {awsdir} doesn't exist or has bad permissions."
+        elif not readableFile(awsconfig):
+            badAws = True
+            err = f"File {awsconfig} doesn't exist or isn't readable."
+        elif not readableFile(awscreds):
+            badAws = True
+            err = f"File {awscreds} doesn't exist or isn't readable."
+        if badAws:
+            print(err)
+            sys.exit("Have you run aws configure?")
+    elif target == "az":
+        azuredir = os.path.expanduser("~/.azure")
+        if not writeableDir(azuredir):
+            print(f"Directory {azuredir} doesn't exist or isn't readable.")
+            sys.exit("Have you run az login and az configure?")
+    elif target == "gcp":
+        gcpdir = os.path.expanduser("~/.config/gcloud")
+        if not writeableDir(gcpdir):
+            print("Directory {gcpdir} doesn't exist or isn't readable.")
+            sys.exit("Have you run gcloud init?")
+
+def checkRSAKey() -> None:
+    if readableFile(rsa) and readableFile(rsaPub):
+        return
+
+    print(f"You do not have readable {rsa} and {rsaPub} files.")
+    yn = input("Would you like me to generate them? [y/N] -> ")
+    if yn.lower() in ("y", "yes"):
+        rc = runShell(f"ssh-keygen -q -t rsa -N '' -f {rsa} <<<y")
+        if rc == 0:
+            print(f"Generated {rsa} file.")
+            return
+        else:
+            print(f"Unable to write {rsa}. Try yourself?")
+    sys.exit(f"Script cannot continue without {rsa} file.")
+
+def checkEtcHosts() -> None:
+    # We only need to make sure that we have a binding for the presto host if
+    # we are running with TLS to the coordinator but the internal connections
+    # are NOT secured, as in that the cert only has presto host
+    if not tlscoord or tlsinternal:
+        return
+
+    if readableFile(hostsf):
+        with open(hostsf) as fh:
+            for line in fh:
+                # skip commented lines
+                if re.match(r"^\s*#", line) != None:
+                    continue
+                cols = line.split()
+                if len(cols) < 2:
+                    continue
+                ip = cols[0]
+                hostname = cols[1]
+                if ip == localhostip and hostname == prestohost:
+                    return
+
+    print(f"For TLS-encryption to coordinator, you will need {prestohost} in "
+            f"{hostsf}.\nI can add this but I'll need to run this as sudo:")
+    cmd = f"echo {localhostip} {prestohost} | sudo tee -a {hostsf}"
+    print(cmd)
+    yn = input("Would you like me to run that with sudo? [y/N] -> ")
+    if yn.lower() in ("y", "yes"):
+        rc = runShell(cmd)
+        if rc == 0:
+            print(f"Added {prestohost} to {hostsf}.")
+            return
+        else:
+            print(f"Unable to write to {hostsf}. Try yourself?")
+    sys.exit(f"Script cannot continue without {prestohost} in {hostsf}")
+
 announceSummary()
+checkCLISetup()
+checkRSAKey()
+checkEtcHosts()
 
 w = []
 started = False
