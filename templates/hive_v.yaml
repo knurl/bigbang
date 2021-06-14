@@ -23,22 +23,22 @@ resources:
     cpu: {{hive_cpu}}
 
 objectStorage:
-  {% if target == "aws" %}
+  {% if Target == "aws" %}
   awsS3:
     region: {{Region}}
     endpoint: s3.{{Region}}.amazonaws.com
     accessKey: {{AWSAccessKey}} 
     secretKey: {{AWSSecretKey}}
-  {% elif target == "az" %}
+  {% elif Target == "az" %}
   azure:
     abfs:
       authType: "accessKey"
       accessKey:
         storageAccount: {{StorageAccount}}
         accessKey: {{adls_access_key}}
-  {% elif target == "gcp" %}
+  {% elif Target == "gcp" %}
   gs:
-    cloudKeyFileSecret: {{gcskeyname}}
+    cloudKeyFileSecret: {{gcskey}}
   {% endif %}
 
 # The K8S scheduler sometimes makes sub-optimal arrangements in which hive and

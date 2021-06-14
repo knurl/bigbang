@@ -6,6 +6,10 @@ output "bastion_address" {
   value = aws_instance.bastion.public_ip
 }
 
+output "ldaps_address" {
+  value = aws_instance.ldaps.private_ip
+}
+
 output "evtlog_address" {
   value = aws_db_instance.evtlog.address
 }

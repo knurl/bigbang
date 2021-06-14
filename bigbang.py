@@ -1,12 +1,14 @@
 #!python
 
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
-import subprocess, ipaddress, glob, threading, time, concurrent.futures, jinja2
+import subprocess, ipaddress, glob, threading, time, concurrent.futures
 import atexit, psutil # type: ignore
 from run import run, runShell, runTry, runStdout, runCollect
 from subprocess import CalledProcessError
-from typing import List, Tuple, Iterable, Callable, Optional, Any
+from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict
 from urllib.parse import urlparse
+import jinja2
+from jinja2.meta import find_undeclared_variables
 
 # Do this just to get rid of the warning when we try to read from the
 # api server, and the certificate isn't trusted
@@ -27,56 +29,59 @@ def writeableDir(p):
 #
 # Global variables.
 #
-clouds         = ("aws", "az", "gcp")
-templatedir    = where("templates")
-tmpdir         = "/tmp"
-rsa            = os.path.expanduser("~/.ssh/id_rsa")
-rsaPub         = os.path.expanduser("~/.ssh/id_rsa.pub")
-knownhosts     = os.path.expanduser("~/.ssh/known_hosts")
-tfvars         = "variables.tf" # basename only, no path!
-awsauthcm      = "aws-auth-cm.yaml" # basename only, no path!
-dbports        = { "mysql": 3306, "postgres": 5432 }
-tpchschema     = "tiny"
-gcskeyname     = "gcs-keyfile"
-gcskeyfbn      = f"key.json"
-tpchcat        = "tpch"
-hivecat        = "hive"
-syscat         = "system"
-evtlogcat      = "postgresqlel"
-bqcat          = "bigquery" # for now, connector doesn't support INSERT or CTAS
-remote_cats    = ["remote_hive", "remote_postgresql", "remote_mysql"]
-avoidcat       = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats
-trinouser      = "presto_service"
-trinopass      = "test"
-dbschema       = "fdd"
-dbevtlog       = "evtlog" # event logger PostgreSQL instance
-dbuser         = "fdd"
-dbpwd          = "a029fjg!>dfgBiO8"
-namespace      = "starburst"
-helmns         = f"-n {namespace}"
-kube           = "kubectl"
-kubecfgf       = os.path.expanduser("~/.kube/config")
-kubens         = f"{kube} -n {namespace}"
-minnodes       = 2
-maxpodpnode    = 16
-toreap         = [] # Accumulate tunnels to destroy
-awsdir         = os.path.expanduser("~/.aws")
-awsconfig      = os.path.expanduser("~/.aws/config")
-awscreds       = os.path.expanduser("~/.aws/credentials")
-localhost      = "localhost"
-localhostip    = "127.0.0.1"
-prestohost     = "presto.az.starburstdata.net"
-sharedsecbf    = "sharedsecret"
-sharedsecf     = where(sharedsecbf)
-keystorebf     = "presto.pkcs12"
-keystoref      = where(keystorebf)
-wildkeystorebf = "starburst.svc.p12"
-wildkeystoref  = where(wildkeystorebf)
-wildkeycertbf  = "starburst.svc.pem"
-wildkeycertf   = where(wildkeycertbf)
-patchfilebf    = "starburst-enterprise.diff"
-patchfile      = where(patchfilebf)
-hostsf         = "/etc/hosts"
+clouds       = ("aws", "az", "gcp")
+templatedir  = where("templates")
+tmpdir       = "/tmp"
+rsa          = os.path.expanduser("~/.ssh/id_rsa")
+rsaPub       = os.path.expanduser("~/.ssh/id_rsa.pub")
+knownhosts   = os.path.expanduser("~/.ssh/known_hosts")
+tfvars       = "variables.tf" # basename only, no path!
+awsauthcm    = "aws-auth-cm.yaml" # basename only, no path!
+dbports      = { "mysql": 3306, "postgres": 5432 }
+tpchschema   = "tiny"
+tpchcat      = "tpch"
+hivecat      = "hive"
+syscat       = "system"
+evtlogcat    = "postgresqlel"
+bqcat        = "bigquery" # for now, connector doesn't support INSERT or CTAS
+remote_cats  = ["remote_hive", "remote_postgresql", "remote_mysql"]
+avoidcat     = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats
+trinouser    = "presto_service"
+trinopass    = "test"
+dbschema     = "fdd"
+dbevtlog     = "evtlog" # event logger PostgreSQL instance
+dbuser       = "fdd"
+dbpwd        = "a029fjg!>dfgBiO8"
+namespace    = "starburst"
+helmns       = f"-n {namespace}"
+kube         = "kubectl"
+kubecfgf     = os.path.expanduser("~/.kube/config")
+kubens       = f"{kube} -n {namespace}"
+minnodes     = 2
+maxpodpnode  = 16
+awsdir       = os.path.expanduser("~/.aws")
+awsconfig    = os.path.expanduser("~/.aws/config")
+awscreds     = os.path.expanduser("~/.aws/credentials")
+localhost    = "localhost"
+localhostip  = "127.0.0.1"
+domain       = "az.starburstdata.net"
+prestohost   = "presto." + domain
+ldaphost     = "ldap." + domain
+keystorepass = "test123"
+hostsf       = "/etc/hosts"
+patchbf      = "starburst-enterprise.diff"
+patchf       = where(patchbf)
+ldapsetupbf  = "install-slapd.sh"
+ldapsetupf   = where(ldapsetupbf)
+ldaplaunchbf = "ldaplaunch.sh"
+ldaplaunchf  = where(ldaplaunchbf)
+
+#
+# Secrets
+#
+secrets: dict[str, dict[str, str]] = {}
+secretsbf    = "secrets.yaml"
+secretsf     = where(secretsbf)
 
 #
 # Start of execution. Handle commandline args.
@@ -94,8 +99,12 @@ p = argparse.ArgumentParser(description=
         to allow you to control the new setup from your laptop using a bastion
         server.""")
 
+p.add_argument('-d', '--debug', action="store_true",
+        help="Run in debug mode.")
 p.add_argument('-c', '--skip-cluster-start', action="store_true",
         help="Skip checking to see if cluster needs to be started.")
+p.add_argument('-u', '--tunnel-only', action="store_true",
+        help="Only start apiserv tunnel through bastion.")
 p.add_argument('-e', '--empty-nodes', action="store_true",
         help="Unload k8s cluster only. Used with stop or restart.")
 p.add_argument('-t', '--target', action="store",
@@ -110,8 +119,12 @@ p.add_argument('command',
 
 ns = p.parse_args()
 
+if ns.skip_cluster_start and ns.command != "start":
+    p.error("-c, --skip-cluster-start is only used with start")
+if ns.tunnel_only and ns.command != "start":
+    p.error("-u, --tunnel-only is only used with start")
 if ns.empty_nodes and ns.command not in ("stop", "restart"):
-    p.error("-e, --empty-nodes is only used with stop and restart")
+    p.error("-e, --empty-nodes is only used with stop or restart")
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -126,6 +139,7 @@ nodecountlabel = "NodeCount"
 chartvlabel = "ChartVersion"
 tlscoordlabel = "RequireCoordTls"
 tlsinternallabel = "RequireInternalTls"
+authnldaplabel = "AuthNLdap"
 try:
     with open(myvarsf) as mypf:
         myvars = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -140,11 +154,12 @@ try:
     email        = myvars["Email"]
     chartversion = myvars[chartvlabel]
     nodeCount    = myvars[nodecountlabel]
-    license      = myvars["LicenseName"]
     repo         = myvars["HelmRepo"]
     repoloc      = myvars["HelmRepoLocation"]
     tlscoord     = myvars[tlscoordlabel]
     tlsinternal  = myvars[tlsinternallabel]
+    authnldap    = myvars[authnldaplabel]
+
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
 
@@ -187,22 +202,21 @@ code = username[:codelen]
 #
 if target == "aws":
     instanceType = myvars["AWSInstanceType"]
-    bastionInstanceType = myvars["AWSBastionInstanceType"]
+    smallInstanceType = myvars["AWSSmallInstanceType"]
 elif target == "az":
     instanceType = myvars["AzureVMType"]
-    bastionInstanceType = myvars["AzureBastionVMType"]
+    smallInstanceType = myvars["AzureSmallVMType"]
 elif target == "gcp":
     instanceType = myvars["GCPMachineType"]
-    bastionInstanceType = myvars["GCPBastionMachineType"]
+    smallInstanceType = myvars["GCPSmallMachineType"]
 else:
     sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
             "{c}".format(t = target, tl = targetlabel, m = myvarsbf,
                 c = ", ".join(clouds)))
 
 # Terraform files are in a directory named for target
-tfdir       = where(target)
-gcskeyfile  = tfdir + "/" + gcskeyfbn
-tf          = f"terraform -chdir={tfdir}"
+tfdir = where(target)
+tf    = f"terraform -chdir={tfdir}"
 for d in [templatedir, tmpdir, tfdir]:
     assert writeableDir(d)
 
@@ -219,14 +233,10 @@ if nodeCount < 2:
             f"{nodecountlabel} in {myvarsbf}.")
 
 if tlsinternal and not tlscoord:
-    sys.exit(f"If {tlsinternallabel} is enabled, so must {tlscoordlabel} be")
+    sys.exit(f"{tlsinternallabel} requires {tlscoordlabel} to be enabled")
 
-# Check the license file
-licensebf = f"{license}.license"
-licensef = where(licensebf)
-if not readableFile(licensef):
-    sys.exit(f"Your {myvarsbf} file specifies a license named {license} "
-            f"located at {licensef} but no readable file exists there.")
+if authnldap and not tlscoord:
+    sys.exit(f"{authnldaplabel} requires {tlscoordlabel} to be enabled")
 
 # Generate a unique octet for our subnet. Use that octet with the 'code' we
 # generated above as part of a short name we can use to mark resources we
@@ -289,15 +299,16 @@ for module in modules:
 
 # Portfinder service
 
-starburstsrv = [ "starburst", "ranger" ]
+starburstsrv = ["starburst", "ranger"]
 svcports    = {
-        "ranger":    { "local": 6080, "remote": 6080 },
-        "apiserv":   { "local": 2153, "remote": 443  }
+        "ranger":    {"local": 6080, "remote": 6080},
+        "apiserv":   {"local": 2153, "remote": 443 }
         }
 if tlscoord:
-    svcports |= { "starburst": { "local": 8443, "remote": 8443 } }
+    svcports |= {"starburst": {"local": 8443, "remote": 8443},
+                 "ldaps":     {"local": 8636, "remote": 636}}
 else:
-    svcports |= { "starburst": { "local": 8080, "remote": 8080 } }
+    svcports |= {"starburst": {"local": 8080, "remote": 8080}}
 
 portoffset = { "aws": 0, "az": 1, "gcp": 2 }
 
@@ -402,7 +413,8 @@ def removeOldVersions(yamltmp: str, similar: str) -> None:
         print(f"Removing old parameterised file {f}")
         os.remove(f)
 
-def parameteriseTemplate(template, targetDir, varsDict):
+def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,
+        undefinedOk: set[str] = set()) -> tuple[bool, str]:
     assert os.path.basename(template) == template, \
             f"YAML template {template} should be in basename form (no path)"
     root, ext = os.path.splitext(template)
@@ -421,9 +433,14 @@ def parameteriseTemplate(template, targetDir, varsDict):
     try:
         file_loader = jinja2.FileSystemLoader(templatedir)
         env = jinja2.Environment(loader = file_loader, trim_blocks = True,
-                lstrip_blocks = True)
+                lstrip_blocks = True, undefined = jinja2.DebugUndefined)
         t = env.get_template(template)
         output = t.render(varsDict)
+        ast = env.parse(output)
+        undefined = find_undeclared_variables(ast)
+        if len(undefined - undefinedOk) > 0:
+            raise jinja2.UndefinedError(f"Undefined vars in {template}: "
+                    f"{undefined}; undefinedOK = {undefinedOk}")
     except jinja2.TemplateNotFound as e:
         print(f"Couldn't read {template} from {templatedir} due to {e}")
         raise
@@ -610,8 +627,8 @@ def loadBalancerResponding(service: str) -> bool:
         url = f"http://{localhost}:{port}/login.jsp"
 
     try:
-        r = requests.get(url, verify = wildkeycertf if service == "starburst"
-                and tlsinternal else None)
+        r = requests.get(url, verify = secrets["wild"]["f"] if service ==
+                "starburst" and tlsinternal else None)
         return r.status_code == 200
     except requests.exceptions.ConnectionError as e:
         pass
@@ -735,8 +752,10 @@ class Tunnel:
                 self.p.pid if self.p != None else "UNKNOWN", l = self.lport,
                 ra = tgtname, rp = self.rport)
 
+toreap: list[Tunnel] = [] # Accumulate tunnels to destroy
+
 # Input dictionary is the output variables from Terraform.
-def establishBastionTunnel(env: dict) -> Tunnel:
+def establishBastionTunnel(env: dict) -> list[Tunnel]:
     # The new bastion server will have a new host key. Delete the old one we
     # have and grab the new one.
     announce(f"Replacing bastion host keys in {knownhosts}")
@@ -753,10 +772,13 @@ def establishBastionTunnel(env: dict) -> Tunnel:
         len(hostkeys.splitlines()), k = knownhosts))
     appendToFile(knownhosts, hostkeys)
 
+    tuns = []
+
     # Start up the tunnel to the Kubernetes API server
     tun = Tunnel("k8s-apiserver", env["bastion_address"],
             getLclPort("apiserv"), env["k8s_api_server"],
             getRmtPort("apiserv"))
+    tuns.append(tun)
 
     # Now that the tunnel is in place, update our kubecfg with the address to
     # the tunnel, keeping everything else in place
@@ -766,7 +788,15 @@ def establishBastionTunnel(env: dict) -> Tunnel:
     # Ensure that we can talk to the api server
     announce("Waiting for api server to respond")
     spinWait(lambda: waitUntilApiServerResponding())
-    return tun
+
+    # Start up the tunnel to the LDAP server
+    if authnldap:
+        assert tlscoord
+        tun = Tunnel("ldaps", env["bastion_address"], getLclPort("ldaps"),
+                ldaphost, getRmtPort("ldaps"))
+        tuns.append(tun)
+
+    return tuns
 
 def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     # If we've already got an aws auth config map, we're done
@@ -775,8 +805,8 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
         announce("aws-auth configmap already installed")
         return
     # Parameterise the aws auth config map template with the node role arn
-    changed, yamltmp = parameteriseTemplate(awsauthcm, tfdir, { "NodeRoleARN":
-        workerIamRoleArn })
+    changed, yamltmp = parameteriseTemplate(awsauthcm, tfdir, {"NodeRoleARN":
+        workerIamRoleArn}, {'EC2PrivateDNSName'})
     # Nodes should start joining after this
     announce("Adding aws-auth configmap to cluster")
     runStdout(f"{kube} apply -f {yamltmp}".split())
@@ -784,7 +814,7 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars
     env |= {
-        "BastionInstanceType": bastionInstanceType,
+        "SmallInstanceType": smallInstanceType,
         "BucketName":          bucket,
         "ClusterName":         clustname,
         "DBName":              dbschema,
@@ -792,6 +822,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
         "DBPassword":          dbpwd,
         "DBUser":              dbuser,
         "InstanceType":        instanceType,
+        "LdapLaunchScript":    ldaplaunchf,
         "MaxPodsPerNode":      maxpodpnode,
         "MyCIDR":              mySubnetCidr,
         "MyPublicIP":          getMyPublicIp(),
@@ -827,14 +858,14 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     # need later. For GCP, write out a key file that Hive will use to access
     # GCS. For Azure, just set a value we'll use for the starburst values file.
     if target == "gcp":
-        replaceFile(gcskeyfile, env["object_key"])
-        env["gcskeyfile"] = gcskeyfile
+        replaceFile(secrets["gcskey"]["f"], env["object_key"])
     elif target == "az":
         env["adls_access_key"] = env["object_key"]
 
-    # Start up the ssh tunnel to the bastion, so we can run kubectl
-    tun = establishBastionTunnel(env)
-    toreap.append(tun) # Save the reference so it doesn't get destroyed
+    # Start up ssh tunnels via the bastion, so we can run kubectl and ldap
+    # locally from the workstation
+    tuns = establishBastionTunnel(env)
+    toreap.extend(tuns) # Ref the tunnels so they don't die when they de-scope
 
     # For AWS, the nodes will not join until we have added the node role ARN to
     # the aws-auth-map-cn.yaml.
@@ -864,7 +895,7 @@ def killAllTerminatingPods() -> None:
             if r.returncode == 0:
                 print(f"Terminated pod {name}")
 
-def startPortForward(bastionIp: str) -> None:
+def startPortForwardToLBs(bastionIp: str) -> None:
     # should be nodeCount - 1 workers with 1 container each, 2 containers for
     # the coordinator, and 2 containers each for Hive and Ranger
     announce("Waiting for pods to be ready")
@@ -938,12 +969,11 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
     if verbose: announceSqlStart(command)
     url = getApiservUrl() + "/v1/statement"
     hdr = { "X-Trino-User": trinouser }
+    authtype = None
     if tlscoord:
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
-    else:
-        authtype = None
     f = lambda: requests.post(url, headers = hdr, auth = authtype, data =
-            command, verify = wildkeycertf if tlsinternal else None)
+            command, verify = secrets["wild"]["f"] if tlsinternal else None)
     r = retry(f, maxretries = httpmaxretries, err = f"POST [{command}]")
 
     data = []
@@ -961,7 +991,7 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
             return data # the only way out is success, or an exception
         if tlsinternal:
             f = lambda: requests.get(j["nextUri"], headers = hdr, verify =
-                    wildkeycertf)
+                    secrets["wild"]["f"])
         else:
             f = lambda: requests.get(j["nextUri"], headers = hdr, verify = None)
         r = retry(f, maxretries = httpmaxretries, 
@@ -988,8 +1018,8 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
         if dstSchema not in schemas:
             clause = " with (location = '{l}/{s}')".format(l = hiveTarget,
                     s = dstSchema) if dstCatalog == "hive" else ""
-            issuePrestoCommand("create schema {c}.{s}{w}".format(c = dstCatalog,
-                s = dstSchema, w = clause), verbose = True)
+            issuePrestoCommand("create schema {c}.{s}{w}".format(c =
+                dstCatalog, s = dstSchema, w = clause), verbose = True)
         else:
             dtab = issuePrestoCommand("show tables in {c}.{s}".format(c =
                 dstCatalog, s = dstSchema))
@@ -1002,9 +1032,13 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
             if srctable not in dsttables:
                 c = f"create table {dstCatalog}.{dstSchema}.{srctable} as " \
                         f"select * from {srcCatalog}.{srcSchema}.{srctable}"
-                t = threading.Thread(target = issuePrestoCommand, args = (c,True,))
-                threads.append(t)
-                t.start()
+            else:
+                c = f"select count(*) from {dstCatalog}.{dstSchema}.{srctable}"
+
+            t = threading.Thread(target = issuePrestoCommand, args =
+                    (c,True,))
+            threads.append(t)
+            t.start()
 
     for t in threads:
         t.join()
@@ -1040,22 +1074,46 @@ def loadDatabases(hive_location):
         hive_location = f"abfs://{bucket}@{hive_location}"
 
     # First copy from tpch to hive...
-    announce(f"populating tables in {hivecat}")
+    announce(f"loading/verifying tables in {hivecat}")
     copySchemaTables(tpchcat, tpchschema, [hivecat], dbschema, hive_location)
 
     # Then copy from hive to everywhere in parallel
     ctab = issuePrestoCommand("show catalogs")
     dstCatalogs = [c[0] for c in ctab if c[0] not in avoidcat + [hivecat]]
-    announce("populating tables in {}".format(", ".join(dstCatalogs)))
+    announce("loading/verifying tables in {}".format(", ".join(dstCatalogs)))
     copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema, "")
 
-def installSecret(name, file):
-    r = runTry(f"{kubens} get secrets {name}".split())
-    # if the secret with that name doesn't yet exist, create it
-    if r.returncode != 0:
-        runStdout(f"{kubens} create secret generic {name} --from-file "
+def installSecrets(secrets: dict) -> dict:
+    env = {}
+    announce(f"Installing secrets")
+    for name, values in secrets.items():
+        # If we are using TLS on internal connections, we don't need these
+        if tlsinternal:
+            if name in ('prestoks', 'prestocert'):
+                continue
+        # If we are using TLS on coordinator only, we don't need these
+        elif tlscoord:
+            if name in ('wildks', 'wildcert', 'sharedsec'):
+                continue
+        # These are needed only for LDAP
+        if not authnldap and name in ('slapdkey', 'slapdcert', 'certinfo',
+                'ldapks'):
+            continue
+        # These are needed only for GCP
+        if target != "gcp" and name == "gcskey":
+            continue
+
+        file = values["f"]
+        env[name] = name
+        env[name + "bf"] = values["bf"]
+        env[name + "f"] = file
+
+        r = runTry(f"{kubens} get secrets {name}".split())
+        # if the secret with that name doesn't yet exist, create it
+        if r.returncode != 0:
+            runStdout(f"{kubens} create secret generic {name} --from-file "
                 f"{file}".split())
-    announce(f"Secret {file} installed as \"{name}\"")
+    return env
 
 def helmTry(cmd: str) -> subprocess.CompletedProcess:
     return runTry(["helm"] + cmd.split())
@@ -1134,24 +1192,25 @@ def helmWhichChartInstalled(module: str) -> Optional[Any]:
 
 # Returns a bool indicating if the hive postgres database might have been
 # created--either during an install, or because we revved up a version
-def helmInstallRelease(module: str, env = {}) -> bool:
-    hivereset = False
-
-    env |= myvars | \
+def helmInstallRelease(module: str, env: dict = {}, debug: bool = False)\
+        -> bool:
+    env |= myvars |\
             { "BucketName":         bucket,
+              "Debug":              debug,
               "DBName":             dbschema,
               "DBNameEventLogger":  dbevtlog,
               "DBPassword":         dbpwd,
+              "KeystorePass":       keystorepass,
               "PrestoHost":         prestohost,
               "PrestoPort":         getRmtPort("starburst"),
-              "RequireCoordTls":    tlscoord,
-              "RequireInternalTls": tlsinternal,
               "StorageAccount":     storageacct,
               "TrinoUser":          trinouser,
               "TrinoPass":          trinopass,
               "mysql_port":         dbports["mysql"],
-              "postgres_port":      dbports["postgres"],
-              "target":             target }
+              "postgres_port":      dbports["postgres"] }
+    if authnldap:
+        env["LdapUri"] = "ldaps://{h}:{p}".format(h = ldaphost, p =
+                getRmtPort("ldaps"))
 
     # Parameterise the yaml file that configures the helm chart install. The
     # function returns a tuple, indicating whether the helm chart values file
@@ -1161,6 +1220,7 @@ def helmInstallRelease(module: str, env = {}) -> bool:
     chart = helmWhichChartInstalled(module)
     newchart = charts[module] + "-" + chartversion # which one to install?
 
+    hivereset = False
     workingrepo = repo
     # There is a bug in Starburst's helm charts where load-balancers can only
     # be on the unsecured port 8080. Fix this manually here.
@@ -1170,7 +1230,7 @@ def helmInstallRelease(module: str, env = {}) -> bool:
         if not os.path.exists(targetdir):
             helm("pull {p}/{c} --version {v} --untar --untardir {d}".format(p =
                 repo, c = charts[module], v = chartversion, d = targetdir))
-            runStdout(f"patch -d {targetdir} -p1 -i {patchfile}".split())
+            runStdout(f"patch -d {targetdir} -p1 -i {patchf}".split())
             changed = True
         workingrepo = targetdir
 
@@ -1197,6 +1257,7 @@ def helmInstallRelease(module: str, env = {}) -> bool:
             hivereset = True
     else:
         print(f"{chart} values unchanged ➼ avoiding helm upgrade")
+
     return hivereset
 
 def helmUninstallRelease(release: str) -> None:
@@ -1273,27 +1334,51 @@ def getMinNodeResources() -> tuple:
     return mincpu, minmem
 
 def planWorkerSize() -> dict:
-    # Each worker or coordinator should get most of the CPU and memory on every
-    # node. The remainder should be reserved for _either_ Ranger or Hive.
+    # Strategy: Each worker or coordinator gets 7/8 of the resource on each
+    # node (after resources for K8S system pods are removed). We put the
+    # coordinator and workers all on different nodes, which means every node
+    # has a remaining 1/8 capacity, which we reserve for _either_ Ranger or
+    # Hive. We guarantee by using pod anti-affinity rules that Hive and Ranger
+    # will end up on different nodes.
     c, m = getMinNodeResources()
     cpu = {}
     mem = {}
+
+    # 7/8 for coordinator and workers
     cpu["worker"] = cpu["coordinator"] = (c >> 3) * 7
     mem["worker"] = mem["coordinator"] = (m >> 3) * 7
     print("Workers & coordinator get {c}m CPU and {m}Mi mem".format(c =
         cpu["worker"], m = mem["worker"] >> 10))
-    cpu["ranger_admin"] = cpu["ranger_db"] = cpu["hive"] = cpu["hive_db"] = \
-            c >> 4
-    mem["ranger_admin"] = mem["ranger_db"] = mem["hive"] = mem["hive_db"] = \
-            m >> 4
-    assert cpu["worker"] + cpu["hive"] + cpu["hive_db"] <= c
-    assert mem["worker"] + mem["hive"] + mem["hive_db"] <= m
-    assert cpu["worker"] + cpu["ranger_admin"] + cpu["ranger_db"] <= c
-    assert mem["worker"] + mem["ranger_admin"] + mem["ranger_db"] <= m
-    print("Hive gets {c}m CPU and {m}Mi mem".format(c = cpu["hive"] +
-        cpu["hive_db"], m = (mem["hive"] + mem["hive_db"]) >> 10))
-    print("Ranger gets {c}m CPU and {m}Mi mem".format(c = cpu["ranger_admin"] +
-        cpu["ranger_db"], m = (mem["ranger_admin"] + mem["ranger_db"]) >> 10))
+
+    # Hive - each container gets 1/16
+    cpu["hive"] = cpu["hive_db"] = c >> 4
+    mem["hive"] = mem["hive_db"] = m >> 4
+    hivecpu = cpu["hive"] + cpu["hive_db"]
+    hivemem = mem["hive"] + mem["hive_db"]
+    assert cpu["worker"] + hivecpu <= c
+    assert mem["worker"] + hivemem <= m
+    print("hive total resources: {c}m CPU and {m}Mi mem".format(c = hivecpu, m
+        = hivemem))
+    print("hive and hive-db get {c}m CPU and {m}Mi mem".format(c = cpu["hive"],
+        m = mem["hive"] >> 10))
+
+    # Ranger - admin gets 2/32, db and usync each get 1/32
+    cpu["ranger_usync"] = cpu["ranger_db"] = c >> 5
+    cpu["ranger_admin"] = c >> 4
+    mem["ranger_usync"] = mem["ranger_db"] = m >> 5
+    mem["ranger_admin"] = m >> 4
+    rangercpu = cpu["ranger_admin"] + cpu["ranger_db"] + cpu["ranger_usync"]
+    rangermem = mem["ranger_admin"] + mem["ranger_db"] + mem["ranger_usync"]
+    assert cpu["worker"] + rangercpu <= c
+    assert mem["worker"] + rangermem <= m
+    print("ranger total resources: {c}m CPU and {m}Mi mem".format(c =
+        rangercpu, m = rangermem))
+    print("ranger-usync and -db get {c}m CPU and {m}Mi mem".format(c =
+        cpu["ranger_usync"], m = mem["ranger_usync"] >> 10))
+    print("ranger-admin gets {c}m CPU and {m}Mi mem".format(c =
+        cpu["ranger_admin"], m = mem["ranger_admin"] >> 10))
+
+    # Convert format of our internal variables, ready to populate our templates
     env = {f"{k}_cpu": f"{v}m" for k, v in cpu.items()}
     env |= {f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in
         mem.items()}
@@ -1301,31 +1386,14 @@ def planWorkerSize() -> dict:
     env["workerCount"] = nodeCount - 1
     return env
 
-def helmInstallAll(env):
+def helmInstallAll(env, debug: bool = False):
     helmCreateNamespace()
-    installSecret(repo, licensef)
-
-    # For internal SSL, we need a wildcard cert--which unfortunately can't be
-    # signed, which makes it less convenient. Limit use of unsigned cert to
-    # this one case, and in the regular case, use the CA-signed cert.
-    if tlsinternal:
-        installSecret(wildkeystorebf, wildkeystoref)
-        installSecret(sharedsecbf, sharedsecf)
-    elif tlscoord:
-        installSecret(keystorebf, keystoref)
-
-    # For GCP, we'll need to store the secret for our GCS access in K8S
-    if target == "gcp":
-        installSecret(gcskeyname, gcskeyfile)
-        env["gcskeyname"] = gcskeyname
-        env["gskeyfbn"] = gcskeyfbn
-
+    env |= installSecrets(secrets)
     ensureHelmRepoSetUp(repo)
-    capacities = planWorkerSize()
-    env |= capacities
+    env |= planWorkerSize()
     hivereset = False
     for module in modules:
-        hivereset = helmInstallRelease(module, env) or hivereset
+        hivereset = helmInstallRelease(module, env, debug) or hivereset
     # If we've installed Hive for the first time, or if we revved the version
     # of the Hive helm chart, then it will have set up fresh the internal
     # PostgreSQL DB used for metadata, which means there also shouldn't be any
@@ -1363,15 +1431,19 @@ def awsGetCreds():
 def announceReady(bastionIp: str) -> list:
     return ["Bastion: {b}".format(b = bastionIp)]
 
-def svcStart(skipClusterStart: bool = False) -> list:
+def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False, debug:\
+        bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the cluster.
     # This will create the control plane and workers.
     env = ensureClusterIsStarted(skipClusterStart)
-    env["Region"] = region
-    env |= awsGetCreds()
-    helmInstallAll(env)
-    startPortForward(env["bastion_address"])
-    loadDatabases(env["object_address"])
+
+    if not tunnelOnly:
+        env["Region"] = region
+        env |= awsGetCreds()
+        helmInstallAll(env, debug)
+        startPortForwardToLBs(env["bastion_address"])
+        loadDatabases(env["object_address"])
+
     return announceReady(env["bastion_address"])
 
 def isTerraformSettled(tgtResource: str = None) -> bool:
@@ -1413,6 +1485,136 @@ def svcStop(emptyNodes: bool = False) -> None:
         announce("tf destroy completed in " + time.strftime("%Hh%Mm%Ss",
             time.gmtime(time.time() - t)))
 
+def fqdnToDc(fqdn: str) -> str:
+    dcs = fqdn.split('.')
+    return ",".join([f"dc={d}" for d in dcs])
+
+def getOverlays() -> str:
+    return textwrap.dedent("""\
+            dn: cn=module,cn=config
+            cn: module
+            objectClass: olcModuleList
+            olcModuleLoad: memberof
+            olcModulePath: /usr/lib/ldap
+            
+            dn: olcOverlay={0}memberof,olcDatabase={1}mdb,cn=config
+            objectClass: olcConfig
+            objectClass: olcMemberOf
+            objectClass: olcOverlayConfig
+            objectClass: top
+            olcOverlay: memberof
+            olcMemberOfRefint: TRUE
+            olcMemberOfGroupOC: groupOfNames\n\n""")
+
+def getOu(outype: str, dcs: str) -> str:
+    return textwrap.dedent(f"""\
+            dn: ou={outype},{dcs}
+            objectClass: organizationalUnit
+            ou: {outype}\n\n""")
+
+def getUser(user: str, uid: int, gid: int, dcs: str) -> str:
+    fn = user.capitalize()
+    ln = user[::-1].capitalize()
+    return textwrap.dedent(f"""\
+            dn: uid={user},ou=People,{dcs}
+            objectClass: inetOrgPerson
+            objectClass: posixAccount
+            objectClass: shadowAccount
+            uid: {user}
+            sn: {ln}
+            givenName: {fn}
+            cn: {fn} {ln}
+            displayName: {fn} {ln}
+            uidNumber: {uid}
+            gidNumber: {gid}
+            userPassword: {trinopass}
+            gecos: {fn} {ln}
+            loginShell: /bin/bash
+            homeDirectory: /home/{user}\n\n""")
+
+def getGroup(name: str, gidNum: int, dcs: str, members: set[str]) -> str:
+    memberstr = "\n".join([f"member: uid={m},ou=People,{dcs}"
+        for m in members])
+    s = textwrap.dedent(f"""\
+            dn: cn={name},ou=Groups,{dcs}
+            objectClass: groupOfNames
+            cn: {name}\n""")
+    s += f"{memberstr}\n\n"
+    return s
+
+def buildLdapLauncher(fqdn: str) -> None:
+    dcs = fqdnToDc(fqdn)
+    with open(ldapsetupf) as sh, \
+            open(ldaplaunchf, 'w') as wh, \
+            open(secrets["slapdkey"]["f"]) as kh, \
+            open(secrets["slapdcert"]["f"]) as ch, \
+            open(secrets["certinfo"]["f"]) as cih:
+        slapdkeybf = secrets["slapdkey"]["bf"]
+        slapdcertbf = secrets["slapdcert"]["bf"]
+        certinfobf = secrets["certinfo"]["bf"]
+        # Copy in the script that installs slapd
+        for line in sh:
+            wh.write(line)
+
+        # Now add to the script some other commands. First, we want to turn on
+        # LDAPS. Write our server cert and our private key to /etc/ldap and
+        # permission them appropriately.
+        wh.write(f"cat <<EOM | sudo tee -a /etc/ldap/{slapdkeybf}\n")
+        for line in kh:
+            wh.write(line)
+        wh.write("EOM\n")
+        wh.write(f"cat <<EOM | sudo tee -a /etc/ldap/{slapdcertbf}\n")
+        for line in ch:
+            wh.write(line)
+        wh.write("EOM\n")
+        wh.write(f"sudo chown openldap /etc/ldap/{slapdkeybf} "
+                f"/etc/ldap/{slapdcertbf}\n")
+        wh.write(f"sudo chgrp openldap /etc/ldap/{slapdkeybf} "
+                f"/etc/ldap/{slapdcertbf}\n")
+        wh.write(f"sudo chmod 0640 /etc/ldap/{slapdkeybf} "
+                f"/etc/ldap/{slapdcertbf}\n")
+
+        # Now add the server cert and private key to slapd.
+        wh.write(f"cat <<EOM > /tmp/{certinfobf}\n")
+        for line in cih:
+            wh.write(line)
+        wh.write("EOM\n")
+        wh.write(f"sudo ldapmodify -Y EXTERNAL -H ldapi:// -f "
+                f"/tmp/{certinfobf}\n")
+
+        # Enable ldaps
+        regex = r"s/(^\s*[^#].*)ldap:/\1ldaps:/g"
+        wh.write(f"sudo sed -E -i '{regex}' /etc/default/slapd\n")
+        wh.write("sudo systemctl restart slapd\n")
+
+        # Configure for LDAP clients
+        wh.write(f"echo URI ldaps://{ldaphost}:636 | sudo tee -a "
+                "/etc/ldap/ldap.conf\n")
+        wh.write("echo TLS_CACERT /etc/ssl/certs/ca-certificates.crt | "
+                "sudo tee -a /etc/ldap/ldap.conf\n")
+
+        # Enable the memberof plugin
+        wh.write("cat <<EOM > /tmp/memberof.ldif\n")
+        wh.write(getOverlays())
+        wh.write("EOM\n")
+        wh.write("sudo ldapadd -H ldapi:/// -Y EXTERNAL -D 'cn=config' -f "
+                "/tmp/memberof.ldif\n")
+
+        # Populate the slapd database with some basic entries that we'll need.
+        wh.write("cat <<EOM > /tmp/who.ldif\n")
+        wh.write(getOu("People", dcs))
+        wh.write(getOu("Groups", dcs))
+        wh.write(getUser("alice",   10000, 5000, dcs))
+        wh.write(getUser("bob",     10001, 5000, dcs))
+        wh.write(getUser("carol",   10002, 5001, dcs))
+        wh.write(getUser(trinouser, 10100, 5001, dcs))
+        wh.write(getGroup("analysts",   5000, dcs, {"alice", "bob"}))
+        wh.write(getGroup("superusers", 5001, dcs, {"carol", trinouser}))
+        wh.write("EOM\n")
+        wh.write("sudo ldapadd -x -w admin -D "
+                "cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif\n")
+        wh.write("echo finished > /tmp/finished\n")
+
 def getCloudSummary() -> List[str]:
     if target == "aws":
         cloud = "Amazon Web Services"
@@ -1423,6 +1625,26 @@ def getCloudSummary() -> List[str]:
     return [f"Cloud: {cloud}",
         f"Region: {region}",
         f"Cluster: {nodeCount} × {instanceType}"]
+
+def getSecrets() -> None:
+    try:
+        with open(secretsf) as fh:
+            s = yaml.load(fh, Loader = yaml.FullLoader)
+    except IOError as e:
+        sys.exit(f"Couldn't read secrets file {secretsf}")
+
+    try:
+        for name, values in s.items():
+            base = values["bf"]
+            if "dir" in values:
+                base = values["dir"] + "/" + base
+            values["f"] = where(base)
+            if not readableFile(values["f"]):
+                sys.exit(f"Can't find a readable file for {name} at " +
+                        values["f"])
+            secrets[name] = values
+    except KeyError as e:
+        sys.exit(f"Unable to find key {e}")
 
 def announceSummary() -> None:
     announceLoud(getCloudSummary())
@@ -1488,6 +1710,7 @@ def checkEtcHosts() -> None:
                 ip = cols[0]
                 hostname = cols[1]
                 if ip == localhostip and hostname == prestohost:
+                    print(f"{prestohost} is already in {hostsf}")
                     return
 
     print(f"For TLS-encryption to coordinator, you will need {prestohost} in "
@@ -1504,10 +1727,12 @@ def checkEtcHosts() -> None:
             print(f"Unable to write to {hostsf}. Try yourself?")
     sys.exit(f"Script cannot continue without {prestohost} in {hostsf}")
 
+getSecrets()
 announceSummary()
 checkCLISetup()
 checkRSAKey()
 checkEtcHosts()
+buildLdapLauncher(domain)
 
 w = []
 started = False
@@ -1516,7 +1741,7 @@ if ns.command in ("stop", "restart"):
     svcStop(ns.empty_nodes)
 
 if ns.command in ("start", "restart"):
-    w = svcStart(ns.skip_cluster_start)
+    w = svcStart(ns.skip_cluster_start, ns.tunnel_only, ns.debug)
     started = True
     announceBox(f"Your {rsaPub} public key has been installed into the "
             "bastion server, so you can ssh there now (user 'ubuntu').")
@@ -1528,7 +1753,8 @@ if ns.command == "status":
         env = getOutputVars()
         w = announceReady(env["bastion_address"])
 
-y = getCloudSummary() + ["Service is " + ("started" if started else "stopped")]
+y = getCloudSummary() + ["Service is " + ("started" if started else
+    "stopped")]
 if len(w) > 0:
     y += w
 

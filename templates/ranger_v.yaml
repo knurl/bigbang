@@ -8,11 +8,11 @@ expose:
   type: loadBalancer
   loadBalancer:
     annotations:
-      {% if target == "aws" %}
+      {% if Target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
-      {% elif target == "az" %}
+      {% elif Target == "az" %}
       service.beta.kubernetes.io/azure-load-balancer-internal: "true"
-      {% elif target == "gcp" %}
+      {% elif Target == "gcp" %}
       networking.gke.io/load-balancer-type: "Internal"
       {% endif %}
 
@@ -26,7 +26,32 @@ admin:
       cpu: {{ranger_admin_cpu}}
 
 usersync:
-  enabled: false
+  enabled: true
+  resources:
+    requests:
+      memory: {{ranger_usync_mem}}
+      cpu: {{ranger_usync_cpu}}
+    limits:
+      memory: {{ranger_usync_mem}}
+      cpu: {{ranger_usync_cpu}}
+  {% if AuthNLdap %}
+  tls:
+    truststore:
+      secret: {{truststore}}
+      password: {{KeystorePass}}
+  env:
+    # Use RANGER__<property_name> variables to set Ranger install properties.
+    RANGER__SYNC_LDAP_URL: "{{LdapUri}}"
+    RANGER__SYNC_LDAP_BIND_DN: "cn=admin,dc=az,dc=starburstdata,dc=net"
+    RANGER__SYNC_LDAP_BIND_PASSWORD: "admin"
+    RANGER__SYNC_LDAP_SEARCH_BASE: "dc=az,dc=starburstdata,dc=net"
+    RANGER__SYNC_LDAP_USER_SEARCH_BASE: "ou=People,dc=az,dc=starburstdata,dc=net"
+    RANGER__SYNC_LDAP_USER_OBJECT_CLASS: "inetOrgPerson"
+    RANGER__SYNC_GROUP_SEARCH_ENABLED: "true"
+    RANGER__SYNC_GROUP_USER_MAP_SYNC_ENABLED: "true"
+    RANGER__SYNC_GROUP_SEARCH_BASE: "ou=Groups,dc=az,dc=starburstdata,dc=net"
+    RANGER__SYNC_GROUP_OBJECT_CLASS: "groupOfNames"
+  {% endif %}
 
 database:
   type: "internal"

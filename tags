@@ -19,17 +19,17 @@ announceSqlEnd	bigbang.py	/^def announceSqlEnd(s):$/;"	f
 announceSqlStart	bigbang.py	/^def announceSqlStart(s):$/;"	f
 announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
 appendToFile	bigbang.py	/^def appendToFile(filepath, contents) -> None:$/;"	f
-avoidcat	bigbang.py	/^avoidcat       = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats$/;"	v
+authnldap	bigbang.py	/^    authnldap    = myvars[authnldaplabel]$/;"	v
+authnldaplabel	bigbang.py	/^authnldaplabel = "AuthNLdap"$/;"	v
+avoidcat	bigbang.py	/^avoidcat     = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats$/;"	v
 awsGetCreds	bigbang.py	/^def awsGetCreds():$/;"	f
-awsauthcm	bigbang.py	/^awsauthcm      = "aws-auth-cm.yaml" # basename only, no path!$/;"	v
-awsconfig	bigbang.py	/^awsconfig      = os.path.expanduser("~\/.aws\/config")$/;"	v
-awscreds	bigbang.py	/^awscreds       = os.path.expanduser("~\/.aws\/credentials")$/;"	v
-awsdir	bigbang.py	/^awsdir         = os.path.expanduser("~\/.aws")$/;"	v
-bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AWSBastionInstanceType"]$/;"	v
-bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["AzureBastionVMType"]$/;"	v
-bastionInstanceType	bigbang.py	/^    bastionInstanceType = myvars["GCPBastionMachineType"]$/;"	v
-bqcat	bigbang.py	/^bqcat          = "bigquery" # for now, connector doesn't support INSERT or CTAS$/;"	v
+awsauthcm	bigbang.py	/^awsauthcm    = "aws-auth-cm.yaml" # basename only, no path!$/;"	v
+awsconfig	bigbang.py	/^awsconfig    = os.path.expanduser("~\/.aws\/config")$/;"	v
+awscreds	bigbang.py	/^awscreds     = os.path.expanduser("~\/.aws\/credentials")$/;"	v
+awsdir	bigbang.py	/^awsdir       = os.path.expanduser("~\/.aws")$/;"	v
+bqcat	bigbang.py	/^bqcat        = "bigquery" # for now, connector doesn't support INSERT or CTAS$/;"	v
 bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
+buildLdapLauncher	bigbang.py	/^def buildLdapLauncher(fqdn: str) -> None:$/;"	f
 c	bigbang.py	/^                c = ", ".join(clouds)))$/;"	v
 charts	bigbang.py	/^charts = {}$/;"	v
 chartversion	bigbang.py	/^    chartversion = myvars[chartvlabel]$/;"	v
@@ -38,48 +38,52 @@ checkCLISetup	bigbang.py	/^def checkCLISetup() -> None:$/;"	f
 checkEtcHosts	bigbang.py	/^def checkEtcHosts() -> None:$/;"	f
 checkRSAKey	bigbang.py	/^def checkRSAKey() -> None:$/;"	f
 choices	bigbang.py	/^        choices = ["start", "stop", "restart", "status"],$/;"	v
-clouds	bigbang.py	/^clouds         = ("aws", "az", "gcp")$/;"	v
+clouds	bigbang.py	/^clouds       = ("aws", "az", "gcp")$/;"	v
 clustname	bigbang.py	/^clustname = shortname + "cl"$/;"	v
 code	bigbang.py	/^code = username[:codelen]$/;"	v
 codelen	bigbang.py	/^codelen = min(3, len(username))$/;"	v
 components	bigbang.py	/^components = chartversion.split('.')$/;"	v
 copySchemaTables	bigbang.py	/^def copySchemaTables(srcCatalog: str, srcSchema: str,$/;"	f
-dbevtlog	bigbang.py	/^dbevtlog       = "evtlog" # event logger PostgreSQL instance$/;"	v
-dbports	bigbang.py	/^dbports        = { "mysql": 3306, "postgres": 5432 }$/;"	v
-dbpwd	bigbang.py	/^dbpwd          = "a029fjg!>dfgBiO8"$/;"	v
-dbschema	bigbang.py	/^dbschema       = "fdd"$/;"	v
-dbuser	bigbang.py	/^dbuser         = "fdd"$/;"	v
+dbevtlog	bigbang.py	/^dbevtlog     = "evtlog" # event logger PostgreSQL instance$/;"	v
+dbports	bigbang.py	/^dbports      = { "mysql": 3306, "postgres": 5432 }$/;"	v
+dbpwd	bigbang.py	/^dbpwd        = "a029fjg!>dfgBiO8"$/;"	v
+dbschema	bigbang.py	/^dbschema     = "fdd"$/;"	v
+dbuser	bigbang.py	/^dbuser       = "fdd"$/;"	v
 deleteAllServices	bigbang.py	/^def deleteAllServices() -> None:$/;"	f
+domain	bigbang.py	/^domain       = "az.starburstdata.net"$/;"	v
 email	bigbang.py	/^    email        = myvars["Email"]$/;"	v
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
 ensureClusterIsStarted	bigbang.py	/^def ensureClusterIsStarted(skipClusterStart: bool) -> dict:$/;"	f
 ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(repo: str) -> None:$/;"	f
 env	bigbang.py	/^        env = getOutputVars()$/;"	v
 eraseBucketContents	bigbang.py	/^def eraseBucketContents(env: dict):$/;"	f
-establishBastionTunnel	bigbang.py	/^def establishBastionTunnel(env: dict) -> Tunnel:$/;"	f
-evtlogcat	bigbang.py	/^evtlogcat      = "postgresqlel"$/;"	v
-gcskeyfbn	bigbang.py	/^gcskeyfbn      = f"key.json"$/;"	v
-gcskeyfile	bigbang.py	/^gcskeyfile  = tfdir + "\/" + gcskeyfbn$/;"	v
-gcskeyname	bigbang.py	/^gcskeyname     = "gcs-keyfile"$/;"	v
+establishBastionTunnel	bigbang.py	/^def establishBastionTunnel(env: dict) -> list[Tunnel]:$/;"	f
+evtlogcat	bigbang.py	/^evtlogcat    = "postgresqlel"$/;"	v
+fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
 getApiservUrl	bigbang.py	/^def getApiservUrl() -> str:$/;"	f
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f
+getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: set[str]) -> str:$/;"	f
 getLclPort	bigbang.py	/^def getLclPort(service: str) -> int:$/;"	f
 getMinNodeResources	bigbang.py	/^def getMinNodeResources() -> tuple:$/;"	f
 getMyPublicIp	bigbang.py	/^def getMyPublicIp() -> str:$/;"	f
+getOu	bigbang.py	/^def getOu(outype: str, dcs: str) -> str:$/;"	f
 getOutputVars	bigbang.py	/^def getOutputVars() -> dict:$/;"	f
+getOverlays	bigbang.py	/^def getOverlays() -> str:$/;"	f
 getRegionFromZone	bigbang.py	/^def getRegionFromZone(zone: str) -> str:$/;"	f
 getRmtPort	bigbang.py	/^def getRmtPort(service: str) -> int:$/;"	f
+getSecrets	bigbang.py	/^def getSecrets() -> None:$/;"	f
 getSshPublicKey	bigbang.py	/^def getSshPublicKey() -> str:$/;"	f
+getUser	bigbang.py	/^def getUser(user: str, uid: int, gid: int, dcs: str) -> str:$/;"	f
 helm	bigbang.py	/^def helm(cmd: str) -> None:$/;"	f
 helmCreateNamespace	bigbang.py	/^def helmCreateNamespace() -> None:$/;"	f
 helmDeleteNamespace	bigbang.py	/^def helmDeleteNamespace() -> None:$/;"	f
 helmGet	bigbang.py	/^def helmGet(cmd: str) -> str:$/;"	f
 helmGetNamespaces	bigbang.py	/^def helmGetNamespaces() -> list:$/;"	f
 helmGetReleases	bigbang.py	/^def helmGetReleases() -> dict:$/;"	f
-helmInstallAll	bigbang.py	/^def helmInstallAll(env):$/;"	f
-helmInstallRelease	bigbang.py	/^def helmInstallRelease(module: str, env = {}) -> bool:$/;"	f
+helmInstallAll	bigbang.py	/^def helmInstallAll(env, debug: bool = False):$/;"	f
+helmInstallRelease	bigbang.py	/^        -> bool:$/;"	f
 helmTry	bigbang.py	/^def helmTry(cmd: str) -> subprocess.CompletedProcess:$/;"	f
 helmUninstallAll	bigbang.py	/^def helmUninstallAll():$/;"	f
 helmUninstallRelease	bigbang.py	/^def helmUninstallRelease(release: str) -> None:$/;"	f
@@ -87,41 +91,44 @@ helmWhichChartInstalled	bigbang.py	/^def helmWhichChartInstalled(module: str) ->
 helmcreds	bigbang.py	/^        helmcreds = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
 helmcredsbf	bigbang.py	/^helmcredsbf = "helm-creds.yaml"$/;"	v
 helmcredsf	bigbang.py	/^helmcredsf  = where("helm-creds.yaml")$/;"	v
-helmns	bigbang.py	/^helmns         = f"-n {namespace}"$/;"	v
+helmns	bigbang.py	/^helmns       = f"-n {namespace}"$/;"	v
 help	bigbang.py	/^        help="Force cloud target to specified value.")$/;"	v
 help	bigbang.py	/^        help="Force zone\/region to specified value.")$/;"	v
+help	bigbang.py	/^        help="Only start apiserv tunnel through bastion.")$/;"	v
+help	bigbang.py	/^        help="Skip checking to see if cluster needs to be started.")$/;"	v
 help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
-hivecat	bigbang.py	/^hivecat        = "hive"$/;"	v
-hostsf	bigbang.py	/^hostsf         = "\/etc\/hosts"$/;"	v
-installSecret	bigbang.py	/^def installSecret(name, file):$/;"	f
+hivecat	bigbang.py	/^hivecat      = "hive"$/;"	v
+hostsf	bigbang.py	/^hostsf       = "\/etc\/hosts"$/;"	v
+installSecrets	bigbang.py	/^def installSecrets(secrets: dict) -> dict:$/;"	f
 instanceType	bigbang.py	/^    instanceType = myvars["AWSInstanceType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["AzureVMType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["GCPMachineType"]$/;"	v
 isTerraformSettled	bigbang.py	/^def isTerraformSettled(tgtResource: str = None) -> bool:$/;"	f
 issuePrestoCommand	bigbang.py	/^def issuePrestoCommand(command: str, verbose = False) -> list:$/;"	f
-keystorebf	bigbang.py	/^keystorebf     = "presto.pkcs12"$/;"	v
-keystoref	bigbang.py	/^keystoref      = where(keystorebf)$/;"	v
+keystorepass	bigbang.py	/^keystorepass = "test123"$/;"	v
 killAllTerminatingPods	bigbang.py	/^def killAllTerminatingPods() -> None:$/;"	f
-knownhosts	bigbang.py	/^knownhosts     = os.path.expanduser("~\/.ssh\/known_hosts")$/;"	v
-kube	bigbang.py	/^kube           = "kubectl"$/;"	v
-kubecfgf	bigbang.py	/^kubecfgf       = os.path.expanduser("~\/.kube\/config")$/;"	v
-kubens	bigbang.py	/^kubens         = f"{kube} -n {namespace}"$/;"	v
-license	bigbang.py	/^    license      = myvars["LicenseName"]$/;"	v
-licensebf	bigbang.py	/^licensebf = f"{license}.license"$/;"	v
-licensef	bigbang.py	/^licensef = where(licensebf)$/;"	v
+knownhosts	bigbang.py	/^knownhosts   = os.path.expanduser("~\/.ssh\/known_hosts")$/;"	v
+kube	bigbang.py	/^kube         = "kubectl"$/;"	v
+kubecfgf	bigbang.py	/^kubecfgf     = os.path.expanduser("~\/.kube\/config")$/;"	v
+kubens	bigbang.py	/^kubens       = f"{kube} -n {namespace}"$/;"	v
+ldaphost	bigbang.py	/^ldaphost     = "ldap." + domain$/;"	v
+ldaplaunchbf	bigbang.py	/^ldaplaunchbf = "ldaplaunch.sh"$/;"	v
+ldaplaunchf	bigbang.py	/^ldaplaunchf  = where(ldaplaunchbf)$/;"	v
+ldapsetupbf	bigbang.py	/^ldapsetupbf  = "install-slapd.sh"$/;"	v
+ldapsetupf	bigbang.py	/^ldapsetupf   = where(ldapsetupbf)$/;"	v
 loadBalancerResponding	bigbang.py	/^def loadBalancerResponding(service: str) -> bool:$/;"	f
 loadDatabases	bigbang.py	/^def loadDatabases(hive_location):$/;"	f
-localhost	bigbang.py	/^localhost      = "localhost"$/;"	v
-localhostip	bigbang.py	/^localhostip    = "127.0.0.1"$/;"	v
-maxpodpnode	bigbang.py	/^maxpodpnode    = 16$/;"	v
-minnodes	bigbang.py	/^minnodes       = 2$/;"	v
+localhost	bigbang.py	/^localhost    = "localhost"$/;"	v
+localhostip	bigbang.py	/^localhostip  = "127.0.0.1"$/;"	v
+maxpodpnode	bigbang.py	/^maxpodpnode  = 16$/;"	v
+minnodes	bigbang.py	/^minnodes     = 2$/;"	v
 modules	bigbang.py	/^modules = ["hive", "ranger", "enterprise"]$/;"	v
 myDir	bigbang.py	/^def myDir():$/;"	f
 mySubnetCidr	bigbang.py	/^mySubnetCidr = genmask(target, octet)$/;"	v
 myvars	bigbang.py	/^        myvars = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
 myvarsbf	bigbang.py	/^myvarsbf = "my-vars.yaml"$/;"	v
 myvarsf	bigbang.py	/^myvarsf  = where("my-vars.yaml")$/;"	v
-namespace	bigbang.py	/^namespace      = "starburst"$/;"	v
+namespace	bigbang.py	/^namespace    = "starburst"$/;"	v
 nodeCount	bigbang.py	/^    nodeCount    = myvars[nodecountlabel]$/;"	v
 nodecountlabel	bigbang.py	/^nodecountlabel = "NodeCount"$/;"	v
 normaliseCPU	bigbang.py	/^def normaliseCPU(cpu) -> int:$/;"	f
@@ -129,17 +136,17 @@ normaliseMem	bigbang.py	/^def normaliseMem(mem) -> int:$/;"	f
 ns	bigbang.py	/^ns = p.parse_args()$/;"	v
 octet	bigbang.py	/^octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256$/;"	v
 p	bigbang.py	/^p = argparse.ArgumentParser(description=$/;"	v
-parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template, targetDir, varsDict):$/;"	f
-patchfile	bigbang.py	/^patchfile      = where(patchfilebf)$/;"	v
-patchfilebf	bigbang.py	/^patchfilebf    = "starburst-enterprise.diff"$/;"	v
+parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,$/;"	f
+patchbf	bigbang.py	/^patchbf      = "starburst-enterprise.diff"$/;"	v
+patchf	bigbang.py	/^patchf       = where(patchbf)$/;"	v
 planWorkerSize	bigbang.py	/^def planWorkerSize() -> dict:$/;"	f
 portoffset	bigbang.py	/^portoffset = { "aws": 0, "az": 1, "gcp": 2 }$/;"	v
-prestohost	bigbang.py	/^prestohost     = "presto.az.starburstdata.net"$/;"	v
+prestohost	bigbang.py	/^prestohost   = "presto." + domain$/;"	v
 readableDir	bigbang.py	/^def readableDir(p):$/;"	f
 readableFile	bigbang.py	/^def readableFile(p):$/;"	f
 region	bigbang.py	/^region = getRegionFromZone(zone)$/;"	v
 releases	bigbang.py	/^releases = {}$/;"	v
-remote_cats	bigbang.py	/^remote_cats    = ["remote_hive", "remote_postgresql", "remote_mysql"]$/;"	v
+remote_cats	bigbang.py	/^remote_cats  = ["remote_hive", "remote_postgresql", "remote_mysql"]$/;"	v
 removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
 replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
 repo	bigbang.py	/^    repo         = myvars["HelmRepo"]$/;"	v
@@ -148,48 +155,50 @@ repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
 repouser	bigbang.py	/^    repouser     = helmcreds["HelmRepoUser"]$/;"	v
 resourcegrp	bigbang.py	/^resourcegrp = shortname + "rg"$/;"	v
 retry	bigbang.py	/^def retry(f, maxretries: int, err: str) -> requests.Response:$/;"	f
-rsa	bigbang.py	/^rsa            = os.path.expanduser("~\/.ssh\/id_rsa")$/;"	v
-rsaPub	bigbang.py	/^rsaPub         = os.path.expanduser("~\/.ssh\/id_rsa.pub")$/;"	v
+rsa	bigbang.py	/^rsa          = os.path.expanduser("~\/.ssh\/id_rsa")$/;"	v
+rsaPub	bigbang.py	/^rsaPub       = os.path.expanduser("~\/.ssh\/id_rsa.pub")$/;"	v
 run	run.py	/^def run(args, check = True, verbose = True):$/;"	f
 runCollect	run.py	/^def runCollect(args) -> str:$/;"	f
 runShell	run.py	/^def runShell(cmd: str) -> int:$/;"	f
 runStdout	run.py	/^def runStdout(args):$/;"	f
 runTry	run.py	/^def runTry(args) -> subprocess.CompletedProcess:$/;"	f
 s	bigbang.py	/^s = username + zone$/;"	v
-sharedsecbf	bigbang.py	/^sharedsecbf    = "sharedsecret"$/;"	v
-sharedsecf	bigbang.py	/^sharedsecf     = where(sharedsecbf)$/;"	v
+secretsbf	bigbang.py	/^secretsbf    = "secrets.yaml"$/;"	v
+secretsf	bigbang.py	/^secretsf     = where(secretsbf)$/;"	v
 shortname	bigbang.py	/^shortname = code + str(octet).zfill(3)$/;"	v
+smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AWSSmallInstanceType"]$/;"	v
+smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AzureSmallVMType"]$/;"	v
+smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["GCPSmallMachineType"]$/;"	v
 spinWait	bigbang.py	/^def spinWait(waitFunc: Callable[[], float]) -> None:$/;"	f
 sqlstr	bigbang.py	/^sqlstr = "Issued 🢩 "$/;"	v
-starburstsrv	bigbang.py	/^starburstsrv = [ "starburst", "ranger" ]$/;"	v
-startPortForward	bigbang.py	/^def startPortForward(bastionIp: str) -> None:$/;"	f
+starburstsrv	bigbang.py	/^starburstsrv = ["starburst", "ranger"]$/;"	v
+startPortForwardToLBs	bigbang.py	/^def startPortForwardToLBs(bastionIp: str) -> None:$/;"	f
 started	bigbang.py	/^    started = True$/;"	v
 started	bigbang.py	/^    started = isTerraformSettled()$/;"	v
 started	bigbang.py	/^started = False$/;"	v
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
-svcStart	bigbang.py	/^def svcStart(skipClusterStart: bool = False) -> list:$/;"	f
+svcStart	bigbang.py	/^        bool = False) -> list:$/;"	f
 svcStop	bigbang.py	/^def svcStop(emptyNodes: bool = False) -> None:$/;"	f
 svcports	bigbang.py	/^svcports    = {$/;"	v
-syscat	bigbang.py	/^syscat         = "system"$/;"	v
+syscat	bigbang.py	/^syscat       = "system"$/;"	v
 targetlabel	bigbang.py	/^targetlabel = "Target"$/;"	v
-templatedir	bigbang.py	/^templatedir    = where("templates")$/;"	v
+templatedir	bigbang.py	/^templatedir  = where("templates")$/;"	v
 templates	bigbang.py	/^templates = {}$/;"	v
-tfdir	bigbang.py	/^tfdir       = where(target)$/;"	v
-tfvars	bigbang.py	/^tfvars         = "variables.tf" # basename only, no path!$/;"	v
+tfdir	bigbang.py	/^tfdir = where(target)$/;"	v
+tfvars	bigbang.py	/^tfvars       = "variables.tf" # basename only, no path!$/;"	v
 tlscoord	bigbang.py	/^    tlscoord     = myvars[tlscoordlabel]$/;"	v
 tlscoordlabel	bigbang.py	/^tlscoordlabel = "RequireCoordTls"$/;"	v
 tlsinternal	bigbang.py	/^    tlsinternal  = myvars[tlsinternallabel]$/;"	v
 tlsinternallabel	bigbang.py	/^tlsinternallabel = "RequireInternalTls"$/;"	v
-tmpdir	bigbang.py	/^tmpdir         = "\/tmp"$/;"	v
-toreap	bigbang.py	/^toreap         = [] # Accumulate tunnels to destroy$/;"	v
-tpchcat	bigbang.py	/^tpchcat        = "tpch"$/;"	v
-tpchschema	bigbang.py	/^tpchschema     = "tiny"$/;"	v
-trinopass	bigbang.py	/^trinopass      = "test"$/;"	v
-trinouser	bigbang.py	/^trinouser      = "presto_service"$/;"	v
+tmpdir	bigbang.py	/^tmpdir       = "\/tmp"$/;"	v
+tpchcat	bigbang.py	/^tpchcat      = "tpch"$/;"	v
+tpchschema	bigbang.py	/^tpchschema   = "tiny"$/;"	v
+trinopass	bigbang.py	/^trinopass    = "test"$/;"	v
+trinouser	bigbang.py	/^trinouser    = "presto_service"$/;"	v
 updateKubeConfig	bigbang.py	/^def updateKubeConfig(kubecfg: str = None) -> None:$/;"	f
 username	bigbang.py	/^username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035$/;"	v
 w	bigbang.py	/^        w = announceReady(env["bastion_address"])$/;"	v
-w	bigbang.py	/^    w = svcStart(ns.skip_cluster_start)$/;"	v
+w	bigbang.py	/^    w = svcStart(ns.skip_cluster_start, ns.tunnel_only, ns.debug)$/;"	v
 w	bigbang.py	/^w = []$/;"	v
 waitUntilApiServerResponding	bigbang.py	/^def waitUntilApiServerResponding() -> float:$/;"	f
 waitUntilDeploymentsAvail	bigbang.py	/^        -> float:$/;"	f
@@ -197,9 +206,5 @@ waitUntilLoadBalancersUp	bigbang.py	/^def waitUntilLoadBalancersUp(services: lis
 waitUntilNodesReady	bigbang.py	/^def waitUntilNodesReady(minnodes: int) -> float:$/;"	f
 waitUntilPodsReady	bigbang.py	/^def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:$/;"	f
 where	bigbang.py	/^def where(leaf):$/;"	f
-wildkeycertbf	bigbang.py	/^wildkeycertbf  = "starburst.svc.pem"$/;"	v
-wildkeycertf	bigbang.py	/^wildkeycertf   = where(wildkeycertbf)$/;"	v
-wildkeystorebf	bigbang.py	/^wildkeystorebf = "starburst.svc.p12"$/;"	v
-wildkeystoref	bigbang.py	/^wildkeystoref  = where(wildkeystorebf)$/;"	v
 writeableDir	bigbang.py	/^def writeableDir(p):$/;"	f
-y	bigbang.py	/^y = getCloudSummary() + ["Service is " + ("started" if started else "stopped")]$/;"	v
+y	bigbang.py	/^y = getCloudSummary() + ["Service is " + ("started" if started else$/;"	v

@@ -5,7 +5,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "2.78.0"
 
-  name = "${var.cluster_name}-vpc"
+  name = var.network_name
   cidr = var.my_cidr
 
   create_database_subnet_group = true

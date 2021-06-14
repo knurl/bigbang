@@ -24,7 +24,8 @@ resource "google_container_cluster" "gke" {
   initial_node_count       = 1
 
   # subnet for nodes
-  subnetwork = google_compute_subnetwork.snet.self_link
+  network    = google_compute_network.vpc.name
+  subnetwork = google_compute_subnetwork.snet.name
 
   ip_allocation_policy {
     cluster_secondary_range_name  = google_compute_subnetwork.snet.secondary_ip_range[0].range_name # pods

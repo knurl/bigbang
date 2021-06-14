@@ -1,7 +1,14 @@
-data "google_compute_network" "vpc" {
-  name    = "default"
-  project = data.google_project.project.project_id
+resource "google_compute_network" "vpc" {
+  project                 = data.google_project.project.project_id
+  name                    = var.network_name
+  auto_create_subnetworks = false
+  routing_mode            = "REGIONAL"
 }
+
+#data "google_compute_network" "vpc" {
+#  name    = "default"
+#  project = data.google_project.project.project_id
+#}
 
 locals {
   # bigbang will submit a CIDR in the 172.16.x/20 range
@@ -18,9 +25,9 @@ locals {
 #
 resource "google_compute_subnetwork" "snet" {
   project       = data.google_project.project.project_id
-  name          = "${data.google_compute_network.vpc.name}-snet"
+  name          = "${var.network_name}-snet"
   region        = var.region
-  network       = data.google_compute_network.vpc.name
+  network       = resource.google_compute_network.vpc.name
   ip_cidr_range = local.subnetwork_cidr
 
   secondary_ip_range {
@@ -43,13 +50,13 @@ resource "google_compute_global_address" "googserv_gaddrs" {
   name          = "${var.cluster_name}-googserv-gaddrs"
   purpose       = "VPC_PEERING"
   address_type  = "INTERNAL"
-  network       = data.google_compute_network.vpc.id
+  network       = resource.google_compute_network.vpc.id
   address       = split("/", local.googserv_cidr)[0]
   prefix_length = split("/", local.googserv_cidr)[1]
 }
 
 resource "google_service_networking_connection" "pvpc_peering" {
-  network                 = data.google_compute_network.vpc.id
+  network                 = resource.google_compute_network.vpc.id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.googserv_gaddrs.name]
 }
@@ -58,9 +65,9 @@ resource "google_service_networking_connection" "pvpc_peering" {
 # Add in NAT routing from all instances and GKE nodes
 #
 resource "google_compute_router" "router" {
-  name    = "${data.google_compute_network.vpc.name}-router"
+  name    = "${google_compute_subnetwork.snet.name}-router"
   region  = var.region
-  network = data.google_compute_network.vpc.self_link
+  network = resource.google_compute_network.vpc.self_link
   project = data.google_project.project.project_id
 }
 
