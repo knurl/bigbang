@@ -1,8 +1,8 @@
 /*
- * One of GCP's quirks is that it doesn't immediately delete databases. They
- * hang around for a week, so if you try to create a new database with the same
- * name, you'll get an error. For that reason it's strongly recommended you
- * include a random string as part of the database name.
+ * One of GCP's quirks is that it doesn't immediately delete database
+ * instances. They hang around for a week, so if you try to create a new
+ * database with the same name, you'll get an error. For that reason it's
+ * strongly recommended you include a random string as part of the name.
  */
 resource "random_id" "db_name_suffix" {
   byte_length = 4
@@ -31,7 +31,7 @@ resource "google_sql_database_instance" "sql_evtlog" {
 
     ip_configuration {
       ipv4_enabled    = false
-      private_network = data.google_compute_network.vpc.id
+      private_network = resource.google_compute_network.vpc.id
     }
 
     user_labels = var.tags
@@ -57,7 +57,7 @@ resource "google_sql_database_instance" "sql_postgres" {
 
     ip_configuration {
       ipv4_enabled    = false
-      private_network = data.google_compute_network.vpc.id
+      private_network = resource.google_compute_network.vpc.id
     }
 
     user_labels = var.tags
@@ -83,7 +83,7 @@ resource "google_sql_database_instance" "sql_mysql" {
 
     ip_configuration {
       ipv4_enabled    = false
-      private_network = data.google_compute_network.vpc.id
+      private_network = resource.google_compute_network.vpc.id
     }
 
     user_labels = var.tags

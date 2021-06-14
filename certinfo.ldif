@@ -1,0 +1,6 @@
+dn: cn=config
+add: olcTLSCertificateKeyFile
+olcTLSCertificateKeyFile: /etc/ldap/slapd-key.pem
+-
+add: olcTLSCertificateFile
+olcTLSCertificateFile: /etc/ldap/slapd-cert.pem

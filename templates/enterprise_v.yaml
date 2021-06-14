@@ -4,7 +4,7 @@ registryCredentials:
   username: {{HelmRepoUser}}
   password: {{HelmRepoPassword}}
 
-starburstPlatformLicense: {{LicenseName}}
+starburstPlatformLicense: {{license}}
 
 # How the starburst service will be exposed.
 expose:
@@ -17,17 +17,17 @@ expose:
       http: null
   {% endif %}
     annotations:
-      {% if target == "aws" %}
+      {% if Target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
-      {% elif target == "az" %}
+      {% elif Target == "az" %}
       service.beta.kubernetes.io/azure-load-balancer-internal: "true"
-      {% elif target == "gcp" %}
+      {% elif Target == "gcp" %}
       networking.gke.io/load-balancer-type: "Internal"
       {% endif %}
 
 {% if RequireInternalTls %}
 # Shared secret for internal communication.
-sharedSecret: secretRef.sharedsecret.sharedsecret
+sharedSecret: secretRef.{{sharedsec}}.{{sharedsecbf}}
 
 # Use only https and port 8443 for internal communication.
 internal:
@@ -73,19 +73,19 @@ coordinator:
         discovery.uri=http://localhost:8080
         {% endif %}
         {% if RequireInternalTls %}
-        http-server.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
-        http-server.https.keystore.key=test123
+        http-server.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
+        http-server.https.keystore.key={{KeystorePass}}
         {% elif RequireCoordTls %}
-        http-server.https.keystore.path=secretRef:presto.pkcs12:presto.pkcs12
-        http-server.https.keystore.key=test123
+        http-server.https.keystore.path=secretRef:{{prestoks}}:{{prestoksbf}}
+        http-server.https.keystore.key={{KeystorePass}}
         {% endif %}
         {% if RequireInternalTls %}
         node.internal-address-source=FQDN
         internal-communication.https.required=true
-        internal-communication.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
-        internal-communication.https.keystore.key=test123
-        internal-communication.https.truststore.path=secretRef:starburst.svc.p12:starburst.svc.p12
-        internal-communication.https.truststore.key=test123
+        internal-communication.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
+        internal-communication.https.keystore.key={{KeystorePass}}
+        internal-communication.https.truststore.path=secretRef:{{wildks}}:{{wildksbf}}
+        internal-communication.https.truststore.key={{KeystorePass}}
         {% endif %}
         insights.persistence-enabled=true
         insights.metrics-persistence-enabled=true
@@ -95,6 +95,22 @@ coordinator:
         insights.metrics-collection-interval=15s
         insights.metrics-persistence-interval=60s
         insights.authorized-users=.*
+      {% if AuthNLdap %}
+      {% if Debug %}
+      log.properties: |
+        # Enable verbose logging from Starburst Enterprise
+        io.trino=DEBUG
+        com.starburstdata.presto=DEBUG
+      {% endif %}
+      password-authenticator.properties: |
+        password-authenticator.name=ldap
+        ldap.url={{LdapUri}}
+        ldap.bind-dn=cn=admin,dc=az,dc=starburstdata,dc=net
+        ldap.bind-password=admin
+        ldap.group-auth-pattern=(&(objectClass=inetOrgPerson)(uid=${USER}))
+        ldap.user-base-dn=ou=People,dc=az,dc=starburstdata,dc=net
+        ldap.user-bind-pattern=uid=${USER},ou=People,dc=az,dc=starburstdata,dc=net
+      {% endif %}
       event-listener.properties: |
         event-listener.name=event-logger
         jdbc.url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
@@ -134,8 +150,8 @@ worker:
         # TLS on coordinator only, or no TLS
         {% if not RequireInternalTls %}
         # If we are using TLS on the coordinator only, then our cert doesn't
-        # include the coordinator service name as a SAN, which means we'll get a
-        # host mismatch when we try to connect. Therefore in this case we'll
+        # include the coordinator service name as a SAN, which means we'll get
+        # a host mismatch when we try to connect. Therefore in this case we'll
         # have to leave port 8080 open and have the workers connect there.
         discovery.uri=http://coordinator.starburst.svc:8080
         # TLS everywhere
@@ -153,31 +169,30 @@ worker:
         http-server.http.enabled=false
         http-server.https.enabled=true
         http-server.https.port=8443
-        http-server.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
-        http-server.https.keystore.key=test123
+        http-server.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
+        http-server.https.keystore.key={{KeystorePass}}
         node.internal-address-source=FQDN
         internal-communication.https.required=true
-        internal-communication.https.keystore.path=secretRef:starburst.svc.p12:starburst.svc.p12
-        internal-communication.https.keystore.key=test123
-        internal-communication.https.truststore.path=secretRef:starburst.svc.p12:starburst.svc.p12
-        internal-communication.https.truststore.key=test123
+        internal-communication.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
+        internal-communication.https.keystore.key={{KeystorePass}}
+        internal-communication.https.truststore.path=secretRef:{{wildks}}:{{wildksbf}}
+        internal-communication.https.truststore.key={{KeystorePass}}
         {% endif %}
 
 # How many queries per node
 query:
   maxConcurrentQueries: 200
 
-# It's handy to have the certificate in the containers as well
-extraSecret:
-  name: presto.pem
-  file: presto.pem
-
+# If we're not going to be using LDAP, then automatically switch over to using
+# a password database ("file")
+{% if not AuthNLdap %}
 # automatically enables password authenticator
 userDatabase:
   enabled: true
   users:
     - username: {{TrinoUser}}
       password: {{TrinoPass}}
+{% endif %}
 
 {% if RequireInternalTls %}
 readinessProbe:
@@ -204,11 +219,11 @@ catalogs:
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
-{% if target == "az" %}
+{% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
-{% elif target == "gcp" %}
-    hive.gcs.json-key-file-path=secretRef:{{gcskeyname}}:{{gskeyfbn}}
+{% elif Target == "gcp" %}
+    hive.gcs.json-key-file-path=secretRef:{{gcskey}}:{{gcskeybf}}
     hive.gcs.use-access-token=false
   bigquery: |
     connector.name=bigquery

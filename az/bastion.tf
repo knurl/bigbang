@@ -25,7 +25,7 @@ resource "azurerm_linux_virtual_machine" "bastion" {
   name                            = "bastion"
   location                        = azurerm_resource_group.rg.location
   resource_group_name             = azurerm_resource_group.rg.name
-  size                            = var.bastion_instance_type
+  size                            = var.small_instance_type
   admin_username                  = "ubuntu"
   network_interface_ids           = [azurerm_network_interface.bastion_nic.id]
   disable_password_authentication = true

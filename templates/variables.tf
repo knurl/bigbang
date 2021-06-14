@@ -18,16 +18,16 @@ variable "zone" {
   default = "{{Zone}}"
 }
 
-variable "resource_group_name" {
-  default = "{{ResourceGroup}}"
-}
-
 variable "my_cidr" {
   default = "{{MyCIDR}}"
 }
 
 variable "cluster_name" {
   default = "{{ClusterName}}"
+}
+
+variable "network_name" {
+  default = "{{ClusterName}}-net"
 }
 
 variable "instance_type" {
@@ -38,8 +38,16 @@ variable "bastion_name" {
   default = "bastion-{{ShortName}}"
 }
 
-variable "bastion_instance_type" {
-  default = "{{BastionInstanceType}}"
+variable "ldaps_name" {
+  default = "ldaps-{{ShortName}}"
+}
+
+variable "ldaps_launch_script" {
+  default = "{{LdapLaunchScript}}"
+}
+
+variable "small_instance_type" {
+  default = "{{SmallInstanceType}}"
 }
 
 variable "node_count" {
@@ -86,10 +94,6 @@ variable "mysql_collation" {
   default = "utf8_general_ci"
 }
 
-variable "storage_account" {
-  default = "{{StorageAccount}}"
-}
-
 variable "bucket_name" {
   default = "{{BucketName}}"
 }
@@ -103,3 +107,17 @@ variable "ssh_public_key" {
   {{SshPublicKey}}
   RSAKEY
 }
+
+{% if Target == "az" %}
+#
+# Azure-specific stuff
+#
+variable "storage_account" {
+  default = "{{StorageAccount}}"
+}
+
+variable "resource_group_name" {
+  default = "{{ResourceGroup}}"
+}
+{% endif %}
+

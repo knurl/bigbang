@@ -6,6 +6,10 @@ output "bastion_address" {
   value = azurerm_linux_virtual_machine.bastion.public_ip_address
 }
 
+output "ldaps_address" {
+  value = azurerm_linux_virtual_machine.ldaps.private_ip_address
+}
+
 output "evtlog_address" {
   value = azurerm_postgresql_server.evtlog.fqdn
 }

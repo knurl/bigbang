@@ -1,0 +1,279 @@
+#!/bin/bash
+  
+# Install Slapd !
+
+# update first
+apt-get -q -y update
+
+# remove any existing install first
+sudo apt-get --purge remove -y slapd ldap-utils
+
+# get rid of the database
+sudo rm -rf /var/lib/ldap
+sudo rm -rf /etc/ldap
+
+cat << EOM | sudo debconf-set-selections
+slapd slapd/password1 password admin
+slapd slapd/internal/adminpw password admin
+slapd slapd/internal/generated_adminpw password admin
+slapd slapd/password2 password admin
+slapd slapd/domain string az.starburstdata.net
+slapd shared/organization string fieldeng
+slapd slapd/purge_database boolean true
+slapd slapd/move_old_database boolean false
+slapd slapd/backend string MDB
+slapd slapd/no_configuration boolean false
+EOM
+
+export DEBIAN_FRONTEND=noninteractive
+
+# now reinstall slapd
+sudo apt-get install -y slapd ldap-utils
+
+# set password
+sudo slappasswd -s admin
+cat <<EOM | sudo tee -a /etc/ldap/slapd-key.pem
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCbNDiNBVb2VQKl
+PSIJ2xcsuQjPB5IamLFoi8w12cFm4jgL2mT9SVkdQTNjsUUUAyk6aEv4Z8gfsEic
+HxR2ZF22rXp1o0ceZvQ6esUlSL5zfdZ35Exkxhbxy3yAKouzxkO//YJNxPw2H+KN
+BAN8dboYXYmbO+nLEUsnqz9wPrheleKwod06flD3HcCACYSNPmso1d3Q1ew3r6oq
+CKMrTUypUOzs/0cL77exCrHH9dcFCeESo3dhBuYoNCyEs0NnPYZPFkmIgdEU6SCr
+taBwuAymRKz1ZFVvXyDARs/CSBibsf/wKjInuZujwR7AcB6cVu+Y/SpJViFjiTNz
+fqL3otJvAgMBAAECggEAASTSYd+vM2OPAG7B6Hav5gl7EiOJJR8I969IEwGG1l5G
+cXfrlJ5MxNVtLofo7WvUivSn0q3ZILqo3lWwTesRcb43j9RjOsshc6jh+RNfK/S6
+dum80mVPV/ra8QrfOrT0XN7ebfpMrY1wmv9zkyA+/dz6naVEZNW8yw8NCaO8sh2/
+vMsyVFmNEhMKsvTd+fnuPlhxCVJxP+qX3JHPYzivXSZpnlOTb2/PxD45wh7447Mj
+nAN2nlubwqj1PDYCEaaGeAbLLcnowQJVJnFPNa/2aVtSpd8ajahEYQ6YFiPicvwS
+uiifOmT3TPmeBN3iEgFgGQv6RDKDLlQrhuLxUNgC2QKBgQDHhrwEu54GIxCzLsO4
+feKz46EvOytAJbigcdeLhYr5RGX2LGqG8axcB2W7YCjXjHTKEmZfI7zkzznlZxLK
+cJb5byx9jGdo+x9N6pDlvlCec5WY+mdUKEIC9HwZ3zLvMBRGExSL/f27a6s/fyqQ
+7l9lXpGG6mZFDa0yNcA1Wn8lpQKBgQDHIfuC32c5iUIslu9wcw0oBLXN+y1IxCKe
+Cf0sTTUHsEycQc2WwRa6geWf1BFddWMaoVOM8FDVNqzzSG344SKDCrSvlcMyFPjp
+Imx3Ys9DGNqJisFq4Oo3ELVvAU8m1u740C3TNMLtgDY03J6hWXUZo9rGyh5NUF+G
+xsU2EykjgwKBgQCZyTaH61gMYOCRSx0dySGAB5YHwnI+mhRozfYVmtOX9ukjye49
+nm577FO0DZTNNnwZ9/6hm/kO3s5AC6cHE6q6DL9c8WgPGWdydbZC7eJTjsEiTPZx
+fioK/wfcJRWsGAG4VSKEGDuGRqGSamCTnrc2eaJvO6Gh3b29soI4XU0c5QKBgDN+
+Ox6djIDZWI5VPXdzmNxXU3f/Urd1WIpLhPdWw7bIRRdHANXR+oGiI3HQEel7+HOj
+cgqI/i4UZGbIvP9VoGoIc67P6FjkCXWn3CqHF5d/LsvQYLG1lXtFy9T3nrMpc0RN
++PubsiheNiY3QqHwkxJdR66OB4XwmbMtZUPVcpbnAoGAdE3aCgfYCGo9F7jH7YCN
+OgGSCagBWWQNuAVnWFIsWSO3fLUgZdbQ9mU8teS/CMQguFZ/KO/zmBg1x/jJKLdb
+TyKg3eduUWA98P4IkDzGHXISNpyA3gx3T1ro0nXFc4ZGq02xUmJi61wBRcRMDcM7
+Y4E0xgtcwLx99YgxYebVBKo=
+-----END PRIVATE KEY-----
+EOM
+cat <<EOM | sudo tee -a /etc/ldap/slapd-cert.pem
+-----BEGIN CERTIFICATE-----
+MIIFNjCCBB6gAwIBAgISA/4/6K9iOfR/jkH34Jmr1RfgMA0GCSqGSIb3DQEBCwUA
+MDIxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQD
+EwJSMzAeFw0yMTA2MDMxNTU2NDBaFw0yMTA5MDExNTU2NDBaMCQxIjAgBgNVBAMT
+GWxkYXAuYXouc3RhcmJ1cnN0ZGF0YS5uZXQwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+DwAwggEKAoIBAQCbNDiNBVb2VQKlPSIJ2xcsuQjPB5IamLFoi8w12cFm4jgL2mT9
+SVkdQTNjsUUUAyk6aEv4Z8gfsEicHxR2ZF22rXp1o0ceZvQ6esUlSL5zfdZ35Exk
+xhbxy3yAKouzxkO//YJNxPw2H+KNBAN8dboYXYmbO+nLEUsnqz9wPrheleKwod06
+flD3HcCACYSNPmso1d3Q1ew3r6oqCKMrTUypUOzs/0cL77exCrHH9dcFCeESo3dh
+BuYoNCyEs0NnPYZPFkmIgdEU6SCrtaBwuAymRKz1ZFVvXyDARs/CSBibsf/wKjIn
+uZujwR7AcB6cVu+Y/SpJViFjiTNzfqL3otJvAgMBAAGjggJSMIICTjAOBgNVHQ8B
+Af8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMAwGA1UdEwEB
+/wQCMAAwHQYDVR0OBBYEFN8MxZfMu/CVgZ44FQy9JrjNr3Z3MB8GA1UdIwQYMBaA
+FBQusxe3WFbLrlAJQOYfr52LFMLGMFUGCCsGAQUFBwEBBEkwRzAhBggrBgEFBQcw
+AYYVaHR0cDovL3IzLm8ubGVuY3Iub3JnMCIGCCsGAQUFBzAChhZodHRwOi8vcjMu
+aS5sZW5jci5vcmcvMCQGA1UdEQQdMBuCGWxkYXAuYXouc3RhcmJ1cnN0ZGF0YS5u
+ZXQwTAYDVR0gBEUwQzAIBgZngQwBAgEwNwYLKwYBBAGC3xMBAQEwKDAmBggrBgEF
+BQcCARYaaHR0cDovL2Nwcy5sZXRzZW5jcnlwdC5vcmcwggECBgorBgEEAdZ5AgQC
+BIHzBIHwAO4AdQBc3EOS/uarRUSxXprUVuYQN/vV+kfcoXOUsl7m9scOygAAAXnS
+zjfwAAAEAwBGMEQCIAaGTDkZBJ3F2nIG5OzayKE/lz6exMon2NOsp3OxtiKiAiAA
+5NcBCCZ3bk0dQKJziPVDsPKpRa62TGjApaCBEQkLyAB1APZclC/RdzAiFFQYCDCU
+Vo7jTRMZM7/fDC8gC8xO8WTjAAABedLON/cAAAQDAEYwRAIgDpEKQq6oNwg8nw2J
+YEXwA/Sme50/UtAvCLXxtbsxWLwCIAHebAcXlIiZj2G/yck1guBObBGFwKqwgwjo
+Oe8lJnm5MA0GCSqGSIb3DQEBCwUAA4IBAQAbqEYOVKu7KC/B1kvlT8fBpODwHLRU
+CRQ/Wxl/o8LFmQYDRjL8R7g2L+O7g0EB2GtKlhjXsHJ9wKgJXbwpFY0vfxDWHJ8V
+b3kAnn+ltX9CbVDVXw6zRneH+la358KYuZqUlg9lr4LybJua6AF1bGbgRjHPfuH5
+p9TtuQTZJ4ayuGmS2V2UbJ1UX1dYq3Id1Au3PuomQyBEbfLnJ/M284xOv3WC5Bfn
+R+dqXrDRwDkKHpbIYYx+A6LFnT6WPm1kX3a2C7x4MjrvGfbaC7WWaKuDnjZEJp4y
+AJhWaZUryGVJfkDw6rs9RWkDPMk7fq+kH9mSyGOnAExK5nK3vuYKsP7g
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIIFFjCCAv6gAwIBAgIRAJErCErPDBinU/bWLiWnX1owDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjAwOTA0MDAwMDAw
+WhcNMjUwOTE1MTYwMDAwWjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg
+RW5jcnlwdDELMAkGA1UEAxMCUjMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+AoIBAQC7AhUozPaglNMPEuyNVZLD+ILxmaZ6QoinXSaqtSu5xUyxr45r+XXIo9cP
+R5QUVTVXjJ6oojkZ9YI8QqlObvU7wy7bjcCwXPNZOOftz2nwWgsbvsCUJCWH+jdx
+sxPnHKzhm+/b5DtFUkWWqcFTzjTIUu61ru2P3mBw4qVUq7ZtDpelQDRrK9O8Zutm
+NHz6a4uPVymZ+DAXXbpyb/uBxa3Shlg9F8fnCbvxK/eG3MHacV3URuPMrSXBiLxg
+Z3Vms/EY96Jc5lP/Ooi2R6X/ExjqmAl3P51T+c8B5fWmcBcUr2Ok/5mzk53cU6cG
+/kiFHaFpriV1uxPMUgP17VGhi9sVAgMBAAGjggEIMIIBBDAOBgNVHQ8BAf8EBAMC
+AYYwHQYDVR0lBBYwFAYIKwYBBQUHAwIGCCsGAQUFBwMBMBIGA1UdEwEB/wQIMAYB
+Af8CAQAwHQYDVR0OBBYEFBQusxe3WFbLrlAJQOYfr52LFMLGMB8GA1UdIwQYMBaA
+FHm0WeZ7tuXkAXOACIjIGlj26ZtuMDIGCCsGAQUFBwEBBCYwJDAiBggrBgEFBQcw
+AoYWaHR0cDovL3gxLmkubGVuY3Iub3JnLzAnBgNVHR8EIDAeMBygGqAYhhZodHRw
+Oi8veDEuYy5sZW5jci5vcmcvMCIGA1UdIAQbMBkwCAYGZ4EMAQIBMA0GCysGAQQB
+gt8TAQEBMA0GCSqGSIb3DQEBCwUAA4ICAQCFyk5HPqP3hUSFvNVneLKYY611TR6W
+PTNlclQtgaDqw+34IL9fzLdwALduO/ZelN7kIJ+m74uyA+eitRY8kc607TkC53wl
+ikfmZW4/RvTZ8M6UK+5UzhK8jCdLuMGYL6KvzXGRSgi3yLgjewQtCPkIVz6D2QQz
+CkcheAmCJ8MqyJu5zlzyZMjAvnnAT45tRAxekrsu94sQ4egdRCnbWSDtY7kh+BIm
+lJNXoB1lBMEKIq4QDUOXoRgffuDghje1WrG9ML+Hbisq/yFOGwXD9RiX8F6sw6W4
+avAuvDszue5L3sz85K+EC4Y/wFVDNvZo4TYXao6Z0f+lQKc0t8DQYzk1OXVu8rp2
+yJMC6alLbBfODALZvYH7n7do1AZls4I9d1P4jnkDrQoxB3UqQ9hVl3LEKQ73xF1O
+yK5GhDDX8oVfGKF5u+decIsH4YaTw7mP3GFxJSqv3+0lUFJoi5Lc5da149p90Ids
+hCExroL1+7mryIkXPeFM5TgO9r0rvZaBFOvV2z0gp35Z0+L4WPlbuEjN/lxPFin+
+HlUjr8gRsI3qfJOQFy/9rKIJR0Y/8Omwt/8oTWgy1mdeHmmjk7j1nYsvC9JSQ6Zv
+MldlTTKB3zhThV1+XWYp6rjd5JW1zbVWEkLNxE7GJThEUG3szgBVGP7pSWTUTsqX
+nLRbwHOoq7hHwg==
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIIFYDCCBEigAwIBAgIQQAF3ITfU6UK47naqPGQKtzANBgkqhkiG9w0BAQsFADA/
+MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
+DkRTVCBSb290IENBIFgzMB4XDTIxMDEyMDE5MTQwM1oXDTI0MDkzMDE4MTQwM1ow
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwggIiMA0GCSqGSIb3DQEB
+AQUAA4ICDwAwggIKAoICAQCt6CRz9BQ385ueK1coHIe+3LffOJCMbjzmV6B493XC
+ov71am72AE8o295ohmxEk7axY/0UEmu/H9LqMZshftEzPLpI9d1537O4/xLxIZpL
+wYqGcWlKZmZsj348cL+tKSIG8+TA5oCu4kuPt5l+lAOf00eXfJlII1PoOK5PCm+D
+LtFJV4yAdLbaL9A4jXsDcCEbdfIwPPqPrt3aY6vrFk/CjhFLfs8L6P+1dy70sntK
+4EwSJQxwjQMpoOFTJOwT2e4ZvxCzSow/iaNhUd6shweU9GNx7C7ib1uYgeGJXDR5
+bHbvO5BieebbpJovJsXQEOEO3tkQjhb7t/eo98flAgeYjzYIlefiN5YNNnWe+w5y
+sR2bvAP5SQXYgd0FtCrWQemsAXaVCg/Y39W9Eh81LygXbNKYwagJZHduRze6zqxZ
+Xmidf3LWicUGQSk+WT7dJvUkyRGnWqNMQB9GoZm1pzpRboY7nn1ypxIFeFntPlF4
+FQsDj43QLwWyPntKHEtzBRL8xurgUBN8Q5N0s8p0544fAQjQMNRbcTa0B7rBMDBc
+SLeCO5imfWCKoqMpgsy6vYMEG6KDA0Gh1gXxG8K28Kh8hjtGqEgqiNx2mna/H2ql
+PRmP6zjzZN7IKw0KKP/32+IVQtQi0Cdd4Xn+GOdwiK1O5tmLOsbdJ1Fu/7xk9TND
+TwIDAQABo4IBRjCCAUIwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAQYw
+SwYIKwYBBQUHAQEEPzA9MDsGCCsGAQUFBzAChi9odHRwOi8vYXBwcy5pZGVudHJ1
+c3QuY29tL3Jvb3RzL2RzdHJvb3RjYXgzLnA3YzAfBgNVHSMEGDAWgBTEp7Gkeyxx
++tvhS5B1/8QVYIWJEDBUBgNVHSAETTBLMAgGBmeBDAECATA/BgsrBgEEAYLfEwEB
+ATAwMC4GCCsGAQUFBwIBFiJodHRwOi8vY3BzLnJvb3QteDEubGV0c2VuY3J5cHQu
+b3JnMDwGA1UdHwQ1MDMwMaAvoC2GK2h0dHA6Ly9jcmwuaWRlbnRydXN0LmNvbS9E
+U1RST09UQ0FYM0NSTC5jcmwwHQYDVR0OBBYEFHm0WeZ7tuXkAXOACIjIGlj26Ztu
+MA0GCSqGSIb3DQEBCwUAA4IBAQAKcwBslm7/DlLQrt2M51oGrS+o44+/yQoDFVDC
+5WxCu2+b9LRPwkSICHXM6webFGJueN7sJ7o5XPWioW5WlHAQU7G75K/QosMrAdSW
+9MUgNTP52GE24HGNtLi1qoJFlcDyqSMo59ahy2cI2qBDLKobkx/J3vWraV0T9VuG
+WCLKTVXkcGdtwlfFRjlBz4pYg1htmf5X6DYO8A4jqv2Il9DjXA6USbW1FzXSLr9O
+he8Y4IWS6wY7bCkjCWDcRQJMEhg76fsO3txE+FiYruq9RUWhiF1myv4Q6W+CyBFC
+Dfvp7OOGAN6dEOM4+qR9sdjoSYKEBpsr6GtPAQw4dy753ec5
+-----END CERTIFICATE-----
+EOM
+sudo chown openldap /etc/ldap/slapd-key.pem /etc/ldap/slapd-cert.pem
+sudo chgrp openldap /etc/ldap/slapd-key.pem /etc/ldap/slapd-cert.pem
+sudo chmod 0640 /etc/ldap/slapd-key.pem /etc/ldap/slapd-cert.pem
+cat <<EOM > /tmp/certinfo.ldif
+dn: cn=config
+add: olcTLSCertificateKeyFile
+olcTLSCertificateKeyFile: /etc/ldap/slapd-key.pem
+-
+add: olcTLSCertificateFile
+olcTLSCertificateFile: /etc/ldap/slapd-cert.pem
+EOM
+sudo ldapmodify -Y EXTERNAL -H ldapi:// -f /tmp/certinfo.ldif
+sudo sed -E -i 's/(^\s*[^#].*)ldap:/\1ldaps:/g' /etc/default/slapd
+sudo systemctl restart slapd
+echo URI ldaps://ldap.az.starburstdata.net:636 | sudo tee -a /etc/ldap/ldap.conf
+echo TLS_CACERT /etc/ssl/certs/ca-certificates.crt | sudo tee -a /etc/ldap/ldap.conf
+cat <<EOM > /tmp/memberof.ldif
+dn: cn=module,cn=config
+cn: module
+objectClass: olcModuleList
+olcModuleLoad: memberof
+olcModulePath: /usr/lib/ldap
+
+dn: olcOverlay={0}memberof,olcDatabase={1}mdb,cn=config
+objectClass: olcConfig
+objectClass: olcMemberOf
+objectClass: olcOverlayConfig
+objectClass: top
+olcOverlay: memberof
+olcMemberOfRefint: TRUE
+olcMemberOfGroupOC: groupOfNames
+
+EOM
+sudo ldapadd -H ldapi:/// -Y EXTERNAL -D 'cn=config' -f /tmp/memberof.ldif
+cat <<EOM > /tmp/who.ldif
+dn: ou=People,dc=az,dc=starburstdata,dc=net
+objectClass: organizationalUnit
+ou: People
+
+dn: ou=Groups,dc=az,dc=starburstdata,dc=net
+objectClass: organizationalUnit
+ou: Groups
+
+dn: uid=alice,ou=People,dc=az,dc=starburstdata,dc=net
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: alice
+sn: Ecila
+givenName: Alice
+cn: Alice Ecila
+displayName: Alice Ecila
+uidNumber: 10000
+gidNumber: 5000
+userPassword: test
+gecos: Alice Ecila
+loginShell: /bin/bash
+homeDirectory: /home/alice
+
+dn: uid=bob,ou=People,dc=az,dc=starburstdata,dc=net
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: bob
+sn: Bob
+givenName: Bob
+cn: Bob Bob
+displayName: Bob Bob
+uidNumber: 10001
+gidNumber: 5000
+userPassword: test
+gecos: Bob Bob
+loginShell: /bin/bash
+homeDirectory: /home/bob
+
+dn: uid=carol,ou=People,dc=az,dc=starburstdata,dc=net
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: carol
+sn: Lorac
+givenName: Carol
+cn: Carol Lorac
+displayName: Carol Lorac
+uidNumber: 10002
+gidNumber: 5001
+userPassword: test
+gecos: Carol Lorac
+loginShell: /bin/bash
+homeDirectory: /home/carol
+
+dn: uid=presto_service,ou=People,dc=az,dc=starburstdata,dc=net
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: presto_service
+sn: Ecivres_otserp
+givenName: Presto_service
+cn: Presto_service Ecivres_otserp
+displayName: Presto_service Ecivres_otserp
+uidNumber: 10100
+gidNumber: 5001
+userPassword: test
+gecos: Presto_service Ecivres_otserp
+loginShell: /bin/bash
+homeDirectory: /home/presto_service
+
+dn: cn=analysts,ou=Groups,dc=az,dc=starburstdata,dc=net
+objectClass: groupOfNames
+cn: analysts
+member: uid=alice,ou=People,dc=az,dc=starburstdata,dc=net
+member: uid=bob,ou=People,dc=az,dc=starburstdata,dc=net
+
+dn: cn=superusers,ou=Groups,dc=az,dc=starburstdata,dc=net
+objectClass: groupOfNames
+cn: superusers
+member: uid=carol,ou=People,dc=az,dc=starburstdata,dc=net
+member: uid=presto_service,ou=People,dc=az,dc=starburstdata,dc=net
+
+EOM
+sudo ldapadd -x -w admin -D cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif
+echo finished > /tmp/finished

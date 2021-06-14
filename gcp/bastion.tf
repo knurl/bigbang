@@ -1,11 +1,6 @@
-data "google_compute_image" "ubuntu" {
-  family  = "ubuntu-1804-lts"
-  project = "ubuntu-os-cloud"
-}
-
 resource "google_compute_instance" "bastion" {
   name         = var.bastion_name
-  machine_type = var.bastion_instance_type
+  machine_type = var.small_instance_type
   zone         = var.zone
   project      = data.google_project.project.project_id
   tags         = ["bastion"]
@@ -34,11 +29,11 @@ resource "google_compute_instance" "bastion" {
 }
 
 resource "google_compute_firewall" "fw-bastion" {
-  name    = "fw-bastion"
-  network = data.google_compute_network.vpc.self_link
+  name    = "fw-${var.bastion_name}"
+  network = resource.google_compute_network.vpc.self_link
   project = data.google_project.project.project_id
-  # Restrict to home IP or VPN
-  source_ranges = ["${var.my_public_ip}/32", "10.0.0.0/8"]
+  # Restrict to home IP or private IPs
+  source_ranges = ["${var.my_public_ip}/32", var.my_cidr]
   allow {
     protocol = "tcp"
     ports    = ["22"]

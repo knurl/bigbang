@@ -6,6 +6,10 @@ output "bastion_address" {
   value = google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip
 }
 
+output "ldaps_address" {
+  value = google_compute_instance.ldaps.network_interface.0.network_ip
+}
+
 output "evtlog_address" {
   value = google_sql_database_instance.sql_evtlog.private_ip_address
 }
