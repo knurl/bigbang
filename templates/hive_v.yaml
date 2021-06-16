@@ -27,8 +27,8 @@ objectStorage:
   awsS3:
     region: {{Region}}
     endpoint: s3.{{Region}}.amazonaws.com
-    accessKey: {{AWSAccessKey}} 
-    secretKey: {{AWSSecretKey}}
+    # For AWS, we don't need to pass credentials because we've assigned a role
+    # with a policy that allows full access to S3
   {% elif Target == "az" %}
   azure:
     abfs:
