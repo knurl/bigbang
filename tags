@@ -64,8 +64,9 @@ generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
 getApiservUrl	bigbang.py	/^def getApiservUrl() -> str:$/;"	f
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f
-getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: set[str]) -> str:$/;"	f
+getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:$/;"	f
 getLclPort	bigbang.py	/^def getLclPort(service: str) -> int:$/;"	f
+getLoadBalancers	bigbang.py	/^def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:$/;"	f
 getMinNodeResources	bigbang.py	/^def getMinNodeResources() -> tuple:$/;"	f
 getMyPublicIp	bigbang.py	/^def getMyPublicIp() -> str:$/;"	f
 getOu	bigbang.py	/^def getOu(outype: str, dcs: str) -> str:$/;"	f
@@ -194,7 +195,7 @@ tmpdir	bigbang.py	/^tmpdir       = "\/tmp"$/;"	v
 tpchcat	bigbang.py	/^tpchcat      = "tpch"$/;"	v
 tpchschema	bigbang.py	/^tpchschema   = "tiny"$/;"	v
 trinopass	bigbang.py	/^trinopass    = "test"$/;"	v
-trinouser	bigbang.py	/^trinouser    = "presto_service"$/;"	v
+trinouser	bigbang.py	/^trinouser    = "starburst_service"$/;"	v
 updateKubeConfig	bigbang.py	/^def updateKubeConfig(kubecfg: str = None) -> None:$/;"	f
 username	bigbang.py	/^username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035$/;"	v
 w	bigbang.py	/^        w = announceReady(env["bastion_address"])$/;"	v

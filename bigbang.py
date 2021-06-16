@@ -46,7 +46,7 @@ evtlogcat    = "postgresqlel"
 bqcat        = "bigquery" # for now, connector doesn't support INSERT or CTAS
 remote_cats  = ["remote_hive", "remote_postgresql", "remote_mysql"]
 avoidcat     = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats
-trinouser    = "presto_service"
+trinouser    = "starburst_service"
 trinopass    = "test"
 dbschema     = "fdd"
 dbevtlog     = "evtlog" # event logger PostgreSQL instance
@@ -634,12 +634,16 @@ def loadBalancerResponding(service: str) -> bool:
         pass
     return False
 
-def waitUntilLoadBalancersUp(services: list, namespace: str = None,
-        checkConnectivity: bool = False) -> float:
-    numer = 0
-    denom = len(services)
+# Get a list of load balancers, in the form of a dictionary mapping service
+# names to load balancer hostname or IP address. This function takes a list of
+# service names (usually starburst and ranger), and returns any load balancers
+# found. The list returned might not cover all the services presented, notably
+# in the case when the load balancers aren't yet ready. The caller needs to be
+# prepared for this possibility.
+def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:
     ns = f" --namespace {namespace}" if namespace != None else ""
-    r = runTry(f"{kube}{ns} get svc -ojson".split())
+    r = runTry(f"{kube}{ns} get svc -ojson".split() + services)
+    lbs: dict[str, str] = {}
     if r.returncode == 0:
         servs = json.loads(r.stdout)
         for s in servs["items"]:
@@ -649,8 +653,7 @@ def waitUntilLoadBalancersUp(services: list, namespace: str = None,
             if not "name" in meta:
                 continue
             name = meta["name"]
-            if not name in services:
-                continue
+            assert name in services, f"Didn't find {name} in {services}"
 
             # Status section - now see if its IP is allocated yet
             if not "status" in s:
@@ -667,20 +670,22 @@ def waitUntilLoadBalancersUp(services: list, namespace: str = None,
             
             # Key could be either ip or hostname, both valid
             if "ip" in ingress0:
-                host = ingress0["ip"]
+                lbs[name] = ingress0["ip"]
             elif "hostname" in ingress0:
-                host = ingress0["hostname"]
-            else:
-                continue
-            if not len(host) > 0:
-                continue
+                lbs[name] = ingress0["hostname"]
+    return lbs
 
-            # Has to actually respond to an HTTP GET
-            if checkConnectivity and not loadBalancerResponding(name):
-                continue
+def waitUntilLoadBalancersUp(services: list, namespace: str = None,
+        checkConnectivity: bool = False) -> float:
+    numer = 0
+    denom = len(services)
+    lbs = getLoadBalancers(services, namespace)
+    for name in lbs.keys():
+        if checkConnectivity and not loadBalancerResponding(name):
+            continue
 
-            # Found one service load balancer running
-            numer += 1
+        # Found one service load balancer running
+        numer += 1
     assert numer <= denom
     return float(numer) / float(denom)
 
@@ -912,21 +917,7 @@ def startPortForwardToLBs(bastionIp: str) -> None:
     #
     # Get the DNS name of the load balancers we've created
     #
-    lbs = {}
-    ksvcs = json.loads(runCollect(f"{kubens} get services "
-        "--output=json".split() + starburstsrv))
-
-    # Go through the named K8S services and find the loadBalancers
-    for ksvc in ksvcs["items"]:
-        ingress = ksvc["status"]["loadBalancer"]["ingress"]
-        assert len(ingress) == 1
-        ingress = ksvc["status"]["loadBalancer"]["ingress"][0]
-        if "hostname" in ingress:
-            lbs[ksvc["metadata"]["name"]] = ingress["hostname"]
-        elif "ip" in ingress:
-            lbs[ksvc["metadata"]["name"]] = ingress["ip"]
-        else:
-            sys.exit("Could not find either hostname or ip in {ingress}")
+    lbs = getLoadBalancers(starburstsrv, namespace)
 
     # we should have a load balancer for every service we'll forward
     assert len(lbs) == len(starburstsrv)
@@ -1167,9 +1158,7 @@ def helmCreateNamespace() -> None:
 def helmDeleteNamespace() -> None:
     if namespace in helmGetNamespaces():
         announce(f"Deleting namespace {namespace}")
-        grace = 120 # 2 minutes
-        runStdout(f"{kube} delete namespace {namespace} "
-                f"--grace-period={grace}".split())
+        runStdout(f"{kube} delete namespace {namespace}".split())
     runStdout(f"{kube} config set-context --namespace=default "
             "--current".split())
 
@@ -1412,7 +1401,16 @@ def deleteAllServices() -> None:
     # the ENIs and preventing the deletion of the associated subnets
     # https://github.com/kubernetes/kubernetes/issues/93390
     announce("Deleting all k8s services")
+    lbs = getLoadBalancers(starburstsrv, namespace)
+    print("Load balancers before service delete: " + str(list(lbs.keys())))
     runStdout(f"{kubens} delete svc --all".split())
+    lbs = getLoadBalancers(starburstsrv, namespace)
+    if len(lbs) == 0:
+        print("No load balancers running after service delete.")
+    else:
+        print("# WARN Load balancers running after service delete! " +
+                str(list(lbs.keys())))
+        print("# WARN This may cause dependency problems later!")
 
 def helmUninstallAll():
     for release, chart in helmGetReleases().items():
@@ -1421,6 +1419,7 @@ def helmUninstallAll():
             helmUninstallRelease(release)
         except CalledProcessError as e:
             print(f"Unable to uninstall release {release}: {e}")
+    killAllTerminatingPods()
     helmDeleteNamespace()
 
 def awsGetCreds():
@@ -1532,7 +1531,7 @@ def getUser(user: str, uid: int, gid: int, dcs: str) -> str:
             loginShell: /bin/bash
             homeDirectory: /home/{user}\n\n""")
 
-def getGroup(name: str, gidNum: int, dcs: str, members: set[str]) -> str:
+def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:
     memberstr = "\n".join([f"member: uid={m},ou=People,{dcs}"
         for m in members])
     s = textwrap.dedent(f"""\
@@ -1608,8 +1607,8 @@ def buildLdapLauncher(fqdn: str) -> None:
         wh.write(getUser("bob",     10001, 5000, dcs))
         wh.write(getUser("carol",   10002, 5001, dcs))
         wh.write(getUser(trinouser, 10100, 5001, dcs))
-        wh.write(getGroup("analysts",   5000, dcs, {"alice", "bob"}))
-        wh.write(getGroup("superusers", 5001, dcs, {"carol", trinouser}))
+        wh.write(getGroup("analysts",   5000, dcs, ["alice", "bob"]))
+        wh.write(getGroup("superusers", 5001, dcs, ["carol", trinouser]))
         wh.write("EOM\n")
         wh.write("sudo ldapadd -x -w admin -D "
                 "cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif\n")
@@ -1710,7 +1709,6 @@ def checkEtcHosts() -> None:
                 ip = cols[0]
                 hostname = cols[1]
                 if ip == localhostip and hostname == prestohost:
-                    print(f"{prestohost} is already in {hostsf}")
                     return
 
     print(f"For TLS-encryption to coordinator, you will need {prestohost} in "

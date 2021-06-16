@@ -119,9 +119,9 @@ coordinator:
       access-control.properties: |
         access-control.name=ranger
         ranger.authentication-type=BASIC
-        ranger.username=presto_service
+        ranger.username=starburst_service
         ranger.password=RangerPassword1
-        ranger.service-name=starburst-enterprise-presto
+        ranger.service-name=starburst-enterprise
         ranger.policy-rest-url=http://ranger:6080
         ranger.policy-refresh-interval=10s
   resources:
@@ -219,16 +219,15 @@ catalogs:
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
-{% if Target == "az" %}
+    # For AWS, we don't need to pass credentials because we've assigned a role
+    # with a policy that allows full access to S3
+    {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
-{% elif Target == "gcp" %}
+    {% elif Target == "gcp" %}
     hive.gcs.json-key-file-path=secretRef:{{gcskey}}:{{gcskeybf}}
     hive.gcs.use-access-token=false
-  bigquery: |
-    connector.name=bigquery
-    bigquery.project-id={{bq_project_id}}
-{% endif %}
+    {% endif %}
   mysql: |
     connector.name=mysql
     connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/
@@ -247,9 +246,14 @@ catalogs:
     connection-user={{evtlog_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
+  {% if Target == "gcp" %}
+  bigquery: |
+    connector.name=bigquery
+    bigquery.project-id={{bq_project_id}}
+  {% endif %}
   remote_hive: |
     connector.name=starburst-remote
-    connection-url=jdbc:presto://{{PrestoHost}}:{{PrestoPort}}/hive
+    connection-url=jdbc:trino://{{PrestoHost}}:{{PrestoPort}}/hive
     connection-user={{TrinoUser}}
     {% if RequireCoordTls %}
     connection-password={{TrinoPass}}
@@ -259,7 +263,7 @@ catalogs:
     {% endif %}
   remote_postgresql: |
     connector.name=starburst-remote
-    connection-url=jdbc:presto://{{PrestoHost}}:{{PrestoPort}}/postgresql
+    connection-url=jdbc:trino://{{PrestoHost}}:{{PrestoPort}}/postgresql
     connection-user={{TrinoUser}}
     {% if RequireCoordTls %}
     connection-password={{TrinoPass}}
@@ -269,7 +273,7 @@ catalogs:
     {% endif %}
   remote_mysql: |
     connector.name=starburst-remote
-    connection-url=jdbc:presto://{{PrestoHost}}:{{PrestoPort}}/mysql
+    connection-url=jdbc:trino://{{PrestoHost}}:{{PrestoPort}}/mysql
     connection-user={{TrinoUser}}
     {% if RequireCoordTls %}
     connection-password={{TrinoPass}}

@@ -65,10 +65,10 @@ database:
         cpu: {{ranger_db_cpu}}
 
 datasources:
-  - name: starburst-enterprise-presto
+  - name: starburst-enterprise
     host: presto
     port: 8080
-    username: presto_service
+    username: starburst_service
     password: RangerPassword1
 
 initFile: files/initFile.sh

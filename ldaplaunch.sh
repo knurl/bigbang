@@ -246,21 +246,21 @@ gecos: Carol Lorac
 loginShell: /bin/bash
 homeDirectory: /home/carol
 
-dn: uid=presto_service,ou=People,dc=az,dc=starburstdata,dc=net
+dn: uid=starburst_service,ou=People,dc=az,dc=starburstdata,dc=net
 objectClass: inetOrgPerson
 objectClass: posixAccount
 objectClass: shadowAccount
-uid: presto_service
-sn: Ecivres_otserp
-givenName: Presto_service
-cn: Presto_service Ecivres_otserp
-displayName: Presto_service Ecivres_otserp
+uid: starburst_service
+sn: Ecivres_tsrubrats
+givenName: Starburst_service
+cn: Starburst_service Ecivres_tsrubrats
+displayName: Starburst_service Ecivres_tsrubrats
 uidNumber: 10100
 gidNumber: 5001
 userPassword: test
-gecos: Presto_service Ecivres_otserp
+gecos: Starburst_service Ecivres_tsrubrats
 loginShell: /bin/bash
-homeDirectory: /home/presto_service
+homeDirectory: /home/starburst_service
 
 dn: cn=analysts,ou=Groups,dc=az,dc=starburstdata,dc=net
 objectClass: groupOfNames
@@ -272,7 +272,7 @@ dn: cn=superusers,ou=Groups,dc=az,dc=starburstdata,dc=net
 objectClass: groupOfNames
 cn: superusers
 member: uid=carol,ou=People,dc=az,dc=starburstdata,dc=net
-member: uid=presto_service,ou=People,dc=az,dc=starburstdata,dc=net
+member: uid=starburst_service,ou=People,dc=az,dc=starburstdata,dc=net
 
 EOM
 sudo ldapadd -x -w admin -D cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif
