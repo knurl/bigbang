@@ -1,5 +1,5 @@
 data "google_project" "project" {
-  project_id = "field-engineering-308119"
+  project_id = var.gcp_project_id
 }
 
 resource "google_project_iam_member" "gke_node_bq" {
