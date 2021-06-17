@@ -51,6 +51,9 @@ HelmRepo: starburstdata
 HelmRegistry: harbor.starburstdata.net/starburstdata
 HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
 
+# Google project
+GcpProjectId: field-engineering-308119
+
 #####################
 # XXX IMPORTANT XXX #
 #####################
