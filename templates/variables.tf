@@ -119,5 +119,11 @@ variable "storage_account" {
 variable "resource_group_name" {
   default = "{{ResourceGroup}}"
 }
+{% elif Target == "gcp" %}
+#
+# Google-specific stuff
+#
+variable "gcp_project_id" {
+  default = "{{GcpProjectId}}"
+}
 {% endif %}
-
