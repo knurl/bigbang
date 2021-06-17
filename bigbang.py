@@ -822,28 +822,26 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     runStdout(f"{kube} apply -f {yamltmp}".split())
 
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
-    env = myvars
-    env |= {
-        "SmallInstanceType": smallInstanceType,
-        "BucketName":          bucket,
-        "ClusterName":         clustname,
-        "DBName":              dbschema,
-        "DBNameEventLogger":   dbevtlog,
-        "DBPassword":          dbpwd,
-        "DBUser":              dbuser,
-        "InstanceType":        instanceType,
-        "LdapLaunchScript":    ldaplaunchf,
-        "MaxPodsPerNode":      maxpodpnode,
-        "MyCIDR":              mySubnetCidr,
-        "MyPublicIP":          getMyPublicIp(),
-        "NodeCount":           nodeCount,
-        "SshPublicKey":        getSshPublicKey(),
-        "Region":              region,
-        "ShortName":           shortname,
-        "Target":              target,
-        "UserName":            username,
-        "Zone":                zone
-        }
+    env = myvars | {
+            "SmallInstanceType": smallInstanceType,
+            "BucketName":          bucket,
+            "ClusterName":         clustname,
+            "DBName":              dbschema,
+            "DBNameEventLogger":   dbevtlog,
+            "DBPassword":          dbpwd,
+            "DBUser":              dbuser,
+            "InstanceType":        instanceType,
+            "LdapLaunchScript":    ldaplaunchf,
+            "MaxPodsPerNode":      maxpodpnode,
+            "MyCIDR":              mySubnetCidr,
+            "MyPublicIP":          getMyPublicIp(),
+            "NodeCount":           nodeCount,
+            "SshPublicKey":        getSshPublicKey(),
+            "Region":              region,
+            "ShortName":           shortname,
+            "UserName":            username,
+            "Zone":                zone
+            }
     assert target in clouds
     if target == "az":
         env["ResourceGroup"] = resourcegrp
