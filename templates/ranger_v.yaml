@@ -7,6 +7,10 @@ registryCredentials:
 expose:
   type: loadBalancer
   loadBalancer:
+    # TODO AWS Doesn't support specification of a static IP for the ELB
+    {% if Target != "aws" %}
+    IP: {{ranger_address | string}}
+    {% endif %}
     annotations:
       {% if Target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
@@ -66,7 +70,7 @@ database:
 
 datasources:
   - name: starburst-enterprise
-    host: presto
+    host: starburst
     port: 8080
     username: starburst_service
     password: RangerPassword1

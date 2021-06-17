@@ -10,6 +10,10 @@ output "ldaps_address" {
   value = aws_instance.ldaps.private_ip
 }
 
+output "route53_zone_id" {
+  value = aws_route53_zone.private_dns.zone_id
+}
+
 output "evtlog_address" {
   value = aws_db_instance.evtlog.address
 }

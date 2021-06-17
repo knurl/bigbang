@@ -18,7 +18,7 @@
         <stringProp name="connectionAge">5000</stringProp>
         <stringProp name="connectionProperties"></stringProp>
         <stringProp name="dataSource">starburst</stringProp>
-        <stringProp name="dbUrl">jdbc:trino://presto.az.starburstdata.net:8443?SSL=true</stringProp>
+        <stringProp name="dbUrl">jdbc:trino://starburst.az.starburstdata.net:8443?SSL=true</stringProp>
         <stringProp name="driver">io.trino.jdbc.TrinoDriver</stringProp>
         <stringProp name="initQuery">select 1</stringProp>
         <boolProp name="keepAlive">true</boolProp>
@@ -28,7 +28,7 @@
         <stringProp name="timeout">10000</stringProp>
         <stringProp name="transactionIsolation">DEFAULT</stringProp>
         <stringProp name="trimInterval">60000</stringProp>
-        <stringProp name="username">presto_service</stringProp>
+        <stringProp name="username">starburst_service</stringProp>
       </JDBCDataSource>
       <hashTree/>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Users" enabled="true">

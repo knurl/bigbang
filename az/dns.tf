@@ -20,3 +20,21 @@ resource "azurerm_private_dns_a_record" "ldap_a_record" {
   records             = [azurerm_linux_virtual_machine.ldaps.private_ip_address]
   tags                = var.tags
 }
+
+resource "azurerm_private_dns_a_record" "starburst_a_record" {
+  name                = "starburst"
+  zone_name           = azurerm_private_dns_zone.private_dns.name
+  resource_group_name = azurerm_resource_group.rg.name
+  ttl                 = 3600
+  records             = [local.starburst_address]
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_a_record" "ranger_a_record" {
+  name                = "ranger"
+  zone_name           = azurerm_private_dns_zone.private_dns.name
+  resource_group_name = azurerm_resource_group.rg.name
+  ttl                 = 3600
+  records             = [local.ranger_address]
+  tags                = var.tags
+}

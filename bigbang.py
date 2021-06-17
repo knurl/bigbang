@@ -3,7 +3,7 @@
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
 import subprocess, ipaddress, glob, threading, time, concurrent.futures
 import atexit, psutil # type: ignore
-from run import run, runShell, runTry, runStdout, runCollect
+from run import run, runShell, runTry, runStdout, runCollect, retryRun
 from subprocess import CalledProcessError
 from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict
 from urllib.parse import urlparse
@@ -29,52 +29,52 @@ def writeableDir(p):
 #
 # Global variables.
 #
-clouds       = ("aws", "az", "gcp")
-templatedir  = where("templates")
-tmpdir       = "/tmp"
-rsa          = os.path.expanduser("~/.ssh/id_rsa")
-rsaPub       = os.path.expanduser("~/.ssh/id_rsa.pub")
-knownhosts   = os.path.expanduser("~/.ssh/known_hosts")
-tfvars       = "variables.tf" # basename only, no path!
-awsauthcm    = "aws-auth-cm.yaml" # basename only, no path!
-dbports      = { "mysql": 3306, "postgres": 5432 }
-tpchschema   = "tiny"
-tpchcat      = "tpch"
-hivecat      = "hive"
-syscat       = "system"
-evtlogcat    = "postgresqlel"
-bqcat        = "bigquery" # for now, connector doesn't support INSERT or CTAS
-remote_cats  = ["remote_hive", "remote_postgresql", "remote_mysql"]
-avoidcat     = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats
-trinouser    = "starburst_service"
-trinopass    = "test"
-dbschema     = "fdd"
-dbevtlog     = "evtlog" # event logger PostgreSQL instance
-dbuser       = "fdd"
-dbpwd        = "a029fjg!>dfgBiO8"
-namespace    = "starburst"
-helmns       = f"-n {namespace}"
-kube         = "kubectl"
-kubecfgf     = os.path.expanduser("~/.kube/config")
-kubens       = f"{kube} -n {namespace}"
-minnodes     = 2
-maxpodpnode  = 16
-awsdir       = os.path.expanduser("~/.aws")
-awsconfig    = os.path.expanduser("~/.aws/config")
-awscreds     = os.path.expanduser("~/.aws/credentials")
-localhost    = "localhost"
-localhostip  = "127.0.0.1"
-domain       = "az.starburstdata.net"
-prestohost   = "presto." + domain
-ldaphost     = "ldap." + domain
-keystorepass = "test123"
-hostsf       = "/etc/hosts"
-patchbf      = "starburst-enterprise.diff"
-patchf       = where(patchbf)
-ldapsetupbf  = "install-slapd.sh"
-ldapsetupf   = where(ldapsetupbf)
-ldaplaunchbf = "ldaplaunch.sh"
-ldaplaunchf  = where(ldaplaunchbf)
+clouds        = ("aws", "az", "gcp")
+templatedir   = where("templates")
+tmpdir        = "/tmp"
+rsa           = os.path.expanduser("~/.ssh/id_rsa")
+rsaPub        = os.path.expanduser("~/.ssh/id_rsa.pub")
+knownhosts    = os.path.expanduser("~/.ssh/known_hosts")
+tfvars        = "variables.tf" # basename only, no path!
+awsauthcm     = "aws-auth-cm.yaml" # basename only, no path!
+dbports       = { "mysql": 3306, "postgres": 5432 }
+tpchschema    = "tiny"
+tpchcat       = "tpch"
+hivecat       = "hive"
+syscat        = "system"
+evtlogcat     = "postgresqlel"
+bqcat         = "bigquery" # for now, connector doesn't support INSERT or CTAS
+remote_cats   = ["remote_hive", "remote_postgresql", "remote_mysql"]
+avoidcat      = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats
+trinouser     = "starburst_service"
+trinopass     = "test"
+dbschema      = "fdd"
+dbevtlog      = "evtlog" # event logger PostgreSQL instance
+dbuser        = "fdd"
+dbpwd         = "a029fjg!>dfgBiO8"
+namespace     = "starburst"
+helmns        = f"-n {namespace}"
+kube          = "kubectl"
+kubecfgf      = os.path.expanduser("~/.kube/config")
+kubens        = f"{kube} -n {namespace}"
+minnodes      = 2
+maxpodpnode   = 16
+awsdir        = os.path.expanduser("~/.aws")
+awsconfig     = os.path.expanduser("~/.aws/config")
+awscreds      = os.path.expanduser("~/.aws/credentials")
+localhost     = "localhost"
+localhostip   = "127.0.0.1"
+domain        = "az.starburstdata.net"
+starbursthost = "starburst." + domain
+ldaphost      = "ldap." + domain
+keystorepass  = "test123"
+hostsf        = "/etc/hosts"
+patchbf       = "starburst-enterprise.diff"
+patchf        = where(patchbf)
+ldapsetupbf   = "install-slapd.sh"
+ldapsetupf    = where(ldapsetupbf)
+ldaplaunchbf  = "ldaplaunch.sh"
+ldaplaunchf   = where(ldaplaunchbf)
 
 #
 # Secrets
@@ -299,7 +299,7 @@ for module in modules:
 
 # Portfinder service
 
-starburstsrv = ["starburst", "ranger"]
+services = ["starburst", "ranger"]
 svcports    = {
         "ranger":    {"local": 6080, "remote": 6080},
         "apiserv":   {"local": 2153, "remote": 443 }
@@ -610,13 +610,13 @@ def getApiservUrl() -> str:
         scheme = "https"
         # If we are TLS-protecting the coordinator connection, but not
         # internal connections, then the cert will require us to use the
-        # presto hostname, as that is the only valid name in that cert.
+        # starburst hostname, as that is the only valid name in that cert.
         if not tlsinternal:
-            host = prestohost
+            host = starbursthost
     return f"{scheme}://{host}:{port}"
 
 def loadBalancerResponding(service: str) -> bool:
-    assert service in starburstsrv
+    assert service in services
 
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
@@ -771,8 +771,13 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
         print("Unable to remove host key for {b} in {k}. Is file "
                 "missing?".format(b = env["bastion_address"], k = knownhosts))
     cmd = "ssh-keyscan -4 -p22 -H {b}".format(b = env["bastion_address"])
+    f = lambda: run(cmd.split(), check = True, verbose = False)
     print(cmd)
-    hostkeys = runCollect(cmd.split())
+    cp = retryRun(f, 3, cmd)
+    if cp.returncode != 0:
+        sys.exit("Unable, after repeated attempts, to contact new host "
+                "{}".format(env["bastion_address"]))
+    hostkeys = cp.stdout.strip()
     print("Adding {n} host keys from bastion to {k}".format(n =
         len(hostkeys.splitlines()), k = knownhosts))
     appendToFile(knownhosts, hostkeys)
@@ -845,6 +850,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
         env["StorageAccount"] = storageacct
     parameteriseTemplate(tfvars, tfdir, env)
 
+    # The terraform run. Perform an init, then an apply.
     if not skipClusterStart:
         announce("Starting terraform run")
         t = time.time()
@@ -900,7 +906,36 @@ def killAllTerminatingPods() -> None:
             if r.returncode == 0:
                 print(f"Terminated pod {name}")
 
-def startPortForwardToLBs(bastionIp: str) -> None:
+# TODO Azure and GCP allow static IPs to be specified for LBs, so we rely on
+# that to set up LDAP during our Terraform run with those IPs. AWS doesn't
+# allow IPs to be explicitly set for load balancers, so we have to take a
+# different approach post-Terraform, which is to create a CNAME in Route 53
+# that references the (classic) LBs that AWS sets up.
+def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str, \
+        delete: bool = False) -> None:
+    announce("{v} route53 entries for {s}".format(v = "Deleting" if delete else
+        "Creating", s = ", ".join(services)))
+    batchf = f"{tmpdir}/crrs_batch.json"
+    batch: Dict[str, Any] = {
+            "Comment": "DNS CNAME records for starburst and ranger.",
+            "Changes": []
+            }
+    action = "DELETE" if delete else "UPSERT"
+    for name, host in lbs.items():
+        assert name in services
+        batch["Changes"].append({
+            "Action": action,
+            "ResourceRecordSet": {
+                "Name": f"{name}.{domain}",
+                "Type": "CNAME",
+                "TTL": 300,
+                "ResourceRecords": [{ "Value": host }]}})
+    replaceFile(batchf, json.dumps(batch))
+    cmd = "aws route53 change-resource-record-sets --hosted-zone-id " \
+            f"{route53ZoneId} --change-batch file://{batchf}"
+    runCollect(cmd.split())
+
+def startPortForwardToLBs(bastionIp: str, route53ZoneId: str = None) -> None:
     # should be nodeCount - 1 workers with 1 container each, 2 containers for
     # the coordinator, and 2 containers each for Hive and Ranger
     announce("Waiting for pods to be ready")
@@ -912,28 +947,36 @@ def startPortForwardToLBs(bastionIp: str) -> None:
 
     # now the load balancers need to be running with their IPs assigned
     announce("Waiting for load-balancers to launch")
-    spinWait(lambda: waitUntilLoadBalancersUp(starburstsrv, namespace))
+    spinWait(lambda: waitUntilLoadBalancersUp(services, namespace))
 
     #
     # Get the DNS name of the load balancers we've created
     #
-    lbs = getLoadBalancers(starburstsrv, namespace)
+    lbs = getLoadBalancers(services, namespace)
 
     # we should have a load balancer for every service we'll forward
-    assert len(lbs) == len(starburstsrv)
-    for svc in starburstsrv:
+    assert len(lbs) == len(services)
+    for svc in services:
         toreap.append(Tunnel(svc, bastionIp, getLclPort(svc), lbs[svc],
             getRmtPort(svc)))
 
     # make sure the load balancers are actually responding
     announce("Waiting for load-balancers to start responding")
-    spinWait(lambda: waitUntilLoadBalancersUp(starburstsrv, namespace,
+    spinWait(lambda: waitUntilLoadBalancersUp(services, namespace,
         checkConnectivity = True))
+
+    # TODO AWS Doesn't support specification of a static IP for the ELB, so we
+    # cannot set up Route53 in Terraform to point to a static IP. Instead we
+    # need to use the aws cli to hand-modify the Route53 entries to create
+    # aliases to our load-balancer DNS names.
+    if target == "aws":
+        assert route53ZoneId is not None
+        setRoute53Cname(lbs, route53ZoneId)
 
 class ApiError(Exception):
     pass
 
-def retry(f, maxretries: int, err: str) -> requests.Response:
+def retryHttp(f, maxretries: int, descr: str) -> requests.Response:
     retries = 0
     stime = 1
     while True:
@@ -944,10 +987,11 @@ def retry(f, maxretries: int, err: str) -> requests.Response:
                 continue
             # All good -- we exit here.
             if retries > 0:
-                print(f"Succeeded on \"{err}\" after {retries} retries")
+                print(f"Succeeded on \"{descr}\" after {retries} retries")
             return r
         except requests.exceptions.ConnectionError as e:
-            print(f"Failed to connect: \"{err}\"; retries={retries}; sleep={stime}")
+            print(f"Failed to connect: \"{descr}\"; retries={retries}; "
+                    "sleep={stime}")
             if retries > maxretries:
                 print(f"{maxretries} retries exceeded!")
                 raise
@@ -955,7 +999,7 @@ def retry(f, maxretries: int, err: str) -> requests.Response:
             retries += 1
             stime <<= 1
 
-def issuePrestoCommand(command: str, verbose = False) -> list:
+def issueStarburstCommand(command: str, verbose = False) -> list:
     httpmaxretries = 10
     if verbose: announceSqlStart(command)
     url = getApiservUrl() + "/v1/statement"
@@ -965,7 +1009,7 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
     f = lambda: requests.post(url, headers = hdr, auth = authtype, data =
             command, verify = secrets["wild"]["f"] if tlsinternal else None)
-    r = retry(f, maxretries = httpmaxretries, err = f"POST [{command}]")
+    r = retryHttp(f, maxretries = httpmaxretries, descr = f"POST [{command}]")
 
     data = []
     while True:
@@ -985,13 +1029,13 @@ def issuePrestoCommand(command: str, verbose = False) -> list:
                     secrets["wild"]["f"])
         else:
             f = lambda: requests.get(j["nextUri"], headers = hdr, verify = None)
-        r = retry(f, maxretries = httpmaxretries, 
-                err = f"GET nextUri [{command}]")
+        r = retryHttp(f, maxretries = httpmaxretries,
+                descr = f"GET nextUri [{command}]")
 
 def copySchemaTables(srcCatalog: str, srcSchema: str,
         dstCatalogs: list, dstSchema: str, hiveTarget: str):
     # fetch our source tables
-    stab = issuePrestoCommand(f"show tables in {srcCatalog}.{srcSchema}")
+    stab = issueStarburstCommand(f"show tables in {srcCatalog}.{srcSchema}")
     srctables = [t[0] for t in stab]
 
     threads = []
@@ -1003,16 +1047,16 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
         # First, we need to make sure our 'dbschema' schema is found in every
         # database. Hive needs to be treated specially.
         #
-        stable = issuePrestoCommand(f"show schemas in {dstCatalog}")
+        stable = issueStarburstCommand(f"show schemas in {dstCatalog}")
         schemas = [s[0] for s in stable]
         dsttables = []
         if dstSchema not in schemas:
             clause = " with (location = '{l}/{s}')".format(l = hiveTarget,
                     s = dstSchema) if dstCatalog == "hive" else ""
-            issuePrestoCommand("create schema {c}.{s}{w}".format(c =
+            issueStarburstCommand("create schema {c}.{s}{w}".format(c =
                 dstCatalog, s = dstSchema, w = clause), verbose = True)
         else:
-            dtab = issuePrestoCommand("show tables in {c}.{s}".format(c =
+            dtab = issueStarburstCommand("show tables in {c}.{s}".format(c =
                 dstCatalog, s = dstSchema))
             dsttables = [d[0] for d in dtab]
 
@@ -1026,7 +1070,7 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
             else:
                 c = f"select count(*) from {dstCatalog}.{dstSchema}.{srctable}"
 
-            t = threading.Thread(target = issuePrestoCommand, args =
+            t = threading.Thread(target = issueStarburstCommand, args =
                     (c,True,))
             threads.append(t)
             t.start()
@@ -1069,7 +1113,7 @@ def loadDatabases(hive_location):
     copySchemaTables(tpchcat, tpchschema, [hivecat], dbschema, hive_location)
 
     # Then copy from hive to everywhere in parallel
-    ctab = issuePrestoCommand("show catalogs")
+    ctab = issueStarburstCommand("show catalogs")
     dstCatalogs = [c[0] for c in ctab if c[0] not in avoidcat + [hivecat]]
     announce("loading/verifying tables in {}".format(", ".join(dstCatalogs)))
     copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema, "")
@@ -1080,7 +1124,7 @@ def installSecrets(secrets: dict) -> dict:
     for name, values in secrets.items():
         # If we are using TLS on internal connections, we don't need these
         if tlsinternal:
-            if name in ('prestoks', 'prestocert'):
+            if name in ('starburstks', 'starburstcert'):
                 continue
         # If we are using TLS on coordinator only, we don't need these
         elif tlscoord:
@@ -1190,8 +1234,8 @@ def helmInstallRelease(module: str, env: dict = {}, debug: bool = False)\
               "DBNameEventLogger":  dbevtlog,
               "DBPassword":         dbpwd,
               "KeystorePass":       keystorepass,
-              "PrestoHost":         prestohost,
-              "PrestoPort":         getRmtPort("starburst"),
+              "StarburstHost":      starbursthost,
+              "StarburstPort":      getRmtPort("starburst"),
               "StorageAccount":     storageacct,
               "TrinoUser":          trinouser,
               "TrinoPass":          trinopass,
@@ -1394,23 +1438,24 @@ def helmInstallAll(env, debug: bool = False):
     # Speed up the deployment of the updated pods by killing the old ones
     killAllTerminatingPods()
 
-def deleteAllServices() -> None:
+def deleteAllServices() -> dict[str, str]:
     # Explicitly deleting services gets rid of load balancers, which eliminates
     # a race condition that Terraform is susceptible to, where the ELBs created
     # by the load balancers endure while the cluster is destroyed, stranding
     # the ENIs and preventing the deletion of the associated subnets
     # https://github.com/kubernetes/kubernetes/issues/93390
     announce("Deleting all k8s services")
-    lbs = getLoadBalancers(starburstsrv, namespace)
-    print("Load balancers before service delete: " + str(list(lbs.keys())))
+    lbs = getLoadBalancers(services, namespace)
+    print("Load balancers before service delete: " + ", ".join(lbs.keys()))
     runStdout(f"{kubens} delete svc --all".split())
-    lbs = getLoadBalancers(starburstsrv, namespace)
-    if len(lbs) == 0:
+    lbs_after = getLoadBalancers(services, namespace)
+    if len(lbs_after) == 0:
         print("No load balancers running after service delete.")
     else:
         print("# WARN Load balancers running after service delete! " +
-                str(list(lbs.keys())))
+                str(lbs_after))
         print("# WARN This may cause dependency problems later!")
+    return lbs
 
 def helmUninstallAll():
     for release, chart in helmGetReleases().items():
@@ -1437,10 +1482,11 @@ def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False, debug:\
     env = ensureClusterIsStarted(skipClusterStart)
 
     if not tunnelOnly:
+        zid = env["route53_zone_id"] if target == "aws" else None
         env["Region"] = region
         env |= awsGetCreds()
         helmInstallAll(env, debug)
-        startPortForwardToLBs(env["bastion_address"])
+        startPortForwardToLBs(env["bastion_address"], zid)
         loadDatabases(env["object_address"])
 
     return announceReady(env["bastion_address"])
@@ -1453,7 +1499,7 @@ def isTerraformSettled(tgtResource: str = None) -> bool:
             "-detailed-exitcode".split()).returncode
     return r == 0
 
-def svcStop(emptyNodes: bool = False) -> None:
+def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion, or our helm and kubectl
     # commands won't work.
     announce("Checking current Terraform status")
@@ -1463,7 +1509,13 @@ def svcStop(emptyNodes: bool = False) -> None:
         try:
             tun = establishBastionTunnel(env)
             t = time.time()
-            deleteAllServices()
+            lbs = deleteAllServices()
+            # TODO AWS has to be handled differently because of its inability
+            # to support specification of static IPs for load balancers.
+            if target == "aws" and len(lbs) > 0:
+                assert len(lbs) == len(services)
+                pdb.set_trace()
+                setRoute53Cname(lbs, env["route53_zone_id"], delete = True)
             helmUninstallAll()
             eraseBucketContents(env)
             announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
@@ -1477,7 +1529,7 @@ def svcStop(emptyNodes: bool = False) -> None:
                     try to destroy your terraform without unloading your pods
                     but you might have trouble on the destroy."""))
 
-    if not emptyNodes:
+    if not onlyEmptyNodes:
         announce(f"Ensuring cluster {clustname} is deleted")
         t = time.time()
         runStdout(f"{tf} destroy -auto-approve".split())
@@ -1691,9 +1743,9 @@ def checkRSAKey() -> None:
     sys.exit(f"Script cannot continue without {rsa} file.")
 
 def checkEtcHosts() -> None:
-    # We only need to make sure that we have a binding for the presto host if
-    # we are running with TLS to the coordinator but the internal connections
-    # are NOT secured, as in that the cert only has presto host
+    # We only need to make sure that we have a binding for the starburst host
+    # if we are running with TLS to the coordinator but the internal
+    # connections are NOT secured, as in that the cert only has starburst host
     if not tlscoord or tlsinternal:
         return
 
@@ -1708,22 +1760,22 @@ def checkEtcHosts() -> None:
                     continue
                 ip = cols[0]
                 hostname = cols[1]
-                if ip == localhostip and hostname == prestohost:
+                if ip == localhostip and hostname == starbursthost:
                     return
 
-    print(f"For TLS-encryption to coordinator, you will need {prestohost} in "
-            f"{hostsf}.\nI can add this but I'll need to run this as sudo:")
-    cmd = f"echo {localhostip} {prestohost} | sudo tee -a {hostsf}"
+    print(f"For TLS-encryption to coordinator, you will need {starbursthost} "
+            f"in {hostsf}.\nI can add this but I'll need to run this as sudo:")
+    cmd = f"echo {localhostip} {starbursthost} | sudo tee -a {hostsf}"
     print(cmd)
     yn = input("Would you like me to run that with sudo? [y/N] -> ")
     if yn.lower() in ("y", "yes"):
         rc = runShell(cmd)
         if rc == 0:
-            print(f"Added {prestohost} to {hostsf}.")
+            print(f"Added {starbursthost} to {hostsf}.")
             return
         else:
             print(f"Unable to write to {hostsf}. Try yourself?")
-    sys.exit(f"Script cannot continue without {prestohost} in {hostsf}")
+    sys.exit(f"Script cannot continue without {starbursthost} in {hostsf}")
 
 getSecrets()
 announceSummary()
