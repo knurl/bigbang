@@ -22,7 +22,7 @@ publicly and freely available purely for educational purposes.*
 ## Usage
 
 ```
-usage: bigbang.py [-h] [-d] [-c] [-u] [-e] [-t TARGET] [-z ZONE] {start,stop,restart,status}
+usage: bigbang.py [-h] [-d] [-c] [-u] [-e] [-l] [-t TARGET] [-z ZONE] {start,stop,restart,status}
 
 Create your own Starbust demo service in AWS, Azure or GCP, starting from
 nothing. It's zero to demo in 20 minutes or less. You provide your target
@@ -35,8 +35,9 @@ to allow you to control the new setup from your laptop using a bastion server.
 
 positional arguments:
   {start,stop,restart,status}
-			Command to issue for demo services.
-			start/stop/restart: Start/stop/restart the demo environment.
+                        Command to issue for demo services.
+			start/stop/restart: Start/stop/restart the demo
+			environment.
 			status: Show whether the environment is running or not.
 
 optional arguments:
@@ -46,6 +47,7 @@ optional arguments:
                         Skip checking to see if cluster needs to be started.
   -u, --tunnel-only     Only start apiserv tunnel through bastion.
   -e, --empty-nodes     Unload k8s cluster only. Used with stop or restart.
+  -l, --dont-load       Don't load databases with tpch data.
   -t TARGET, --target TARGET
                         Force cloud target to specified value.
   -z ZONE, --zone ZONE  Force zone/region to specified value.
@@ -145,3 +147,9 @@ Then once you've got that installed, you should install the required python
 libraries using python itself, like this:
 
 `python -m pip install jinja2 pyyaml psutil requests`
+
+### Logging in
+
+You will log in with the user _starburst_service_. If you enable LDAP, then in
+addition to _starburst_service_, you will also have _alice_, _bob_, and
+_carol_. All users have the password _test_.
