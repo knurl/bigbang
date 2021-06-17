@@ -107,6 +107,8 @@ p.add_argument('-u', '--tunnel-only', action="store_true",
         help="Only start apiserv tunnel through bastion.")
 p.add_argument('-e', '--empty-nodes', action="store_true",
         help="Unload k8s cluster only. Used with stop or restart.")
+p.add_argument('-l', '--dont-load', action="store_true",
+        help="Don't load databases with tpch data.")
 p.add_argument('-t', '--target', action="store",
         help="Force cloud target to specified value.")
 p.add_argument('-z', '--zone', action="store",
@@ -125,6 +127,8 @@ if ns.tunnel_only and ns.command != "start":
     p.error("-u, --tunnel-only is only used with start")
 if ns.empty_nodes and ns.command not in ("stop", "restart"):
     p.error("-e, --empty-nodes is only used with stop or restart")
+if ns.dont_load and ns.command not in ("start", "restart"):
+    p.error("-l, --dont-load is only used with start or restart")
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -1473,8 +1477,8 @@ def awsGetCreds():
 def announceReady(bastionIp: str) -> list:
     return ["Bastion: {b}".format(b = bastionIp)]
 
-def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False, debug:\
-        bool = False) -> list:
+def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False,
+        dontLoad: bool = False, debug: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the cluster.
     # This will create the control plane and workers.
     env = ensureClusterIsStarted(skipClusterStart)
@@ -1485,7 +1489,8 @@ def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False, debug:\
         env |= awsGetCreds()
         helmInstallAll(env, debug)
         startPortForwardToLBs(env["bastion_address"], zid)
-        loadDatabases(env["object_address"])
+        if not dontLoad:
+            loadDatabases(env["object_address"])
 
     return announceReady(env["bastion_address"])
 
@@ -1789,7 +1794,7 @@ if ns.command in ("stop", "restart"):
     svcStop(ns.empty_nodes)
 
 if ns.command in ("start", "restart"):
-    w = svcStart(ns.skip_cluster_start, ns.tunnel_only, ns.debug)
+    w = svcStart(ns.skip_cluster_start, ns.tunnel_only, ns.dont_load, ns.debug)
     started = True
     announceBox(f"Your {rsaPub} public key has been installed into the "
             "bastion server, so you can ssh there now (user 'ubuntu').")
