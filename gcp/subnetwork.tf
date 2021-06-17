@@ -18,6 +18,8 @@ locals {
   k8s_services_cidr = local.cidrs[2] # 8.1 - 11.254, 22 b = 1022 hosts
   googserv_cidr     = local.cidrs[3] # 12.1 - 13.254, 23 b = 510 hosts
   master_ntwk_cidr  = local.cidrs[4] # 14.1 - 14.14, 28 b = 14 hosts
+  starburst_address = cidrhost(local.subnetwork_cidr, 103)
+  ranger_address    = cidrhost(local.subnetwork_cidr, 104)
 }
 
 #

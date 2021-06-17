@@ -10,6 +10,14 @@ output "ldaps_address" {
   value = azurerm_linux_virtual_machine.ldaps.private_ip_address
 }
 
+output "starburst_address" {
+  value = local.starburst_address
+}
+
+output "ranger_address" {
+  value = local.ranger_address
+}
+
 output "evtlog_address" {
   value = azurerm_postgresql_server.evtlog.fqdn
 }

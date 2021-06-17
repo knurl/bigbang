@@ -21,3 +21,21 @@ resource "google_dns_record_set" "ldap_a_record" {
   rrdatas      = [google_compute_instance.ldaps.network_interface.0.network_ip]
   ttl          = 3600
 }
+
+resource "google_dns_record_set" "starburst_a_record" {
+  project      = data.google_project.project.project_id
+  managed_zone = google_dns_managed_zone.private_zone.name
+  name         = "starburst.az.starburstdata.net."
+  type         = "A"
+  rrdatas      = [local.starburst_address]
+  ttl          = 3600
+}
+
+resource "google_dns_record_set" "ranger_a_record" {
+  project      = data.google_project.project.project_id
+  managed_zone = google_dns_managed_zone.private_zone.name
+  name         = "ranger.az.starburstdata.net."
+  type         = "A"
+  rrdatas      = [local.ranger_address]
+  ttl          = 3600
+}

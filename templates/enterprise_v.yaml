@@ -10,6 +10,10 @@ starburstPlatformLicense: {{license}}
 expose:
   type: loadBalancer
   loadBalancer:
+    # TODO AWS Doesn't support specification of a static IP for the ELB
+    {% if Target != "aws" %}
+    IP: {{starburst_address | string}}
+    {% endif %}
   {% if RequireInternalTls or RequireCoordTls %}
     ports:
       https:
@@ -76,7 +80,7 @@ coordinator:
         http-server.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
         http-server.https.keystore.key={{KeystorePass}}
         {% elif RequireCoordTls %}
-        http-server.https.keystore.path=secretRef:{{prestoks}}:{{prestoksbf}}
+        http-server.https.keystore.path=secretRef:{{starburstks}}:{{starburstksbf}}
         http-server.https.keystore.key={{KeystorePass}}
         {% endif %}
         {% if RequireInternalTls %}
@@ -100,7 +104,6 @@ coordinator:
       log.properties: |
         # Enable verbose logging from Starburst Enterprise
         io.trino=DEBUG
-        com.starburstdata.presto=DEBUG
       {% endif %}
       password-authenticator.properties: |
         password-authenticator.name=ldap
@@ -219,8 +222,6 @@ catalogs:
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
-    # For AWS, we don't need to pass credentials because we've assigned a role
-    # with a policy that allows full access to S3
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
@@ -249,11 +250,14 @@ catalogs:
   {% if Target == "gcp" %}
   bigquery: |
     connector.name=bigquery
-    bigquery.project-id={{bq_project_id}}
+    bigquery.project-id={{ bq_project_id | string }}
+#   TODO: These two settings cause bigquery to fail. Bug?
+#    bigquery.case-insensitive-name-matching=true
+#    bigquery.case-insensitive-name-matching.cache-ttl=60m
   {% endif %}
   remote_hive: |
     connector.name=starburst-remote
-    connection-url=jdbc:trino://{{PrestoHost}}:{{PrestoPort}}/hive
+    connection-url=jdbc:trino://{{StarburstHost}}:{{StarburstPort}}/hive
     connection-user={{TrinoUser}}
     {% if RequireCoordTls %}
     connection-password={{TrinoPass}}
@@ -263,7 +267,7 @@ catalogs:
     {% endif %}
   remote_postgresql: |
     connector.name=starburst-remote
-    connection-url=jdbc:trino://{{PrestoHost}}:{{PrestoPort}}/postgresql
+    connection-url=jdbc:trino://{{StarburstHost}}:{{StarburstPort}}/postgresql
     connection-user={{TrinoUser}}
     {% if RequireCoordTls %}
     connection-password={{TrinoPass}}
@@ -273,7 +277,7 @@ catalogs:
     {% endif %}
   remote_mysql: |
     connector.name=starburst-remote
-    connection-url=jdbc:trino://{{PrestoHost}}:{{PrestoPort}}/mysql
+    connection-url=jdbc:trino://{{StarburstHost}}:{{StarburstPort}}/mysql
     connection-user={{TrinoUser}}
     {% if RequireCoordTls %}
     connection-password={{TrinoPass}}

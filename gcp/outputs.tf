@@ -10,6 +10,14 @@ output "ldaps_address" {
   value = google_compute_instance.ldaps.network_interface.0.network_ip
 }
 
+output "starburst_address" {
+  value = local.starburst_address
+}
+
+output "ranger_address" {
+  value = local.ranger_address
+}
+
 output "evtlog_address" {
   value = google_sql_database_instance.sql_evtlog.private_ip_address
 }

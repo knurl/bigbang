@@ -8,7 +8,9 @@ resource "azurerm_virtual_network" "vnet" {
 
 locals {
   # 00.1 - 127.254 = 32766; 128.1 - 191.254 = 16382; 192.1 - 255.254 = 16382
-  subnets = cidrsubnets(var.my_cidr, 1, 2, 2)
+  subnets           = cidrsubnets(var.my_cidr, 1, 2, 2)
+  starburst_address = cidrhost(azurerm_subnet.private_sub.address_prefixes[0], 103)
+  ranger_address    = cidrhost(azurerm_subnet.private_sub.address_prefixes[0], 104)
 }
 
 resource "azurerm_subnet" "private_sub" {

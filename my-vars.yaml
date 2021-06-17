@@ -4,23 +4,24 @@ Email: rob.anderson@starburstdata.com
 # Cloud target.
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
-Target: aws
+#Target: aws
 #Target: az
-#Target: gcp
+Target: gcp
 
 #
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
 #
-#Zone: eu-west-3 # AWS - Paris, France
-Zone: eu-west-2 # AWS - London, UK
+#Zone: eu-west-3 # AWS - Paris, France, EU
+#Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
-#Zone: francecentral # Azure - Paris, France
-#Zone: uksouth # Azure - London, UK
-#Zone: europe-west1-b # GCP - St. Ghislain, Belgium
+#Zone: francecentral # Azure - Paris, France, EU
+#Zone: uksouth # Azure - London, UK, EU
+#Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
+Zone: europe-west2-b # London, UK, EU
 
 # Version of Starburst you want to install. This must match across
-# starburst-presto, starburst-ranger, and starburst-hive.
+# starburst-enterprise, starburst-ranger, and starburst-hive.
 ChartVersion: 358.0.0
 
 # Number of nodes in K8S cluster.
