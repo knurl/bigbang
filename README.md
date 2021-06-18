@@ -19,41 +19,41 @@ publicly and freely available purely for educational purposes.*
 - go through the requirements section below to make sure you have all the
   dependencies before starting
 
-## Usage
+## Instructions on use
 
-```
-usage: bigbang.py [-h] [-d] [-c] [-u] [-e] [-l] [-t TARGET] [-z ZONE] {start,stop,restart,status}
+### What BigBang does
 
-Create your own Starbust demo service in AWS, Azure or GCP, starting from
-nothing. It's zero to demo in 20 minutes or less. You provide your target
-cloud, zone/region, version of software, and your cluster size and instance
-type, and everything is set up for you, including Starburst, multiple
-databases, and a data lake. The event logger and Starburst Insights are set up
-too. This script uses terraform to set up a K8S cluster, with its own VPC/VNet
-and K8S cluster, routes and peering connections, security, etc. It's designed
-to allow you to control the new setup from your laptop using a bastion server.
+In the cloud of your choice, BigBang stands up some object storage (as a data
+lake) and some databases, as well as a K8S cluster into which it installs
+Starburst. You can optionally secure connections with TLS, and you can
+optionally stand up LDAP to use as an identity source. You can configure with a
+cluster size and machine type of your choice. AWS, Azure and GCP are all
+supported.
 
-positional arguments:
-  {start,stop,restart,status}
-                        Command to issue for demo services.
-			start/stop/restart: Start/stop/restart the demo
-			environment.
-			status: Show whether the environment is running or not.
+BigBang uses Terraform to deploy the infrastructure required, and kubectl and
+helm to deploy the helm charts. Both of these technologies are _declarative_
+and _idempotent_, and fortunately BigBang is too. This means that:
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -d, --debug           Run in debug mode.
-  -c, --skip-cluster-start
-                        Skip checking to see if cluster needs to be started.
-  -u, --tunnel-only     Only start apiserv tunnel through bastion.
-  -e, --empty-nodes     Unload k8s cluster only. Used with stop or restart.
-  -l, --dont-load       Don't load databases with tpch data.
-  -t TARGET, --target TARGET
-                        Force cloud target to specified value.
-  -z ZONE, --zone ZONE  Force zone/region to specified value.
-```
+- you declare the objective in my-vars.html, and BigBang attempts to achieve
+  that objective every time you run it.
 
-## Requirements
+- If you change any configuration, you can simply re-run BigBang to achieve
+  your new objective. You do _not_ need to stop BigBang and re-start it, just
+  because you change some yaml; just run start again.
+
+### General command-line usage
+
+run bigbang.py -h to see how to use it.
+
+### Logging into Starburst
+
+For the Starburst UI, you will log in with the user _starburst_service_. If you
+enable LDAP, then in addition to _starburst_service_, you will also have
+_alice_, _bob_, and _carol_, all with password _test_. All users have the
+password _test_. For Ranger, the username is _starburst_service_ and the
+password is _RangerPassword1_.
+
+## How to install it
 
 ### Homebrew
 
@@ -80,7 +80,7 @@ And the following brew casks, like this:
 brew install --cask google-cloud-sdk
 ```
 
-### AWS CLI
+### AWS
 
 After the installation of `awscli`, you now need to configure it, by running
 `aws configure`. You'll need to have ready your AWS Access Key ID, your AWS
@@ -94,7 +94,7 @@ you want to work in a different region.
 See [this link](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config)
 for the full instructions.
 
-### Azure CLI
+### Azure
 
 After the installation of `azure-cli`, you now need to configure, by running `az
 configure`, and you'll need to login, by running `az login`. When you log in, it
@@ -105,7 +105,7 @@ your Microsoft credentials. After running these commands you'll have a
 See [this link](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-macos)
 for the full instructions.
 
-### GCloud SDK
+### GCloud
 
 After the installation of the `gcloud`, `gsutil` and the rest of the Google
 Cloud SDK, you'll need to configure it by running `gcloud init`. Once that is
@@ -114,6 +114,8 @@ configuration inside of it.
 
 See [this link](https://blog.petehouston.com/install-and-configure-google-cloud-sdk-using-homebrew/)
 for the full instructions.
+
+NB: For GCP you will also need to set your project name in my-vars.html.
 
 ### Python
 
@@ -147,9 +149,3 @@ Then once you've got that installed, you should install the required python
 libraries using python itself, like this:
 
 `python -m pip install jinja2 pyyaml psutil requests`
-
-### Logging in
-
-You will log in with the user _starburst_service_. If you enable LDAP, then in
-addition to _starburst_service_, you will also have _alice_, _bob_, and
-_carol_. All users have the password _test_.
