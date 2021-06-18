@@ -83,6 +83,7 @@ module "eks" {
   manage_aws_auth                 = false # Can't for private clusters
   cluster_create_security_group   = false
   cluster_security_group_id       = aws_security_group.apiserver_sg.id
+
   /*
    * The workers by default are allowed to talk to each other (usually
    * facilitated by a recursive reference to their own security group), and
@@ -92,7 +93,7 @@ module "eks" {
    */
   worker_additional_security_group_ids = [aws_security_group.worker_sg.id]
 
-  # Don't need a kubectl physical file; we'll get it as an output var
+  # Don't need a kubectl physical file
   write_kubeconfig = false
 
   worker_groups_launch_template = [

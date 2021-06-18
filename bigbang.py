@@ -478,13 +478,11 @@ def generateDatabaseUsers(env: dict) -> None:
 class KubeContextError(Exception):
     pass
 
-def updateKubeConfig(kubecfg: str = None) -> None:
+def updateKubeConfig() -> None:
     # Phase I: Write in the new kubectl config file as-is
     announce(f"Updating kube config file")
     if target == "aws":
-        assert kubecfg != None
-        replaceFile(kubecfgf, kubecfg)
-        print(f"wrote out kubectl file to {kubecfgf}")
+        runStdout(f"aws eks update-kubeconfig --name {clustname}".split())
     elif target == "az":
         runStdout(f"az aks get-credentials --resource-group {resourcegrp} "
                 f"--name {clustname} --overwrite-existing".split())
@@ -796,8 +794,7 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
 
     # Now that the tunnel is in place, update our kubecfg with the address to
     # the tunnel, keeping everything else in place
-    updateKubeConfig(env["kubectl_config"] if "kubectl_config" in env
-            else None)
+    updateKubeConfig()
 
     # Ensure that we can talk to the api server
     announce("Waiting for api server to respond")

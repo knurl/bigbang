@@ -62,7 +62,6 @@ evtlogcat	bigbang.py	/^evtlogcat     = "postgresqlel"$/;"	v
 fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
-getApiservUrl	bigbang.py	/^def getApiservUrl() -> str:$/;"	f
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f
 getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:$/;"	f
 getLclPort	bigbang.py	/^def getLclPort(service: str) -> int:$/;"	f
@@ -76,6 +75,7 @@ getRegionFromZone	bigbang.py	/^def getRegionFromZone(zone: str) -> str:$/;"	f
 getRmtPort	bigbang.py	/^def getRmtPort(service: str) -> int:$/;"	f
 getSecrets	bigbang.py	/^def getSecrets() -> None:$/;"	f
 getSshPublicKey	bigbang.py	/^def getSshPublicKey() -> str:$/;"	f
+getStarburstUrl	bigbang.py	/^def getStarburstUrl() -> str:$/;"	f
 getUser	bigbang.py	/^def getUser(user: str, uid: int, gid: int, dcs: str) -> str:$/;"	f
 helm	bigbang.py	/^def helm(cmd: str) -> None:$/;"	f
 helmCreateNamespace	bigbang.py	/^def helmCreateNamespace() -> None:$/;"	f
@@ -93,6 +93,7 @@ helmcreds	bigbang.py	/^        helmcreds = yaml.load(mypf, Loader = yaml.FullLoa
 helmcredsbf	bigbang.py	/^helmcredsbf = "helm-creds.yaml"$/;"	v
 helmcredsf	bigbang.py	/^helmcredsf  = where("helm-creds.yaml")$/;"	v
 helmns	bigbang.py	/^helmns        = f"-n {namespace}"$/;"	v
+help	bigbang.py	/^        help="Don't load databases with tpch data.")$/;"	v
 help	bigbang.py	/^        help="Force cloud target to specified value.")$/;"	v
 help	bigbang.py	/^        help="Force zone\/region to specified value.")$/;"	v
 help	bigbang.py	/^        help="Only start apiserv tunnel through bastion.")$/;"	v
@@ -180,7 +181,7 @@ started	bigbang.py	/^    started = True$/;"	v
 started	bigbang.py	/^    started = isTerraformSettled()$/;"	v
 started	bigbang.py	/^started = False$/;"	v
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
-svcStart	bigbang.py	/^        bool = False) -> list:$/;"	f
+svcStart	bigbang.py	/^def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False,$/;"	f
 svcStop	bigbang.py	/^def svcStop(onlyEmptyNodes: bool = False) -> None:$/;"	f
 svcports	bigbang.py	/^svcports    = {$/;"	v
 syscat	bigbang.py	/^syscat        = "system"$/;"	v
@@ -198,10 +199,10 @@ tpchcat	bigbang.py	/^tpchcat       = "tpch"$/;"	v
 tpchschema	bigbang.py	/^tpchschema    = "tiny"$/;"	v
 trinopass	bigbang.py	/^trinopass     = "test"$/;"	v
 trinouser	bigbang.py	/^trinouser     = "starburst_service"$/;"	v
-updateKubeConfig	bigbang.py	/^def updateKubeConfig(kubecfg: str = None) -> None:$/;"	f
+updateKubeConfig	bigbang.py	/^def updateKubeConfig() -> None:$/;"	f
 username	bigbang.py	/^username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035$/;"	v
 w	bigbang.py	/^        w = announceReady(env["bastion_address"])$/;"	v
-w	bigbang.py	/^    w = svcStart(ns.skip_cluster_start, ns.tunnel_only, ns.debug)$/;"	v
+w	bigbang.py	/^    w = svcStart(ns.skip_cluster_start, ns.tunnel_only, ns.dont_load, ns.debug)$/;"	v
 w	bigbang.py	/^w = []$/;"	v
 waitUntilApiServerResponding	bigbang.py	/^def waitUntilApiServerResponding() -> float:$/;"	f
 waitUntilDeploymentsAvail	bigbang.py	/^        -> float:$/;"	f
@@ -210,4 +211,4 @@ waitUntilNodesReady	bigbang.py	/^def waitUntilNodesReady(minnodes: int) -> float
 waitUntilPodsReady	bigbang.py	/^def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:$/;"	f
 where	bigbang.py	/^def where(leaf):$/;"	f
 writeableDir	bigbang.py	/^def writeableDir(p):$/;"	f
-y	bigbang.py	/^y = getCloudSummary() + ["Service is " + ("started" if started else$/;"	v
+y	bigbang.py	/^y = getCloudSummary() + ["Service is " + ("started on:" if started else$/;"	v

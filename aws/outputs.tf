@@ -30,11 +30,6 @@ output "object_address" {
   value = aws_s3_bucket.s3_bucket.bucket_regional_domain_name
 }
 
-output "kubectl_config" {
-  value     = module.eks.kubeconfig
-  sensitive = true
-}
-
 output "worker_iam_role_arn" {
   value = module.eks.worker_iam_role_arn
 }
