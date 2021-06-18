@@ -1517,7 +1517,6 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
             # to support specification of static IPs for load balancers.
             if target == "aws" and len(lbs) > 0:
                 assert len(lbs) == len(services)
-                pdb.set_trace()
                 setRoute53Cname(lbs, env["route53_zone_id"], delete = True)
             helmUninstallAll()
             eraseBucketContents(env)
