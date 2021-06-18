@@ -629,7 +629,7 @@ def loadBalancerResponding(service: str) -> bool:
         url = f"http://{localhost}:{port}/login.jsp"
 
     try:
-        r = requests.get(url, verify = secrets["wild"]["f"] if service ==
+        r = requests.get(url, verify = secrets["wildcert"]["f"] if service ==
                 "starburst" and tlsinternal else None)
         return r.status_code == 200
     except requests.exceptions.ConnectionError as e:
@@ -1007,7 +1007,8 @@ def issueStarburstCommand(command: str, verbose = False) -> list:
     if tlscoord:
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
     f = lambda: requests.post(url, headers = hdr, auth = authtype, data =
-            command, verify = secrets["wild"]["f"] if tlsinternal else None)
+            command, verify = secrets["wildcert"]["f"] if tlsinternal else
+            None)
     r = retryHttp(f, maxretries = httpmaxretries, descr = f"POST [{command}]")
 
     data = []
@@ -1025,7 +1026,7 @@ def issueStarburstCommand(command: str, verbose = False) -> list:
             return data # the only way out is success, or an exception
         if tlsinternal:
             f = lambda: requests.get(j["nextUri"], headers = hdr, verify =
-                    secrets["wild"]["f"])
+                    secrets["wildcert"]["f"])
         else:
             f = lambda: requests.get(j["nextUri"], headers = hdr, verify = None)
         r = retryHttp(f, maxretries = httpmaxretries,
