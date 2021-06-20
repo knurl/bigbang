@@ -717,12 +717,12 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
         pct = waitFunc()
         assert(pct <= 1.0)
         c = int(pct * barlength)
-        arrow = '⇒' if c > 0 else ""
+        arrow = '┤' if c > 0 else ""
         if c > 1:
-            arrow = (c - 1) * '═' + arrow
+            arrow = (c - 1) * '─' + arrow
         r = barlength - c
         space = ' '*r
-        s = '   ' + anim1[i % f] + '╞' + arrow + space + '╡' + anim2[i % f]
+        s = '   ' + anim1[i % f] + '┠' + arrow + space + '┨' + anim2[i % f]
         maxlen = max(maxlen, len(s))
         print(s, end='\r', flush=True)
         if pct == 1.0:
