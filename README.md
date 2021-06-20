@@ -71,7 +71,7 @@ You now should install the following required Homebrew formulae, like this:
 
 ```
 brew install awscli azure-cli aws-iam-authenticator helm kubectl \
-    libyaml terraform
+    libyaml terraform gimme-aws-creds
 ```
 
 And the following brew casks, like this:

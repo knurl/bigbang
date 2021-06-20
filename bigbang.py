@@ -7,6 +7,7 @@ from run import run, runShell, runTry, runStdout, runCollect, retryRun
 from subprocess import CalledProcessError
 from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict
 from urllib.parse import urlparse
+from abc import ABC, abstractmethod
 import jinja2
 from jinja2.meta import find_undeclared_variables
 
@@ -1215,7 +1216,7 @@ def helmGetReleases() -> dict:
         print("No helm releases found.")
     return rls
 
-def helmWhichChartInstalled(module: str) -> Optional[Any]:
+def helmWhichChartInstalled(module: str) -> Optional[str]:
     chart = None
     release = releases[module] # Get release name for module name
     installed = helmGetReleases()
@@ -1467,10 +1468,80 @@ def helmUninstallAll():
     killAllTerminatingPods()
     helmDeleteNamespace()
 
-def awsGetCreds():
-    awsAccess = runCollect("aws configure get aws_access_key_id".split())
-    awsSecret = runCollect("aws configure get aws_secret_access_key".split())
-    return dict(AWSAccessKey=awsAccess, AWSSecretKey=awsSecret)
+class Creds(ABC):
+    def __init__(self, accesskey: str, secret: str):
+        self.accesskey = accesskey
+        self.secret = secret
+        super().__init__()
+        pass
+
+    @abstractmethod
+    def getAccessKeyName(self) -> str:
+        pass
+
+    @abstractmethod
+    def getSecretName(self) -> str:
+        pass
+
+    @abstractmethod
+    def toDict(self) -> dict[str, str]:
+        return { self.getAccessKeyName(): self.accesskey,
+                 self.getSecretName(): self.secret }
+
+class AwsCreds(Creds):
+    def isTokenFresh(self, awsAccess: str) -> bool:
+        r = runTry("aws sts get-access-key-info --access-key-id".split() +
+                [awsAccess])
+        rc = r.returncode
+        assert rc != 253, "Shouldn't happen. I just checked creds files?"
+        if rc not in (0, 254):
+            sys.exit(f"Unknown error {rc} trying to get credentials.")
+        return rc == 0
+
+    def __init__(self):
+        if target != "aws":
+            return
+
+        # First make sure we can find the credentials files
+        badAws = False
+        if not writeableDir(awsdir):
+            badAws = True
+            err = f"Directory {awsdir} doesn't exist or has bad permissions."
+        elif not readableFile(awsconfig):
+            badAws = True
+            err = f"File {awsconfig} doesn't exist or isn't readable."
+        elif not readableFile(awscreds):
+            badAws = True
+            err = f"File {awscreds} doesn't exist or isn't readable."
+        if badAws:
+            print(err)
+            sys.exit("Have you run aws configure?")
+        awsAccess = runCollect("aws configure get "
+                "aws_access_key_id".split())
+        awsSecret = runCollect("aws configure get "
+                "aws_secret_access_key".split())
+
+        # Next, ensure that if we are using an access token, it remains valid
+        if self.isTokenFresh(awsAccess):
+            print("AWS access token is valid")
+        else:
+            print("Your aws access token is stale.")
+            yn = input("Would you like me to refresh it? [y/N] -> ")
+            if yn.lower() in ("y", "yes"):
+                runStdout("gimme-aws-creds -m".split())
+            if not self.isTokenFresh(awsAccess):
+                sys.exit("Unable to refresh access token.")
+        super().__init__(awsAccess, awsSecret)
+
+    def getAccessKeyName(self) -> str:
+        return "AWSAccessKey"
+
+    def getSecretName(self) -> str:
+        return "AWSSecretKey"
+
+    def toDict(self) -> dict[str, str]:
+        assert target == "aws", f"Target is {target} not aws!"
+        return super().toDict()
 
 def announceReady(bastionIp: str) -> list:
     who = f"user: {trinouser}"
@@ -1478,8 +1549,9 @@ def announceReady(bastionIp: str) -> list:
         who += f" pwd: {trinopass}"
     return [getStarburstUrl() + "/ui/insights", who, f"Bastion: {bastionIp}"]
 
-def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False,
-        dontLoad: bool = False, debug: bool = False) -> list:
+def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
+        tunnelOnly: bool = False, awscreds: AwsCreds = None, dontLoad: bool =
+        False, debug: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the cluster.
     # This will create the control plane and workers.
     env = ensureClusterIsStarted(skipClusterStart)
@@ -1487,7 +1559,8 @@ def svcStart(skipClusterStart: bool = False, tunnelOnly: bool = False,
     if not tunnelOnly:
         zid = env["route53_zone_id"] if target == "aws" else None
         env["Region"] = region
-        env |= awsGetCreds()
+        if creds != None and isinstance(creds, Creds):
+            env |= creds.toDict()
         helmInstallAll(env, debug)
         startPortForwardToLBs(env["bastion_address"], zid)
         if not dontLoad:
@@ -1710,22 +1783,11 @@ def getSecrets() -> None:
 def announceSummary() -> None:
     announceLoud(getCloudSummary())
 
-def checkCLISetup() -> None:
+def getCreds() -> Optional[Creds]:
     assert target in clouds
+    creds: Optional[Creds] = None
     if target == "aws":
-        badAws = False
-        if not writeableDir(awsdir):
-            badAws = True
-            err = f"Directory {awsdir} doesn't exist or has bad permissions."
-        elif not readableFile(awsconfig):
-            badAws = True
-            err = f"File {awsconfig} doesn't exist or isn't readable."
-        elif not readableFile(awscreds):
-            badAws = True
-            err = f"File {awscreds} doesn't exist or isn't readable."
-        if badAws:
-            print(err)
-            sys.exit("Have you run aws configure?")
+        creds = AwsCreds()
     elif target == "az":
         azuredir = os.path.expanduser("~/.azure")
         if not writeableDir(azuredir):
@@ -1736,6 +1798,7 @@ def checkCLISetup() -> None:
         if not writeableDir(gcpdir):
             print("Directory {gcpdir} doesn't exist or isn't readable.")
             sys.exit("Have you run gcloud init?")
+    return creds
 
 def checkRSAKey() -> None:
     if readableFile(rsa) and readableFile(rsaPub):
@@ -1789,7 +1852,7 @@ def checkEtcHosts() -> None:
 
 getSecrets()
 announceSummary()
-checkCLISetup()
+creds = getCreds()
 checkRSAKey()
 checkEtcHosts()
 buildLdapLauncher(domain)
@@ -1801,7 +1864,7 @@ if ns.command in ("stop", "restart"):
     svcStop(ns.empty_nodes)
 
 if ns.command in ("start", "restart"):
-    w = svcStart(ns.skip_cluster_start, ns.tunnel_only, ns.dont_load, ns.debug)
+    w = svcStart(creds, ns.skip_cluster_start, ns.tunnel_only, ns.dont_load, ns.debug)
     started = True
     announceBox(f"Your {rsaPub} public key has been installed into the "
             "bastion server, so you can ssh there now (user 'ubuntu').")
