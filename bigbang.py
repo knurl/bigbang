@@ -122,7 +122,7 @@ p.add_argument('command',
 
 ns = p.parse_args()
 
-if ns.skip_cluster_start and ns.command != "start":
+if ns.skip_cluster_start and ns.command not in ("start", "restart"):
     p.error("-c, --skip-cluster-start is only used with start")
 if ns.tunnel_only and ns.command != "start":
     p.error("-u, --tunnel-only is only used with start")
@@ -717,9 +717,21 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
         pct = waitFunc()
         assert(pct <= 1.0)
         c = int(pct * barlength)
-        arrow = '┤' if c > 0 else ""
-        if c > 1:
-            arrow = (c - 1) * '─' + arrow
+        p100 = int(100 * pct)
+        minpctsz = len("─1%─┤")
+        if c == 0:
+            arrow = ""
+        elif c == 1:
+            arrow = '┤'
+        elif c < minpctsz:
+            arrow = (c - 1) * '─' + '┤'
+        else:
+            p100s = f"{p100}%"
+            rmdr = c - len(p100s) - 1 # 1 for arrowhead
+            rmdr1 = int(rmdr / 2)
+            rmdr2 = rmdr - rmdr1
+            arrow = rmdr1 * '─' + p100s + rmdr2 * '─' + '┤'
+        assert len(arrow) == c, "{arrow} is not len {c}"
         r = barlength - c
         space = ' '*r
         s = '   ' + anim1[i % f] + '┠' + arrow + space + '┨' + anim2[i % f]
@@ -729,7 +741,7 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
             print(' ' * maxlen, end='\r')
             return
         i += 1
-        time.sleep(1)
+        time.sleep(0.5)
 
 # A class for recording ssh tunnels
 class Tunnel:
@@ -1522,9 +1534,7 @@ class AwsCreds(Creds):
                 "aws_secret_access_key".split())
 
         # Next, ensure that if we are using an access token, it remains valid
-        if self.isTokenFresh(awsAccess):
-            print("AWS access token is valid")
-        else:
+        if not self.isTokenFresh(awsAccess):
             print("Your aws access token is stale.")
             yn = input("Would you like me to refresh it? [y/N] -> ")
             if yn.lower() in ("y", "yes"):
@@ -1850,6 +1860,7 @@ def checkEtcHosts() -> None:
             print(f"Unable to write to {hostsf}. Try yourself?")
     sys.exit(f"Script cannot continue without {starbursthost} in {hostsf}")
 
+announce("Verifying environment")
 getSecrets()
 announceSummary()
 creds = getCreds()
@@ -1864,7 +1875,8 @@ if ns.command in ("stop", "restart"):
     svcStop(ns.empty_nodes)
 
 if ns.command in ("start", "restart"):
-    w = svcStart(creds, ns.skip_cluster_start, ns.tunnel_only, ns.dont_load, ns.debug)
+    w = svcStart(creds, ns.skip_cluster_start, ns.tunnel_only, ns.dont_load,
+            ns.debug)
     started = True
     announceBox(f"Your {rsaPub} public key has been installed into the "
             "bastion server, so you can ssh there now (user 'ubuntu').")
