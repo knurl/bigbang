@@ -1,15 +1,13 @@
 data "aws_availability_zones" "available" {}
 
-# TODO: Consider replacing this module with the constituent resources
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "2.78.0"
+  version = "3.1.0"
 
   name = var.network_name
   cidr = var.my_cidr
 
   create_database_subnet_group = true
-  database_subnet_group_tags   = merge(var.tags, { Name = "${module.vpc.name}-snetg" })
 
   azs              = data.aws_availability_zones.available.names
   private_subnets  = [for k in ["prv_a", "prv_b", "prv_c"] : module.subnet_addrs.network_cidr_blocks[k]]
@@ -28,8 +26,6 @@ module "vpc" {
   # Our workers will need to be able to get packages
   enable_nat_gateway = true
   single_nat_gateway = true
-
-  tags = merge(var.tags, { Name = module.vpc.name })
 
   # Required to allow ELBs on the private subnets
   private_subnet_tags = {
