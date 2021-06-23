@@ -23,7 +23,6 @@ announceSqlEnd	bigbang.py	/^def announceSqlEnd(s):$/;"	f
 announceSqlStart	bigbang.py	/^def announceSqlStart(s):$/;"	f
 announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
 appendToFile	bigbang.py	/^def appendToFile(filepath, contents) -> None:$/;"	f
-authnldap	bigbang.py	/^    authnldap    = myvars[authnldaplabel]$/;"	v
 authnldaplabel	bigbang.py	/^authnldaplabel = "AuthNLdap"$/;"	v
 avoidcat	bigbang.py	/^avoidcat      = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats$/;"	v
 awsauthcm	bigbang.py	/^awsauthcm     = "aws-auth-cm.yaml" # basename only, no path!$/;"	v
@@ -35,7 +34,6 @@ bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 buildLdapLauncher	bigbang.py	/^def buildLdapLauncher(fqdn: str) -> None:$/;"	f
 c	bigbang.py	/^                c = ", ".join(clouds)))$/;"	v
 charts	bigbang.py	/^charts = {}$/;"	v
-chartversion	bigbang.py	/^    chartversion = myvars[chartvlabel]$/;"	v
 chartvlabel	bigbang.py	/^chartvlabel = "ChartVersion"$/;"	v
 checkEtcHosts	bigbang.py	/^def checkEtcHosts() -> None:$/;"	f
 checkRSAKey	bigbang.py	/^def checkRSAKey() -> None:$/;"	f
@@ -54,7 +52,6 @@ dbschema	bigbang.py	/^dbschema      = "fdd"$/;"	v
 dbuser	bigbang.py	/^dbuser        = "fdd"$/;"	v
 deleteAllServices	bigbang.py	/^def deleteAllServices() -> dict[str, str]:$/;"	f
 domain	bigbang.py	/^domain        = "az.starburstdata.net"$/;"	v
-email	bigbang.py	/^    email        = myvars["Email"]$/;"	v
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
 ensureClusterIsStarted	bigbang.py	/^def ensureClusterIsStarted(skipClusterStart: bool) -> dict:$/;"	f
 ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(repo: str) -> None:$/;"	f
@@ -140,7 +137,6 @@ myvars	bigbang.py	/^        myvars = yaml.load(mypf, Loader = yaml.FullLoader)$/
 myvarsbf	bigbang.py	/^myvarsbf = "my-vars.yaml"$/;"	v
 myvarsf	bigbang.py	/^myvarsf  = where("my-vars.yaml")$/;"	v
 namespace	bigbang.py	/^namespace     = "starburst"$/;"	v
-nodeCount	bigbang.py	/^    nodeCount    = myvars[nodecountlabel]$/;"	v
 nodecountlabel	bigbang.py	/^nodecountlabel = "NodeCount"$/;"	v
 normaliseCPU	bigbang.py	/^def normaliseCPU(cpu) -> int:$/;"	f
 normaliseMem	bigbang.py	/^def normaliseMem(mem) -> int:$/;"	f
@@ -159,10 +155,9 @@ releases	bigbang.py	/^releases = {}$/;"	v
 remote_cats	bigbang.py	/^remote_cats   = ["remote_hive", "remote_postgresql", "remote_mysql"]$/;"	v
 removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
 replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
-repo	bigbang.py	/^    repo         = myvars["HelmRepo"]$/;"	v
-repoloc	bigbang.py	/^    repoloc      = myvars["HelmRepoLocation"]$/;"	v
 repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
 repouser	bigbang.py	/^    repouser     = helmcreds["HelmRepoUser"]$/;"	v
+requireKey	bigbang.py	/^def requireKey(key: str, d: dict[str, Any]):$/;"	f
 resourcegrp	bigbang.py	/^resourcegrp = shortname + "rg"$/;"	v
 retryHttp	bigbang.py	/^def retryHttp(f, maxretries: int, descr: str) -> requests.Response:$/;"	f
 retryRun	run.py	/^def retryRun(f: Callable[[], subprocess.CompletedProcess], maxretries: int,$/;"	f
@@ -199,15 +194,13 @@ templatedir	bigbang.py	/^templatedir   = where("templates")$/;"	v
 templates	bigbang.py	/^templates = {}$/;"	v
 tfdir	bigbang.py	/^tfdir = where(target)$/;"	v
 tfvars	bigbang.py	/^tfvars        = "variables.tf" # basename only, no path!$/;"	v
-tlscoord	bigbang.py	/^    tlscoord     = myvars[tlscoordlabel]$/;"	v
 tlscoordlabel	bigbang.py	/^tlscoordlabel = "RequireCoordTls"$/;"	v
-tlsinternal	bigbang.py	/^    tlsinternal  = myvars[tlsinternallabel]$/;"	v
 tlsinternallabel	bigbang.py	/^tlsinternallabel = "RequireInternalTls"$/;"	v
 tmpdir	bigbang.py	/^tmpdir        = "\/tmp"$/;"	v
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds
 tpchcat	bigbang.py	/^tpchcat       = "tpch"$/;"	v
-tpchschema	bigbang.py	/^tpchschema    = "sf100"$/;"	v
+tpchschema	bigbang.py	/^tpchschema    = "tiny"$/;"	v
 trinopass	bigbang.py	/^trinopass     = "test"$/;"	v
 trinouser	bigbang.py	/^trinouser     = "starburst_service"$/;"	v
 updateKubeConfig	bigbang.py	/^def updateKubeConfig() -> None:$/;"	f
