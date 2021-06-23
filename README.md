@@ -80,6 +80,13 @@ And the following brew casks, like this:
 brew install --cask google-cloud-sdk
 ```
 
+__NB__: Some of these packages, including google-cloud-sdk, will require you to
+add things to your .zshrc, .bashrc, .zprofile, .profile or other dotfiles in
+order to ensure that the right binaries are in your PATH, and to ensure that
+you have tab-completion on the binaries. _Make sure that you pay attention to
+the messages that accompany each install_, and please install every package one
+at a time.
+
 ### AWS
 
 After the installation of `awscli`, you now need to configure it, by running
@@ -88,18 +95,18 @@ Secret Access Key, your default region, and your default output format (which
 should probably be json). This will create a `~/.aws` directory, containing a
 `config` file with your default region and output format, and a `.credentials`
 file containing your access key ID and secret access key. You'll never need to
-change the `.credentials` file, but you will need to update the `config` file if
-you want to work in a different region.
+change the `.credentials` file, but you will need to update the `config` file
+if you want to work in a different region.
 
 See [this link](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config)
 for the full instructions.
 
 ### Azure
 
-After the installation of `azure-cli`, you now need to configure, by running `az
-configure`, and you'll need to login, by running `az login`. When you log in, it
-will fire up your default browser and have you log into the Azure Portal with
-your Microsoft credentials. After running these commands you'll have a
+After the installation of `azure-cli`, you now need to configure, by running
+`az configure`, and you'll need to login, by running `az login`. When you log
+in, it will fire up your default browser and have you log into the Azure Portal
+with your Microsoft credentials. After running these commands you'll have a
 `~/.azure` directory created with your settings and access tokens inside.
 
 See [this link](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-macos)
@@ -107,10 +114,9 @@ for the full instructions.
 
 ### GCloud
 
-After the installation of the `gcloud`, `gsutil` and the rest of the Google
-Cloud SDK, you'll need to configure it by running `gcloud init`. Once that is
-completed you'll have a `~/.config/gcloud` directory with all of the
-configuration inside of it.
+After the installation of the `google-cloud-sdk` cask, you'll need to configure
+it by running `gcloud init`. Once that is completed you'll have a
+`~/.config/gcloud` directory with all of the configuration inside of it.
 
 See [this link](https://blog.petehouston.com/install-and-configure-google-cloud-sdk-using-homebrew/)
 for the full instructions.
@@ -120,9 +126,9 @@ NB: For GCP you will also need to set your project name in my-vars.html.
 ### Python
 
 Next, you will need python 3.9.1 or higher. On a Mac, the built-in ("system")
-zversion of python that comes with the OS is 2.7.x, which obviously won't do. If
-you type `which python`, you'll probably get `/usr/bin/python`. You can check
-the version with `python -V`. You'll probably see something like this:
+zversion of python that comes with the OS is 2.7.x, which obviously won't do.
+If you type `which python`, you'll probably get `/usr/bin/python`. You can
+check the version with `python -V`. You'll probably see something like this:
 
 ```
 ~ % which python

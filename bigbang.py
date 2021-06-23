@@ -151,35 +151,49 @@ try:
 except IOError as e:
     sys.exit(f"Couldn't read user variables file {e}")
 
+def requireKey(key: str, d: dict[str, Any]):
+    if not key in d:
+        raise KeyError(key)
+
 try:
-    # Allow a commandline override of what's in the vars file
+    # Email
+    email        = myvars["Email"]
+
+    # Target
     if ns.target == None:
         target = myvars[targetlabel]
     else:
         target = ns.target
         myvars[targetlabel] = target
+    assert target == myvars[targetlabel]
 
+    # Zone
     if ns.zone == None:
         zone = myvars["Zone"]
     else:
         zone = ns.zone
         myvars["Zone"] = zone
-
-    assert target == myvars[targetlabel]
     assert zone == myvars["Zone"]
 
-    # Things that can't be overridden on commandline
-    email        = myvars["Email"]
-    chartversion = myvars[chartvlabel]
-    nodeCount    = myvars[nodecountlabel]
+    chartversion = myvars[chartvlabel] # ChartVersion
+    nodeCount    = myvars[nodecountlabel] # NodeCount
+    tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
+    tlsinternal  = myvars[tlsinternallabel] # RequireInternalTls
+    authnldap    = myvars[authnldaplabel] # AuthNLdap
+    requireKey("AWSInstanceType", myvars)
+    requireKey("AWSSmallInstanceType", myvars)
+    requireKey("AzureVMType", myvars)
+    requireKey("AzureSmallVMType", myvars)
+    requireKey("GCPMachineType", myvars)
+    requireKey("GCPSmallMachineType", myvars)
     repo         = myvars["HelmRepo"]
+    requireKey("HelmRegistry", myvars)
     repoloc      = myvars["HelmRepoLocation"]
-    tlscoord     = myvars[tlscoordlabel]
-    tlsinternal  = myvars[tlsinternallabel]
-    authnldap    = myvars[authnldaplabel]
-
+    requireKey("GcpProjectId", myvars)
 except KeyError as e:
-    sys.exit(f"Unspecified configuration parameter {e} in {myvarsbf}")
+    print(f"Unspecified configuration parameter {e} in {myvarsf}.")
+    sys.exit(f"Consider running a git diff {myvarsf} to ensure no "
+            "parameters have been eliminated.")
 
 # Set the region and zone from the location. We assume zone is more precise and
 # infer the region from the zone.
@@ -198,7 +212,7 @@ def getRegionFromZone(zone: str) -> str:
         if awsregion != region:
             sys.exit(textwrap.dedent(f"""\
                     Region {awsregion} specified in your {awsconfig} doesn't
-                    match region {region} set in your {myvarsbf} file. Cannot
+                    match region {region} set in your {myvarsf} file. Cannot
                     continue execution. Please ensure these match and
                     re-run."""))
 
@@ -210,7 +224,7 @@ region = getRegionFromZone(zone)
 # NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
 emailparts = email.split('@')
 if not (len(emailparts) == 2 and "." in emailparts[1]):
-    sys.exit(f"Email specified in {myvarsbf} must be a full email address")
+    sys.exit(f"Email specified in {myvarsf} must be a full email address")
 username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035
 codelen = min(3, len(username))
 code = username[:codelen]
@@ -229,7 +243,7 @@ elif target == "gcp":
     smallInstanceType = myvars["GCPSmallMachineType"]
 else:
     sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
-            "{c}".format(t = target, tl = targetlabel, m = myvarsbf,
+            "{c}".format(t = target, tl = targetlabel, m = myvarsf,
                 c = ", ".join(clouds)))
 
 # Terraform files are in a directory named for target
@@ -241,14 +255,14 @@ for d in [templatedir, tmpdir, tfdir]:
 # Check the format of the chart version
 components = chartversion.split('.')
 if len(components) != 3 or not all(map(str.isdigit, components)):
-    sys.exit(f"The {chartvlabel} in {myvarsbf} field must be of the form "
+    sys.exit(f"The {chartvlabel} in {myvarsf} field must be of the form "
             f"x.y.z, all numbers; {chartversion} is not of a valid form")
 
 # The yaml files for the coordinator and worker specify they should be on
 # different nodes, so we need a 2-node cluster at minimum.
 if nodeCount < 2:
     sys.exit(f"Must have at least {minnodes} nodes; {nodeCount} set for "
-            f"{nodecountlabel} in {myvarsbf}.")
+            f"{nodecountlabel} in {myvarsf}.")
 
 if tlsinternal and not tlscoord:
     sys.exit(f"{tlsinternallabel} requires {tlscoordlabel} to be enabled")
