@@ -14,7 +14,7 @@ resource "aws_security_group" "rds_sg" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = module.vpc.private_subnets_cidr_blocks
+    cidr_blocks = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
   }
 
   tags = merge(var.tags, { Name = "rds_sg" })

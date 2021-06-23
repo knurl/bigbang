@@ -153,9 +153,22 @@ except IOError as e:
 
 try:
     # Allow a commandline override of what's in the vars file
-    target = myvars[targetlabel] if ns.target == None else ns.target
-    zone = myvars["Zone"] if ns.zone == None else ns.zone
+    if ns.target == None:
+        target = myvars[targetlabel]
+    else:
+        target = ns.target
+        myvars[targetlabel] = target
 
+    if ns.zone == None:
+        zone = myvars["Zone"]
+    else:
+        zone = ns.zone
+        myvars["Zone"] = zone
+
+    assert target == myvars[targetlabel]
+    assert zone == myvars["Zone"]
+
+    # Things that can't be overridden on commandline
     email        = myvars["Email"]
     chartversion = myvars[chartvlabel]
     nodeCount    = myvars[nodecountlabel]

@@ -114,6 +114,7 @@ instanceType	bigbang.py	/^    instanceType = myvars["AWSInstanceType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["AzureVMType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["GCPMachineType"]$/;"	v
 isTerraformSettled	bigbang.py	/^def isTerraformSettled(tgtResource: str = None) -> bool:$/;"	f
+isTokenFresh	bigbang.py	/^    def isTokenFresh(self, awsAccess: str) -> bool:$/;"	m	class:AwsCreds
 issueStarburstCommand	bigbang.py	/^def issueStarburstCommand(command: str, verbose = False) -> list:$/;"	f
 keystorepass	bigbang.py	/^keystorepass  = "test123"$/;"	v
 killAllTerminatingPods	bigbang.py	/^def killAllTerminatingPods() -> None:$/;"	f
@@ -206,13 +207,13 @@ tmpdir	bigbang.py	/^tmpdir        = "\/tmp"$/;"	v
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds
 tpchcat	bigbang.py	/^tpchcat       = "tpch"$/;"	v
-tpchschema	bigbang.py	/^tpchschema    = "tiny"$/;"	v
+tpchschema	bigbang.py	/^tpchschema    = "sf100"$/;"	v
 trinopass	bigbang.py	/^trinopass     = "test"$/;"	v
 trinouser	bigbang.py	/^trinouser     = "starburst_service"$/;"	v
 updateKubeConfig	bigbang.py	/^def updateKubeConfig() -> None:$/;"	f
 username	bigbang.py	/^username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035$/;"	v
 w	bigbang.py	/^        w = announceReady(env["bastion_address"])$/;"	v
-w	bigbang.py	/^    w = svcStart(creds, ns.skip_cluster_start, ns.tunnel_only, ns.dont_load, ns.debug)$/;"	v
+w	bigbang.py	/^    w = svcStart(creds, ns.skip_cluster_start, ns.tunnel_only, ns.dont_load,$/;"	v
 w	bigbang.py	/^w = []$/;"	v
 waitUntilApiServerResponding	bigbang.py	/^def waitUntilApiServerResponding() -> float:$/;"	f
 waitUntilDeploymentsAvail	bigbang.py	/^        -> float:$/;"	f

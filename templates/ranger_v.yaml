@@ -50,6 +50,7 @@ usersync:
     RANGER__SYNC_LDAP_BIND_PASSWORD: "admin"
     RANGER__SYNC_LDAP_SEARCH_BASE: "dc=az,dc=starburstdata,dc=net"
     RANGER__SYNC_LDAP_USER_SEARCH_BASE: "ou=People,dc=az,dc=starburstdata,dc=net"
+    RANGER__SYNC_LDAP_USER_NAME_ATTRIBUTE: "uid"
     RANGER__SYNC_LDAP_USER_OBJECT_CLASS: "inetOrgPerson"
     RANGER__SYNC_GROUP_SEARCH_ENABLED: "true"
     RANGER__SYNC_GROUP_USER_MAP_SYNC_ENABLED: "true"
