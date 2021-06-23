@@ -14,13 +14,13 @@ Target: aws
 # XXX Choose something appropriate for the cloud you've selected above.
 # This value can be overridden with -z flag on commandline
 #
-#Zone: eu-west-3 # AWS - Paris, France, EU
 Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
-#Zone: francecentral # Azure - Paris, France, EU
+#Zone: eu-west-3 # AWS - Paris, France, EU
 #Zone: uksouth # Azure - London, UK, EU
-#Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
+#Zone: francecentral # Azure - Paris, France, EU
 #Zone: europe-west2-b # GCP - London, UK, EU
+#Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
@@ -39,11 +39,11 @@ RequireInternalTls: False
 AuthNLdap: True
 
 # instance types for AWS and Azure
-AWSInstanceType: m5.16xlarge
+AWSInstanceType: m5.8xlarge
 AWSSmallInstanceType: m5.large
-AzureVMType: Standard_E32a_v4
+AzureVMType: Standard_D32a_v4
 AzureSmallVMType: Standard_B4ms
-GCPMachineType: n2-standard-64
+GCPMachineType: n2-standard-32
 GCPSmallMachineType: n1-standard-1
 
 #

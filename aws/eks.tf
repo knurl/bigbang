@@ -2,7 +2,6 @@ resource "aws_security_group" "apiserver_sg" {
   name                   = "apiserver_sg"
   vpc_id                 = module.vpc.vpc_id
   revoke_rules_on_delete = true
-  tags                   = merge(var.tags, { Name = "apiserver_sg" })
 
   /* Allow access from any internal IP (including the worker nodes, and the
      bastion server) to the api server endpoint. */
@@ -28,6 +27,8 @@ resource "aws_security_group" "apiserver_sg" {
     protocol    = -1
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = merge(var.tags, { Name = "apiserver_sg" })
 }
 
 resource "aws_security_group" "worker_sg" {
