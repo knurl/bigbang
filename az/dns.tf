@@ -26,7 +26,7 @@ resource "azurerm_private_dns_a_record" "starburst_a_record" {
   zone_name           = azurerm_private_dns_zone.private_dns.name
   resource_group_name = azurerm_resource_group.rg.name
   ttl                 = 3600
-  records             = [local.starburst_address]
+  records             = [var.mc_stargate_enabled ? azurerm_linux_virtual_machine.bastion.private_ip_address : local.starburst_address]
   tags                = var.tags
 }
 
