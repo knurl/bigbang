@@ -5,21 +5,21 @@ Email: rob.anderson@starburstdata.com
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-Target: aws
+#Target: aws
 #Target: az
-#Target: gcp
+Target: gcp
 
 #
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
 # This value can be overridden with -z flag on commandline
 #
-Zone: eu-west-2 # AWS - London, UK, EU
+#Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: eu-west-3 # AWS - Paris, France, EU
 #Zone: uksouth # Azure - London, UK, EU
 #Zone: francecentral # Azure - Paris, France, EU
-#Zone: europe-west2-b # GCP - London, UK, EU
+Zone: europe-west2-b # GCP - London, UK, EU
 #Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
@@ -38,10 +38,16 @@ RequireInternalTls: False
 # Authenticate using LDAP. Implies RequireCoordTls.
 AuthNLdap: True
 
+# Multi-cloud Stargate mode
+MCStargate: False
+
+# Google project
+GcpProjectId: field-engineering-308119
+
 # instance types for AWS and Azure
 AWSInstanceType: m5.8xlarge
 AWSSmallInstanceType: m5.large
-AzureVMType: Standard_D32a_v4
+AzureVMType: Standard_E32a_v4
 AzureSmallVMType: Standard_B4ms
 GCPMachineType: n2-standard-32
 GCPSmallMachineType: n1-standard-1
@@ -52,9 +58,6 @@ GCPSmallMachineType: n1-standard-1
 HelmRepo: starburstdata
 HelmRegistry: harbor.starburstdata.net/starburstdata
 HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
-
-# Google project
-GcpProjectId: field-engineering-308119
 
 #####################
 # XXX IMPORTANT XXX #

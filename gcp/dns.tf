@@ -27,7 +27,7 @@ resource "google_dns_record_set" "starburst_a_record" {
   managed_zone = google_dns_managed_zone.private_zone.name
   name         = "starburst.az.starburstdata.net."
   type         = "A"
-  rrdatas      = [local.starburst_address]
+  rrdatas      = [var.mc_stargate_enabled ? google_compute_instance.bastion.network_interface.0.network_ip : local.starburst_address]
   ttl          = 3600
 }
 

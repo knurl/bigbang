@@ -66,8 +66,9 @@ awscreds      = os.path.expanduser("~/.aws/credentials")
 localhost     = "localhost"
 localhostip   = "127.0.0.1"
 domain        = "az.starburstdata.net"
-starbursthost = "starburst." + domain
-ldaphost      = "ldap." + domain
+starburstfqdn = "starburst." + domain
+ldapfqdn      = "ldap." + domain
+bastionfqdn   = "bastion." + domain
 keystorepass  = "test123"
 hostsf        = "/etc/hosts"
 patchbf       = "starburst-enterprise.diff"
@@ -189,12 +190,28 @@ try:
     repo         = myvars["HelmRepo"]
     requireKey("HelmRegistry", myvars)
     repoloc      = myvars["HelmRepoLocation"]
-    requireKey("GcpProjectId", myvars)
+    gcpproject   = myvars["GcpProjectId"]
+    mcstargate   = myvars["MCStargate"]
 except KeyError as e:
     print(f"Unspecified configuration parameter {e} in {myvarsf}.")
     sys.exit(f"Consider running a git diff {myvarsf} to ensure no "
             "parameters have been eliminated.")
 
+#
+# Email
+#
+# Verify the email looks right, and extract username from it
+# NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
+emailparts = email.split('@')
+if not (len(emailparts) == 2 and "." in emailparts[1]):
+    sys.exit(f"Email specified in {myvarsf} must be a full email address")
+username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035
+codelen = min(3, len(username))
+code = username[:codelen]
+
+#
+# Target, Zone
+#
 # Set the region and zone from the location. We assume zone is more precise and
 # infer the region from the zone.
 def getRegionFromZone(zone: str) -> str:
@@ -213,25 +230,15 @@ def getRegionFromZone(zone: str) -> str:
             sys.exit(textwrap.dedent(f"""\
                     Region {awsregion} specified in your {awsconfig} doesn't
                     match region {region} set in your {myvarsf} file. Cannot
-                    continue execution. Please ensure these match and
-                    re-run."""))
+                    continue. Please ensure these match and re-run."""))
 
     return region
 
 region = getRegionFromZone(zone)
 
-# Verify the email looks right, and extract username from it
-# NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
-emailparts = email.split('@')
-if not (len(emailparts) == 2 and "." in emailparts[1]):
-    sys.exit(f"Email specified in {myvarsf} must be a full email address")
-username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035
-codelen = min(3, len(username))
-code = username[:codelen]
-
 # Verify the cloud target is set up correctly Gather up other related items
 # based on which cloud target it is.
-#
+
 if target == "aws":
     instanceType = myvars["AWSInstanceType"]
     smallInstanceType = myvars["AWSSmallInstanceType"]
@@ -252,12 +259,17 @@ tf    = f"terraform -chdir={tfdir}"
 for d in [templatedir, tmpdir, tfdir]:
     assert writeableDir(d)
 
-# Check the format of the chart version
+#
+# ChartVersion.
+#
 components = chartversion.split('.')
 if len(components) != 3 or not all(map(str.isdigit, components)):
     sys.exit(f"The {chartvlabel} in {myvarsf} field must be of the form "
             f"x.y.z, all numbers; {chartversion} is not of a valid form")
 
+#
+# NodeCount
+#
 # The yaml files for the coordinator and worker specify they should be on
 # different nodes, so we need a 2-node cluster at minimum.
 if nodeCount < 2:
@@ -269,6 +281,18 @@ if tlsinternal and not tlscoord:
 
 if authnldap and not tlscoord:
     sys.exit(f"{authnldaplabel} requires {tlscoordlabel} to be enabled")
+
+#
+# GcpProjectId
+#
+if target == "gcp":
+    defaultproj = runCollect("gcloud config list --format "
+            "value(core.project)".split())
+    if gcpproject != defaultproj:
+        sys.exit(textwrap.dedent(f"""\
+                Default project ID {defaultproj} specified in your gcloud
+                config doesn't match project ID {gcpproject} set in your
+                {myvarsf} file. Cannot continue. Please run gcloud init."""))
 
 # Generate a unique octet for our subnet. Use that octet with the 'code' we
 # generated above as part of a short name we can use to mark resources we
@@ -642,7 +666,7 @@ def getStarburstUrl() -> str:
         # internal connections, then the cert will require us to use the
         # starburst hostname, as that is the only valid name in that cert.
         if not tlsinternal:
-            host = starbursthost
+            host = starburstfqdn
     return f"{scheme}://{host}:{port}"
 
 def loadBalancerResponding(service: str) -> bool:
@@ -844,7 +868,7 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
     if authnldap:
         assert tlscoord
         tun = Tunnel("ldaps", env["bastion_address"], getLclPort("ldaps"),
-                ldaphost, getRmtPort("ldaps"))
+                ldapfqdn, getRmtPort("ldaps"))
         tuns.append(tun)
 
     return tuns
@@ -950,7 +974,7 @@ def killAllTerminatingPods() -> None:
 # allow IPs to be explicitly set for load balancers, so we have to take a
 # different approach post-Terraform, which is to create a CNAME in Route 53
 # that references the (classic) LBs that AWS sets up.
-def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str, \
+def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str, bastionIp: str,\
         delete: bool = False) -> None:
     announce("{v} route53 entries for {s}".format(v = "Deleting" if delete else
         "Creating", s = ", ".join(services)))
@@ -962,6 +986,15 @@ def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str, \
     action = "DELETE" if delete else "UPSERT"
     for name, host in lbs.items():
         assert name in services
+
+        # If multi-cloud Stargate is enabled, then we want each worker to point
+        # to the bastion address, so we can pipe it to the next Starburst
+        # instance rather than to itself. We are actually pointing the
+        # Starburst FQDN to the bastion FQDN via a CNAME, then the bastion FQDN
+        # has an A record that points to the internal bastion IP.
+        if mcstargate and name == "starburst":
+            host = bastionfqdn
+
         batch["Changes"].append({
             "Action": action,
             "ResourceRecordSet": {
@@ -1010,7 +1043,7 @@ def startPortForwardToLBs(bastionIp: str, route53ZoneId: str = None) -> None:
     # aliases to our load-balancer DNS names.
     if target == "aws":
         assert route53ZoneId is not None
-        setRoute53Cname(lbs, route53ZoneId)
+        setRoute53Cname(lbs, route53ZoneId, bastionIp)
 
 class ApiError(Exception):
     pass
@@ -1274,7 +1307,7 @@ def helmInstallRelease(module: str, env: dict = {}, debug: bool = False)\
               "DBNameEventLogger":  dbevtlog,
               "DBPassword":         dbpwd,
               "KeystorePass":       keystorepass,
-              "StarburstHost":      starbursthost,
+              "StarburstHost":      starburstfqdn,
               "StarburstPort":      getRmtPort("starburst"),
               "StorageAccount":     storageacct,
               "TrinoUser":          trinouser,
@@ -1282,7 +1315,7 @@ def helmInstallRelease(module: str, env: dict = {}, debug: bool = False)\
               "mysql_port":         dbports["mysql"],
               "postgres_port":      dbports["postgres"] }
     if authnldap:
-        env["LdapUri"] = "ldaps://{h}:{p}".format(h = ldaphost, p =
+        env["LdapUri"] = "ldaps://{h}:{p}".format(h = ldapfqdn, p =
                 getRmtPort("ldaps"))
 
     # Parameterise the yaml file that configures the helm chart install. The
@@ -1628,7 +1661,8 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
             # to support specification of static IPs for load balancers.
             if target == "aws" and len(lbs) > 0:
                 assert len(lbs) == len(services)
-                setRoute53Cname(lbs, env["route53_zone_id"], delete = True)
+                setRoute53Cname(lbs, env["route53_zone_id"],
+                        env["bastion_address"], delete = True)
             helmUninstallAll()
             eraseBucketContents(env)
             announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
@@ -1752,7 +1786,7 @@ def buildLdapLauncher(fqdn: str) -> None:
         wh.write("sudo systemctl restart slapd\n")
 
         # Configure for LDAP clients
-        wh.write(f"echo URI ldaps://{ldaphost}:636 | sudo tee -a "
+        wh.write(f"echo URI ldaps://{ldapfqdn}:636 | sudo tee -a "
                 "/etc/ldap/ldap.conf\n")
         wh.write("echo TLS_CACERT /etc/ssl/certs/ca-certificates.crt | "
                 "sudo tee -a /etc/ldap/ldap.conf\n")
@@ -1868,22 +1902,22 @@ def checkEtcHosts() -> None:
                     continue
                 ip = cols[0]
                 hostname = cols[1]
-                if ip == localhostip and hostname == starbursthost:
+                if ip == localhostip and hostname == starburstfqdn:
                     return
 
-    print(f"For TLS-encryption to coordinator, you will need {starbursthost} "
+    print(f"For TLS-encryption to coordinator, you will need {starburstfqdn} "
             f"in {hostsf}.\nI can add this but I'll need to run this as sudo:")
-    cmd = f"echo {localhostip} {starbursthost} | sudo tee -a {hostsf}"
+    cmd = f"echo {localhostip} {starburstfqdn} | sudo tee -a {hostsf}"
     print(cmd)
     yn = input("Would you like me to run that with sudo? [y/N] -> ")
     if yn.lower() in ("y", "yes"):
         rc = runShell(cmd)
         if rc == 0:
-            print(f"Added {starbursthost} to {hostsf}.")
+            print(f"Added {starburstfqdn} to {hostsf}.")
             return
         else:
             print(f"Unable to write to {hostsf}. Try yourself?")
-    sys.exit(f"Script cannot continue without {starbursthost} in {hostsf}")
+    sys.exit(f"Script cannot continue without {starburstfqdn} in {hostsf}")
 
 announce("Verifying environment")
 getSecrets()
