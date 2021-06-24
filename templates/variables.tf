@@ -108,6 +108,10 @@ variable "ssh_public_key" {
   RSAKEY
 }
 
+variable "mc_stargate_enabled" {
+  default = "{{MCStargate}}" == "True" ? true : false
+}
+
 {% if Target == "az" %}
 #
 # Azure-specific stuff

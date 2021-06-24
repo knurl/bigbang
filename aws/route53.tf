@@ -16,7 +16,10 @@ resource "aws_route53_record" "ldap_a_record" {
   records = [aws_instance.ldaps.private_ip]
 }
 
-/*
- * TODO AWS Doesn't support specification of a static IP for the ELB
- * so we don't create records here for starburst or ranger
- */
+resource "aws_route53_record" "bastion_a_record" {
+  zone_id = aws_route53_zone.private_dns.zone_id
+  name    = "bastion"
+  type    = "A"
+  ttl     = "3600"
+  records = [aws_instance.bastion.private_ip]
+}
