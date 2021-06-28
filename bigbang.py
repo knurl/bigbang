@@ -181,12 +181,15 @@ try:
     tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
     tlsinternal  = myvars[tlsinternallabel] # RequireInternalTls
     authnldap    = myvars[authnldaplabel] # AuthNLdap
-    requireKey("AWSInstanceType", myvars)
-    requireKey("AWSSmallInstanceType", myvars)
-    requireKey("AzureVMType", myvars)
-    requireKey("AzureSmallVMType", myvars)
-    requireKey("GCPMachineType", myvars)
-    requireKey("GCPSmallMachineType", myvars)
+    requireKey("AwsInstanceType", myvars)
+    requireKey("AwsSmallInstanceType", myvars)
+    requireKey("AwsDbInstanceType", myvars)
+    requireKey("AzureVmType", myvars)
+    requireKey("AzureSmallVmType", myvars)
+    requireKey("AzureDbVmType", myvars)
+    requireKey("GcpMachineType", myvars)
+    requireKey("GcpSmallMachineType", myvars)
+    requireKey("GcpDbMachineType", myvars)
     repo         = myvars["HelmRepo"]
     requireKey("HelmRegistry", myvars)
     repoloc      = myvars["HelmRepoLocation"]
@@ -245,14 +248,17 @@ region = getRegionFromZone(zone)
 # items based on which cloud target it is.
 
 if target == "aws":
-    instanceType = myvars["AWSInstanceType"]
-    smallInstanceType = myvars["AWSSmallInstanceType"]
+    instanceType = myvars["AwsInstanceType"]
+    smallInstanceType = myvars["AwsSmallInstanceType"]
+    dbInstanceType = myvars["AwsDbInstanceType"]
 elif target == "az":
-    instanceType = myvars["AzureVMType"]
-    smallInstanceType = myvars["AzureSmallVMType"]
+    instanceType = myvars["AzureVmType"]
+    smallInstanceType = myvars["AzureSmallVmType"]
+    dbInstanceType = myvars["AzureDbVmType"]
 elif target == "gcp":
-    instanceType = myvars["GCPMachineType"]
-    smallInstanceType = myvars["GCPSmallMachineType"]
+    instanceType = myvars["GcpMachineType"]
+    smallInstanceType = myvars["GcpSmallMachineType"]
+    dbInstanceType = myvars["GcpDbMachineType"]
 else:
     sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
             "{c}".format(t = target, tl = targetlabel, m = myvarsf,
@@ -893,9 +899,9 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
 
 def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars | {
-            "SmallInstanceType": smallInstanceType,
             "BucketName":          bucket,
             "ClusterName":         clustname,
+            "DbInstanceType":      dbInstanceType,
             "DBName":              dbschema,
             "DBNameEventLogger":   dbevtlog,
             "DBPassword":          dbpwd,
@@ -906,6 +912,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
             "MyCIDR":              mySubnetCidr,
             "MyPublicIP":          getMyPublicIp(),
             "NodeCount":           nodeCount,
+            "SmallInstanceType":   smallInstanceType,
             "SshPublicKey":        getSshPublicKey(),
             "Region":              region,
             "ShortName":           shortname,
@@ -922,7 +929,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     if not skipClusterStart:
         announce("Starting terraform run")
         t = time.time()
-        runStdout(f"{tf} init -input=false -upgrade".split())
+        runStdout(f"{tf} init -input=false".split())
         runStdout(f"{tf} apply -auto-approve -input=false".split())
         announce("terraform run completed in " + time.strftime("%Hh%Mm%Ss",
             time.gmtime(time.time() - t)))

@@ -25,7 +25,7 @@ resource "aws_db_instance" "evtlog" {
   identifier               = var.evtlog_server_name
   engine                   = "postgres"
   allocated_storage        = 20
-  instance_class           = "db.m5.xlarge"
+  instance_class           = var.db_instance_type
   name                     = var.db_name_evtlog
   username                 = var.db_user
   password                 = var.db_password
@@ -40,7 +40,7 @@ resource "aws_db_instance" "postgres" {
   identifier               = var.postgres_server_name
   engine                   = "postgres"
   allocated_storage        = 20
-  instance_class           = "db.m5.xlarge"
+  instance_class           = var.db_instance_type
   name                     = var.db_name
   username                 = var.db_user
   password                 = var.db_password
@@ -55,7 +55,7 @@ resource "aws_db_instance" "mysql" {
   identifier               = var.mysql_server_name
   engine                   = "mysql"
   allocated_storage        = 20
-  instance_class           = "db.m5.xlarge"
+  instance_class           = var.db_instance_type
   name                     = var.db_name
   username                 = var.db_user
   password                 = var.db_password
