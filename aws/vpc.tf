@@ -2,12 +2,13 @@ data "aws_availability_zones" "available" {}
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "3.1.0"
+  version = "3.2.0"
 
   name = var.network_name
   cidr = var.my_cidr
 
   create_database_subnet_group = true
+  database_subnet_group_name   = "${var.network_name}-sg-db"
 
   azs              = data.aws_availability_zones.available.names
   private_subnets  = [for k in ["prv_a", "prv_b", "prv_c"] : module.subnet_addrs.network_cidr_blocks[k]]
@@ -32,6 +33,8 @@ module "vpc" {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"           = "1"
   }
+
+  tags = var.tags
 }
 
 resource "aws_key_pair" "key_pair" {

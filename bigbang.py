@@ -200,12 +200,17 @@ except KeyError as e:
 #
 # Email
 #
-# Verify the email looks right, and extract username from it
-# NB: username goes in GCP labels, and GCP requires labels to fit RFC-1035
+# Verify the email looks right, and extract username from it.
 emailparts = email.split('@')
 if not (len(emailparts) == 2 and "." in emailparts[1]):
-    sys.exit(f"Email specified in {myvarsf} must be a full email address")
-username = re.sub(r"[^a-zA-Z0-9]", "-", emailparts[0]).lower() # RFC-1035
+    sys.exit(f"Email specified in {myvarsf} must be a full email address.")
+# Google requires labels to follow RFC-1035 (which is used for DNS names).
+# Amazon and Azure tags are more forgiving, so allow more special chars.
+validchars = r"a-zA-Z0-9"
+if target in ("aws", "az"):
+    validchars += r"._/=+\-"
+invalidchars = r'[^' + validchars + r']'
+username = re.sub(invalidchars, "-", emailparts[0]).lower()
 codelen = min(3, len(username))
 code = username[:codelen]
 
@@ -236,8 +241,8 @@ def getRegionFromZone(zone: str) -> str:
 
 region = getRegionFromZone(zone)
 
-# Verify the cloud target is set up correctly Gather up other related items
-# based on which cloud target it is.
+# Verify the cloud target is set up correctly, and gather up other related
+# items based on which cloud target it is.
 
 if target == "aws":
     instanceType = myvars["AWSInstanceType"]
