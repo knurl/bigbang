@@ -34,6 +34,14 @@ variable "instance_type" {
   default = "{{InstanceType}}"
 }
 
+variable "small_instance_type" {
+  default = "{{SmallInstanceType}}"
+}
+
+variable "db_instance_type" {
+  default = "{{DbInstanceType}}"
+}
+
 variable "bastion_name" {
   default = "bastion-{{ShortName}}"
 }
@@ -44,10 +52,6 @@ variable "ldaps_name" {
 
 variable "ldaps_launch_script" {
   default = "{{LdapLaunchScript}}"
-}
-
-variable "small_instance_type" {
-  default = "{{SmallInstanceType}}"
 }
 
 variable "node_count" {
