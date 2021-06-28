@@ -1,25 +1,25 @@
 # Your email. Used to generate a unique code to mark your resources.
-Email: rob.anderson@starburstdata.com
+Email: rob.anderson@starburst.io
 
 # Cloud target.
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-#Target: aws
+Target: aws
 #Target: az
-Target: gcp
+#Target: gcp
 
 #
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
 # This value can be overridden with -z flag on commandline
 #
-#Zone: eu-west-2 # AWS - London, UK, EU
+Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: eu-west-3 # AWS - Paris, France, EU
 #Zone: uksouth # Azure - London, UK, EU
 #Zone: francecentral # Azure - Paris, France, EU
-Zone: europe-west2-b # GCP - London, UK, EU
+#Zone: europe-west2-b # GCP - London, UK, EU
 #Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
@@ -44,13 +44,15 @@ MCStargate: False
 # Google project
 GcpProjectId: field-engineering-308119
 
-# instance types for AWS and Azure
-AWSInstanceType: m5.8xlarge
+# node pool instance types - 16 vCPU / 64 GB RAM
+AWSInstanceType: m5.4xlarge
+AzureVMType: Standard_D16_v3
+GCPMachineType: n2-standard-16
+
+# smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM
 AWSSmallInstanceType: m5.large
-AzureVMType: Standard_E32a_v4
-AzureSmallVMType: Standard_B4ms
-GCPMachineType: n2-standard-32
-GCPSmallMachineType: n1-standard-1
+AzureSmallVMType: Standard_B2ms
+GCPSmallMachineType: e2-standard-2
 
 #
 # Helm repo information
