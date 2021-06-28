@@ -43,7 +43,7 @@ resource "azurerm_postgresql_server" "evtlog" {
   administrator_login          = var.db_user
   administrator_login_password = var.db_password
 
-  sku_name   = "GP_Gen5_2"
+  sku_name   = var.db_instance_type
   version    = "11"
   storage_mb = 20480
 
@@ -64,7 +64,7 @@ resource "azurerm_postgresql_server" "postgres" {
   administrator_login          = var.db_user
   administrator_login_password = var.db_password
 
-  sku_name   = "GP_Gen5_2"
+  sku_name   = var.db_instance_type
   version    = "11"
   storage_mb = 20480
 
@@ -85,7 +85,7 @@ resource "azurerm_mysql_server" "mysql" {
   administrator_login          = var.db_user
   administrator_login_password = var.db_password
 
-  sku_name   = "GP_Gen5_2"
+  sku_name   = var.db_instance_type
   version    = "5.6"
   storage_mb = 20480
 

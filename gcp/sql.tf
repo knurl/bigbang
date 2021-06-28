@@ -22,7 +22,7 @@ resource "google_sql_database_instance" "sql_evtlog" {
   deletion_protection = false
 
   settings {
-    tier              = "db-g1-small"
+    tier              = var.db_instance_type
     availability_type = "ZONAL"
 
     location_preference {
@@ -48,7 +48,7 @@ resource "google_sql_database_instance" "sql_postgres" {
   deletion_protection = false
 
   settings {
-    tier              = "db-g1-small"
+    tier              = var.db_instance_type
     availability_type = "ZONAL"
 
     location_preference {
@@ -74,7 +74,7 @@ resource "google_sql_database_instance" "sql_mysql" {
   deletion_protection = false
 
   settings {
-    tier              = "db-g1-small"
+    tier              = var.db_instance_type
     availability_type = "ZONAL"
 
     location_preference {
