@@ -1,0 +1,41 @@
+# Python program to validate an Email
+
+# import re module
+
+# re module provides support
+# for regular expressions
+import re
+
+# Make a regular expression
+# for validating an Email
+regex = r"(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*\")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9]))\.){3}(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9])|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])"
+
+# Define a function for
+# for validating an Email
+
+
+def check(email):
+	# pass the regular expression
+	# and the string in search() method
+	if re.search(regex, email) != None:
+		print("Valid Email")
+
+	else:
+		print("Invalid Email")
+
+# Driver Code
+if __name__ == '__main__':
+
+	# Enter the email
+	email = "ankitrai326@gmail.com"
+
+	# calling run function
+	check(email)
+
+	email = "my.ownsite@our-earth.org"
+	check(email)
+
+	email = "ankitrai326.com"
+	check(email)
+
+
