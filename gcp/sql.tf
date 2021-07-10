@@ -12,6 +12,7 @@ resource "random_id" "db_name_suffix" {
  * Create all of the database instances ("servers")
  */
 
+/*
 resource "google_sql_database_instance" "sql_evtlog" {
   name    = "${var.evtlog_server_name}-${random_id.db_name_suffix.hex}"
   region  = var.region
@@ -37,6 +38,7 @@ resource "google_sql_database_instance" "sql_evtlog" {
     user_labels = var.tags
   }
 }
+*/
 
 resource "google_sql_database_instance" "sql_postgres" {
   name    = "${var.postgres_server_name}-${random_id.db_name_suffix.hex}"
@@ -69,8 +71,11 @@ resource "google_sql_database_instance" "sql_mysql" {
   region  = var.region
   project = data.google_project.project.project_id
 
-  database_version    = "MYSQL_5_6"
-  depends_on          = [google_service_networking_connection.pvpc_peering]
+  database_version = "MYSQL_5_6"
+  depends_on = [
+    google_sql_database_instance.sql_postgres,
+    google_service_networking_connection.pvpc_peering
+  ]
   deletion_protection = false
 
   settings {
@@ -94,6 +99,7 @@ resource "google_sql_database_instance" "sql_mysql" {
  * Create the users who will access the databases.
  */
 
+/*
 resource "google_sql_user" "user_evtlog" {
   project    = data.google_project.project.project_id
   instance   = google_sql_database_instance.sql_evtlog.name
@@ -101,6 +107,7 @@ resource "google_sql_user" "user_evtlog" {
   password   = var.db_password
   depends_on = [google_sql_database_instance.sql_evtlog]
 }
+*/
 
 resource "google_sql_user" "user_postgres" {
   project    = data.google_project.project.project_id
@@ -125,10 +132,10 @@ resource "google_sql_user" "user_mysql" {
 resource "google_sql_database" "db_evtlog" {
   name       = var.db_name_evtlog
   project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_evtlog.name
+  instance   = google_sql_database_instance.sql_postgres.name
   charset    = var.charset
   collation  = "en_US.UTF8"
-  depends_on = [google_sql_user.user_evtlog]
+  depends_on = [google_sql_user.user_postgres]
 }
 
 resource "google_sql_database" "db_postgres" {

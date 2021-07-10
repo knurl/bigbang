@@ -19,7 +19,7 @@ output "ranger_address" {
 }
 
 output "evtlog_address" {
-  value = azurerm_postgresql_server.evtlog.fqdn
+  value = azurerm_postgresql_server.postgres.fqdn
 }
 
 output "postgres_address" {
