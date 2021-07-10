@@ -39,14 +39,13 @@ knownhosts    = os.path.expanduser("~/.ssh/known_hosts")
 tfvars        = "variables.tf" # basename only, no path!
 awsauthcm     = "aws-auth-cm.yaml" # basename only, no path!
 dbports       = { "mysql": 3306, "postgres": 5432 }
-tpchschema    = "tiny"
 tpchcat       = "tpch"
 hivecat       = "hive"
 syscat        = "system"
 evtlogcat     = "postgresqlel"
 bqcat         = "bigquery" # for now, connector doesn't support INSERT or CTAS
-remote_cats   = ["remote_hive", "remote_postgresql", "remote_mysql"]
-avoidcat      = [tpchcat, syscat, evtlogcat, bqcat] + remote_cats
+remote_cats   = {"remote_hive", "remote_postgresql", "remote_mysql"}
+avoidcat      = {tpchcat, syscat, evtlogcat, bqcat} | remote_cats
 trinouser     = "starburst_service"
 trinopass     = "test"
 dbschema      = "fdd"
@@ -77,6 +76,18 @@ ldapsetupbf   = "install-slapd.sh"
 ldapsetupf    = where(ldapsetupbf)
 ldaplaunchbf  = "ldaplaunch.sh"
 ldaplaunchf   = where(ldaplaunchbf)
+tpchbigschema = "sf10"
+tpchsmlschema = "tiny"
+minbucketsize = 1 << 12
+tpchbuckets   = {
+        "sf1000": 128,
+        "sf100": 64,
+        "sf10": 16,
+        "sf1": 4,
+        "tiny": 1
+        }
+assert tpchbigschema in tpchbuckets
+assert tpchsmlschema in tpchbuckets
 
 #
 # Secrets
@@ -101,18 +112,20 @@ p = argparse.ArgumentParser(description=
         to allow you to control the new setup from your laptop using a bastion
         server.""")
 
-p.add_argument('-d', '--debug', action="store_true",
-        help="Run in debug mode.")
 p.add_argument('-c', '--skip-cluster-start', action="store_true",
         help="Skip checking to see if cluster needs to be started.")
-p.add_argument('-u', '--tunnel-only', action="store_true",
-        help="Only start apiserv tunnel through bastion.")
+p.add_argument('-d', '--debug', action="store_true",
+        help="Run in debug mode.")
 p.add_argument('-e', '--empty-nodes', action="store_true",
         help="Unload k8s cluster only. Used with stop or restart.")
 p.add_argument('-l', '--dont-load', action="store_true",
         help="Don't load databases with tpch data.")
+p.add_argument('-r', '--drop-tables', action="store_true",
+        help="Drop all tables before loading with tpch data.")
 p.add_argument('-t', '--target', action="store",
         help="Force cloud target to specified value.")
+p.add_argument('-u', '--tunnel-only', action="store_true",
+        help="Only start apiserv tunnel through bastion.")
 p.add_argument('-z', '--zone', action="store",
         help="Force zone/region to specified value.")
 p.add_argument('command',
@@ -123,14 +136,17 @@ p.add_argument('command',
 
 ns = p.parse_args()
 
-if ns.skip_cluster_start and ns.command not in ("start", "restart"):
-    p.error("-c, --skip-cluster-start is only used with start")
-if ns.tunnel_only and ns.command != "start":
-    p.error("-u, --tunnel-only is only used with start")
-if ns.empty_nodes and ns.command not in ("stop", "restart"):
-    p.error("-e, --empty-nodes is only used with stop or restart")
-if ns.dont_load and ns.command not in ("start", "restart"):
-    p.error("-l, --dont-load is only used with start or restart")
+# Options which can only be used with start (or restart)
+if ns.command not in ("start", "restart"):
+    v = vars(ns)
+    for switch in {"dont_load", "skip_cluster_start", "drop_tables",
+            "tunnel_only"}:
+        if switch in v and v[switch] == True:
+            p.error(f"{switch} is only used with start (or restart)")
+
+# Options which can only be used with stop (or restart)
+if ns.command not in ("stop", "restart") and ns.empty_nodes:
+    p.error("empty_nodes is only used with stop or restart")
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -617,8 +633,8 @@ def waitUntilNodesReady(minnodes: int) -> float:
 def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:
     numer = 0
     denom = 0
-    ns = f" --namespace {namespace}" if namespace != None else ""
-    r = runTry(f"{kube}{ns} get po --no-headers".split())
+    namesp = f" --namespace {namespace}" if namespace != None else ""
+    r = runTry(f"{kube}{namesp} get po --no-headers".split())
     if r.returncode == 0:
         lines = r.stdout.splitlines()
         for line in lines:
@@ -648,8 +664,8 @@ def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
         -> float:
     numer = 0
     denom = 0
-    ns = f" --namespace {namespace}" if namespace != None else ""
-    r = runTry(f"{kube}{ns} get deployments --no-headers".split())
+    namesp = f" --namespace {namespace}" if namespace != None else ""
+    r = runTry(f"{kube}{namesp} get deployments --no-headers".split())
     if r.returncode == 0:
         lines = r.stdout.splitlines()
         for line in lines:
@@ -706,8 +722,8 @@ def loadBalancerResponding(service: str) -> bool:
 # in the case when the load balancers aren't yet ready. The caller needs to be
 # prepared for this possibility.
 def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:
-    ns = f" --namespace {namespace}" if namespace != None else ""
-    r = runTry(f"{kube}{ns} get svc -ojson".split() + services)
+    namesp = f" --namespace {namespace}" if namespace != None else ""
+    r = runTry(f"{kube}{namesp} get svc -ojson".split() + services)
     lbs: dict[str, str] = {}
     if r.returncode == 0:
         servs = json.loads(r.stdout)
@@ -1083,7 +1099,7 @@ def retryHttp(f, maxretries: int, descr: str) -> requests.Response:
             retries += 1
             stime <<= 1
 
-def issueStarburstCommand(command: str, verbose = False) -> list:
+def sendSql(command: str, verbose = False) -> list:
     httpmaxretries = 10
     if verbose: announceSqlStart(command)
     url = getStarburstUrl() + "/v1/statement"
@@ -1117,32 +1133,55 @@ def issueStarburstCommand(command: str, verbose = False) -> list:
         r = retryHttp(f, maxretries = httpmaxretries,
                 descr = f"GET nextUri [{command}]")
 
+def dropExistingTables(catalog: str, schema: str):
+    # verify the schema exists first
+    stable = sendSql(f"show schemas in {catalog}")
+    schemas = [s[0] for s in stable]
+    if schema not in schemas:
+        return
+
+    # look for existing tables
+    tab = sendSql(f"show tables in {catalog}.{schema}")
+    tables = [t[0] for t in tab]
+
+    threads = []
+    for table in tables:
+        c = f"drop table {catalog}.{schema}.{table}"
+        t = threading.Thread(target = sendSql, args = (c,True,))
+        threads.append(t)
+        t.start()
+    for t in threads:
+        t.join()
+
 def copySchemaTables(srcCatalog: str, srcSchema: str,
         dstCatalogs: list, dstSchema: str, hiveTarget: str):
     # fetch our source tables
-    stab = issueStarburstCommand(f"show tables in {srcCatalog}.{srcSchema}")
+    stab = sendSql(f"show tables in {srcCatalog}.{srcSchema}")
     srctables = [t[0] for t in stab]
+    assert srcSchema in tpchbuckets
+    numbuckets = tpchbuckets[srcSchema]
 
     threads = []
     for dstCatalog in dstCatalogs:
         # We never want to write data to these schemas!
-        if dstCatalog in avoidcat + [srcCatalog]: continue
+        if dstCatalog in avoidcat or dstCatalog == srcCatalog:
+            continue
 
         #
         # First, we need to make sure our 'dbschema' schema is found in every
         # database. Hive needs to be treated specially.
         #
-        stable = issueStarburstCommand(f"show schemas in {dstCatalog}")
+        stable = sendSql(f"show schemas in {dstCatalog}")
         schemas = [s[0] for s in stable]
         dsttables = []
         if dstSchema not in schemas:
             clause = " with (location = '{l}/{s}')".format(l = hiveTarget,
-                    s = dstSchema) if dstCatalog == "hive" else ""
-            issueStarburstCommand("create schema {c}.{s}{w}".format(c =
-                dstCatalog, s = dstSchema, w = clause), verbose = True)
+                    s = dstSchema) if dstCatalog == hivecat else ""
+            sendSql("create schema {c}.{s}{w}".format(c = dstCatalog, s =
+                dstSchema, w = clause), verbose = True)
         else:
-            dtab = issueStarburstCommand("show tables in {c}.{s}".format(c =
-                dstCatalog, s = dstSchema))
+            dtab = sendSql("show tables in {c}.{s}".format(c = dstCatalog, s =
+                dstSchema))
             dsttables = [d[0] for d in dtab]
 
         #
@@ -1150,13 +1189,31 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
         #
         for srctable in srctables:
             if srctable not in dsttables:
-                c = f"create table {dstCatalog}.{dstSchema}.{srctable} as " \
-                        f"select * from {srcCatalog}.{srcSchema}.{srctable}"
+                withc = ""
+                if dstCatalog == hivecat:
+                    bucketed_by = []
+
+                    if srctable == 'lineitem':
+                        bucketed_by = ['orderkey']
+                    elif srctable == 'orders':
+                        bucketed_by = ['custkey']
+                    elif srctable == 'customer':
+                        bucketed_by = ['custkey']
+
+                    if len(bucketed_by) > 0:
+                        bucketc = "bucketed_by = ARRAY{b}, " \
+                                "bucket_count = {c}".format(b =
+                                        str(bucketed_by), c = numbuckets)
+                        withc = " with (" + bucketc + ")"
+
+                c = f"create table {dstCatalog}.{dstSchema}.{srctable}"\
+                        f"{withc} as select * from "\
+                        f"{srcCatalog}.{srcSchema}.{srctable}"
+
             else:
                 c = f"select count(*) from {dstCatalog}.{dstSchema}.{srctable}"
 
-            t = threading.Thread(target = issueStarburstCommand, args =
-                    (c,True,))
+            t = threading.Thread(target = sendSql, args = (c,True,))
             threads.append(t)
             t.start()
 
@@ -1187,21 +1244,32 @@ def eraseBucketContents(env: dict):
         except CalledProcessError as e:
             print(f"Unable to erase bucket {bucket} (already empty?)")
 
+def unloadDatabases():
+    ctab = sendSql("show catalogs")
+    catalogs = [c[0] for c in ctab if c[0] not in avoidcat]
+    announce("dropping tables in {}".format(", ".join(catalogs)))
+    for catalog in catalogs:
+        dropExistingTables(catalog, dbschema)
+
 def loadDatabases(hive_location):
     if target == "aws":
         hive_location = f"s3://{bucket}"
     elif target == "az":
         hive_location = f"abfs://{bucket}@{hive_location}"
 
-    # First copy from tpch to hive...
+    # First copy tpch large scale set to hive...
     announce(f"loading/verifying tables in {hivecat}")
-    copySchemaTables(tpchcat, tpchschema, [hivecat], dbschema, hive_location)
+    copySchemaTables(tpchcat, tpchbigschema, [hivecat], dbschema,
+            hive_location)
 
-    # Then copy from hive to everywhere in parallel
-    ctab = issueStarburstCommand("show catalogs")
-    dstCatalogs = [c[0] for c in ctab if c[0] not in avoidcat + [hivecat]]
+    # Then copy tpch small scale set to everywhere else
+    ctab = sendSql("show catalogs")
+    dstCatalogs = [c[0] for c in ctab if c[0] not in avoidcat | {hivecat}]
     announce("loading/verifying tables in {}".format(", ".join(dstCatalogs)))
-    copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema, "")
+    if tpchbigschema == tpchsmlschema:
+        copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema, "")
+    else:
+        copySchemaTables(tpchcat, tpchsmlschema, dstCatalogs, dbschema, "")
 
 def installSecrets(secrets: dict) -> dict:
     env = {}
@@ -1632,7 +1700,7 @@ def announceReady(bastionIp: str) -> list:
     return [getStarburstUrl() + "/ui/insights", who, f"Bastion: {bastionIp}"]
 
 def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
-        tunnelOnly: bool = False, awscreds: AwsCreds = None, dontLoad: bool =
+        tunnelOnly: bool = False, dropTables: bool = False, dontLoad: bool =
         False, debug: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the cluster.
     # This will create the control plane and workers.
@@ -1645,6 +1713,8 @@ def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
             env |= creds.toDict()
         helmInstallAll(env, debug)
         startPortForwardToLBs(env["bastion_address"], zid)
+        if dropTables:
+            unloadDatabases()
         if not dontLoad:
             loadDatabases(env["object_address"])
 
@@ -1946,8 +2016,8 @@ if ns.command in ("stop", "restart"):
     svcStop(ns.empty_nodes)
 
 if ns.command in ("start", "restart"):
-    w = svcStart(creds, ns.skip_cluster_start, ns.tunnel_only, ns.dont_load,
-            ns.debug)
+    w = svcStart(creds, ns.skip_cluster_start, ns.tunnel_only, ns.drop_tables,
+            ns.dont_load, ns.debug)
     started = True
     announceBox(f"Your {rsaPub} public key has been installed into the "
             "bastion server, so you can ssh there now (user 'ubuntu').")

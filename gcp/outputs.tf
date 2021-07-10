@@ -19,7 +19,7 @@ output "ranger_address" {
 }
 
 output "evtlog_address" {
-  value = google_sql_database_instance.sql_evtlog.private_ip_address
+  value = google_sql_database_instance.sql_postgres.private_ip_address
 }
 
 output "postgres_address" {

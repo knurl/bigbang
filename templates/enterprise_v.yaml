@@ -46,10 +46,12 @@ coordinator:
     properties:
       config.properties: |
         coordinator=true
+        colocated-joins-enabled=true
         node-scheduler.include-coordinator=false
         http-server.http.port=8080
         discovery-server.enabled=true
         http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
+        task.writer-count = 8
         # TLS everywhere
         {% if RequireInternalTls %}
         http-server.http.enabled=false
@@ -216,6 +218,8 @@ catalogs:
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
+    hive.storage-format=PARQUET
+    hive.compression-codec=SNAPPY
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
