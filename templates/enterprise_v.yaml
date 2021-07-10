@@ -229,7 +229,7 @@ catalogs:
     {% endif %}
   mysql: |
     connector.name=mysql
-    connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/
+    connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/?serverTimezone=UTC
     connection-user={{mysql_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
