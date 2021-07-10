@@ -24,7 +24,7 @@ Zone: uksouth # Azure - London, UK, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 358.0.0
+ChartVersion: 359.0.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 5
