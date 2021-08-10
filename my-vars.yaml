@@ -5,8 +5,8 @@ Email: rob.anderson@starburst.io
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-#Target: aws
-Target: az
+Target: aws
+#Target: az
 #Target: gcp
 
 #
@@ -16,8 +16,8 @@ Target: az
 #
 #Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
-#Zone: eu-west-3 # AWS - Paris, France, EU
-Zone: uksouth # Azure - London, UK, EU
+Zone: eu-west-3 # AWS - Paris, France, EU
+#Zone: uksouth # Azure - London, UK, EU
 #Zone: francecentral # Azure - Paris, France, EU
 #Zone: europe-west2-b # GCP - London, UK, EU
 #Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
