@@ -1325,12 +1325,21 @@ def ensureHelmRepoSetUp(repo: str) -> None:
         repos = [x["name"] for x in json.loads(r.stdout)]
         if repo in repos:
             announce(f"Upgrading repo {repo}")
-            helm("repo update")
-            return
+            # Unfortunately, helm repo update returns a 0 error code even when
+            # it fails. So we actually have to collect the output and look to
+            # see if it failed. :-( If it fails, then just remove the repo and
+            # re-install it.
+            output = helmGet("repo update")
+            if "Unable" not in output:
+                print("Upgrade of repo succeeded")
+                return
+
+            announce(f"Update of repo failed. Removing repo {repo}")
+            helm(f"repo remove {repo}")
 
     try:
-        helm(f"repo add --username {repouser} --password "
-            f"{repopass} {repo} {repoloc}")
+        helm(f"repo add --username {repouser} --password {repopass} {repo} "
+                f"{repoloc}")
     except CalledProcessError as e:
         print("Could not install (or verify installation of) "
                 f"{repo} at {repoloc}")
