@@ -5,9 +5,9 @@ Email: rob.anderson@starburst.io
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-Target: aws
+#Target: aws
 #Target: az
-#Target: gcp
+Target: gcp
 
 #
 # The zone/region/location you want to run in.
@@ -16,15 +16,15 @@ Target: aws
 #
 #Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
-Zone: eu-west-3 # AWS - Paris, France, EU
+#Zone: eu-west-3 # AWS - Paris, France, EU
 #Zone: uksouth # Azure - London, UK, EU
 #Zone: francecentral # Azure - Paris, France, EU
 #Zone: europe-west2-b # GCP - London, UK, EU
-#Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
+Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 359.0.0
+ChartVersion: 360.2.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 5
@@ -55,9 +55,9 @@ AzureSmallVmType: Standard_B2ms
 GcpSmallMachineType: e2-standard-2
 
 # DB instance types
-AwsDbInstanceType: db.m5.xlarge
-AzureDbVmType: GP_Gen5_2
-GcpDbMachineType: db-g1-small
+AwsDbInstanceType: db.m5.8xlarge
+AzureDbVmType: GP_Gen5_24
+GcpDbMachineType: db-custom-32-122880
 
 #
 # Helm repo information
