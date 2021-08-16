@@ -74,8 +74,8 @@ ldapsetupbf   = "install-slapd.sh"
 ldapsetupf    = where(ldapsetupbf)
 ldaplaunchbf  = "ldaplaunch.sh"
 ldaplaunchf   = where(ldaplaunchbf)
-tpchbigschema = "tiny"
-tpchsmlschema = "tiny"
+tpchbigschema = "sf1"
+tpchsmlschema = "sf1"
 minbucketsize = 1 << 12
 tpchbuckets   = {
         "sf1000": 128,
@@ -1260,17 +1260,23 @@ def loadDatabases(hive_location):
 
     # First copy tpch large scale set to hive...
     announce(f"loading/verifying tables in {hivecat}")
+    t = time.time()
     copySchemaTables(tpchcat, tpchbigschema, [hivecat], dbschema,
             hive_location)
+    announce("hive table loading/verifying done in " +
+            time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - t)))
 
     # Then copy tpch small scale set to everywhere else
     ctab = sendSql("show catalogs")
     dstCatalogs = [c[0] for c in ctab if c[0] not in avoidcat | {hivecat}]
     announce("loading/verifying tables in {}".format(", ".join(dstCatalogs)))
+    t = time.time()
     if tpchbigschema == tpchsmlschema:
         copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema, "")
     else:
         copySchemaTables(tpchcat, tpchsmlschema, dstCatalogs, dbschema, "")
+    announce("Loading/verifying of other tables done in " +
+            time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - t)))
 
 def installSecrets(secrets: dict) -> dict:
     env = {}
