@@ -120,7 +120,7 @@ instanceType	bigbang.py	/^    instanceType = myvars["GcpMachineType"]$/;"	v
 invalidchars	bigbang.py	/^invalidchars = r'[^' + validchars + r']'$/;"	v
 isTerraformSettled	bigbang.py	/^def isTerraformSettled(tgtResource: str = None) -> bool:$/;"	f
 isTokenFresh	bigbang.py	/^    def isTokenFresh(self, awsAccess: str) -> bool:$/;"	m	class:AwsCreds
-keystorepass	bigbang.py	/^keystorepass  = "test123"$/;"	v
+keystorepass	bigbang.py	/^keystorepass  = "test"$/;"	v
 killAllTerminatingPods	bigbang.py	/^def killAllTerminatingPods() -> None:$/;"	f
 knownhosts	bigbang.py	/^knownhosts    = os.path.expanduser("~\/.ssh\/known_hosts")$/;"	v
 kube	bigbang.py	/^kube          = "kubectl"$/;"	v
@@ -152,8 +152,6 @@ ns	bigbang.py	/^ns = p.parse_args()$/;"	v
 octet	bigbang.py	/^octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256$/;"	v
 p	bigbang.py	/^p = argparse.ArgumentParser(description=$/;"	v
 parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,$/;"	f
-patchbf	bigbang.py	/^patchbf       = "starburst-enterprise.diff"$/;"	v
-patchf	bigbang.py	/^patchf        = where(patchbf)$/;"	v
 planWorkerSize	bigbang.py	/^def planWorkerSize() -> dict:$/;"	f
 portoffset	bigbang.py	/^portoffset = { "aws": 0, "az": 1, "gcp": 2 }$/;"	v
 readableDir	bigbang.py	/^def readableDir(p):$/;"	f
@@ -208,7 +206,7 @@ tlsinternallabel	bigbang.py	/^tlsinternallabel = "RequireInternalTls"$/;"	v
 tmpdir	bigbang.py	/^tmpdir        = "\/tmp"$/;"	v
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds
-tpchbigschema	bigbang.py	/^tpchbigschema = "sf10"$/;"	v
+tpchbigschema	bigbang.py	/^tpchbigschema = "tiny"$/;"	v
 tpchbuckets	bigbang.py	/^tpchbuckets   = {$/;"	v
 tpchcat	bigbang.py	/^tpchcat       = "tpch"$/;"	v
 tpchsmlschema	bigbang.py	/^tpchsmlschema = "tiny"$/;"	v
