@@ -74,8 +74,8 @@ ldapsetupbf   = "install-slapd.sh"
 ldapsetupf    = where(ldapsetupbf)
 ldaplaunchbf  = "ldaplaunch.sh"
 ldaplaunchf   = where(ldaplaunchbf)
-tpchbigschema = "sf1"
-tpchsmlschema = "sf1"
+tpchbigschema = "tiny"
+tpchsmlschema = "tiny"
 minbucketsize = 1 << 12
 tpchbuckets   = {
         "sf1000": 128,
