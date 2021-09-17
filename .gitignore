@@ -18,3 +18,4 @@ gcp/key.json
 *.swp
 *.info
 commit
+*privkey.pem
