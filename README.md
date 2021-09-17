@@ -155,3 +155,12 @@ Then once you've got that installed, you should install the required python
 libraries using python itself, like this:
 
 `python -m pip install jinja2 pyyaml psutil requests`
+
+## Other
+
+Bigbang makes heavy use of Unicode characters for representing useful visual
+elements such as arrows and progress meters. Users are strongly advised to use
+a monospace font with a full representation of Plane 0, which includes the
+arrows (U+2500–U+257F) and box-drawing characters (U+2500–U+257F). I highly
+recommend [Iosevka](https://en.wikipedia.org/wiki/Iosevka), which renders
+beautifully.
