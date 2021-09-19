@@ -46,6 +46,18 @@ variable "bastion_name" {
   default = "bastion-{{ShortName}}"
 }
 
+variable "bastion_fw_ingress" {
+  {% if DownstreamSG %}
+  default = ["{{MyPublicIP}}/32", "{{UpstrBastion}}"]
+  {% else %}
+  default = ["{{MyPublicIP}}/32"]
+  {% endif %}
+}
+
+variable "upstream_stargate" {
+  default = "{{UpstreamSG}}" == "True" ? true : false
+}
+
 variable "ldaps_name" {
   default = "ldaps-{{ShortName}}"
 }
@@ -70,8 +82,16 @@ variable "postgres_server_name" {
   default = "postgres-server-{{ShortName}}"
 }
 
+variable "postgresql_version" {
+  default = "11"
+}
+
 variable "mysql_server_name" {
   default = "mysql-server-{{ShortName}}"
+}
+
+variable "mysql_version" {
+  default = "8.0"
 }
 
 variable "db_name" {
@@ -88,6 +108,10 @@ variable "db_user" {
 
 variable "db_password" {
   default = "{{DBPassword}}"
+}
+
+variable "redshift_cluster_name" {
+  default = "redshift-cluster-{{ShortName}}"
 }
 
 variable "charset" {
@@ -112,12 +136,7 @@ variable "ssh_public_key" {
   RSAKEY
 }
 
-variable "mc_stargate_enabled" {
-  default = "{{MCStargate}}" == "True" ? true : false
-}
-
 {% if Target == "az" %}
-#
 # Azure-specific stuff
 #
 variable "storage_account" {

@@ -26,6 +26,10 @@ output "mysql_address" {
   value = aws_db_instance.mysql.address
 }
 
+output "redshift_endpoint" {
+  value = aws_redshift_cluster.redshift.endpoint
+}
+
 output "object_address" {
   value = aws_s3_bucket.s3_bucket.bucket_regional_domain_name
 }

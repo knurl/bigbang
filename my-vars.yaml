@@ -38,16 +38,10 @@ RequireInternalTls: False
 # Authenticate using LDAP. Implies RequireCoordTls.
 AuthNLdap: True
 
-# Multi-cloud Stargate mode
-MCStargate: False
-
-# Google project
-GcpProjectId: field-engineering-308119
-
-# node pool instance types - 16 vCPU / 64 GB RAM
-AwsInstanceType: m5.4xlarge
-AzureVmType: Standard_D16_v3
-GcpMachineType: n2-standard-16
+# node pool instance types - 32 vCPU
+AwsInstanceType: m5.8xlarge
+AzureVmType: Standard_D32_v3
+GcpMachineType: n2-standard-32
 
 # smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM
 AwsSmallInstanceType: m5.large
@@ -56,7 +50,7 @@ GcpSmallMachineType: e2-standard-2
 
 # DB instance types
 AwsDbInstanceType: db.m5.8xlarge
-AzureDbVmType: GP_Gen5_24
+AzureDbVmType: GP_Gen5_32
 GcpDbMachineType: db-custom-32-122880
 
 #

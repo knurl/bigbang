@@ -55,7 +55,7 @@ def retryRun(f: Callable[[], subprocess.CompletedProcess], maxretries: int,
             pass
 
         print(f"Encountered error with \"{descr}\"; retries={retries}; "
-                    "sleep={stime}")
+                    f"sleep={stime}")
         if retries > maxretries:
             print(f"{maxretries} retries exceeded!")
             if e != None:

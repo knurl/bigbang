@@ -55,14 +55,18 @@ resource "azurerm_network_security_group" "sg_bastion" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   security_rule {
-    access                 = "Allow"
-    direction              = "Inbound"
-    name                   = "allow-ssh"
-    priority               = 100
-    protocol               = "Tcp"
-    source_port_range      = "*"
-    source_address_prefix  = var.my_public_ip
-    destination_port_range = "22"
+    access            = "Allow"
+    direction         = "Inbound"
+    name              = "allow-ssh"
+    priority          = 100
+    protocol          = "Tcp"
+    source_port_range = "*"
+    /* Restrict to home IP only normally. For Stargate mode, also allow
+     * connects from the private subnet, as we will be directing the remote
+     * catalogs to point to the bastion, which will use SSH port-forwarding to
+     * connect to the *remote* bastion host */
+    source_address_prefixes = var.bastion_fw_ingress
+    destination_port_range  = "22"
     /*
      * From Microsoft's online docs: "If you specify an address for an Azure
      * resource, specify the private IP address assigned to the resource.
