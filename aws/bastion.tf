@@ -3,12 +3,28 @@ resource "aws_security_group" "bastion_sg" {
   vpc_id                 = module.vpc.vpc_id
   revoke_rules_on_delete = true
 
-  /* Allow communication to port 22 (SSH) from the home IP only */
+  /* Allow communication to port 22 (SSH) from the home IP only, or in the case
+   * of a downstream bastion host, also allow from the upstream bastion
+   * */
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
+    /* Restrict to home IP only normally. For Stargate mode, also allow
+     * connects from the private subnet, as we will be directing the remote
+     * catalogs to point to the bastion, which will use SSH port-forwarding to
+     * connect to the *remote* bastion host */
+    cidr_blocks = var.bastion_fw_ingress
+  }
+
+  /* This might be an upstream bastion host (in a Stargate formation), in which
+   * case allow incoming connections on ports 8444-8445
+   */
+  ingress {
+    from_port   = 8444
+    to_port     = 8445
     protocol    = "tcp"
-    cidr_blocks = ["${var.my_public_ip}/32"] # Restrict to home IP...
+    cidr_blocks = [var.my_cidr]
   }
 
   ingress {

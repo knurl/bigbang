@@ -44,7 +44,7 @@ resource "azurerm_postgresql_server" "postgres" {
   administrator_login_password = var.db_password
 
   sku_name   = var.db_instance_type
-  version    = "11"
+  version    = var.postgresql_version
   storage_mb = 20480
 
   geo_redundant_backup_enabled = false
@@ -65,7 +65,7 @@ resource "azurerm_mysql_server" "mysql" {
   administrator_login_password = var.db_password
 
   sku_name   = var.db_instance_type
-  version    = "5.6"
+  version    = var.mysql_version
   storage_mb = 20480
 
   geo_redundant_backup_enabled = false
