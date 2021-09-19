@@ -39,6 +39,7 @@ resource "aws_db_instance" "evtlog" {
 resource "aws_db_instance" "postgres" {
   identifier               = var.postgres_server_name
   engine                   = "postgres"
+  engine_version           = var.postgresql_version
   allocated_storage        = 20
   instance_class           = var.db_instance_type
   name                     = var.db_name
@@ -54,6 +55,7 @@ resource "aws_db_instance" "postgres" {
 resource "aws_db_instance" "mysql" {
   identifier               = var.mysql_server_name
   engine                   = "mysql"
+  engine_version           = var.mysql_version
   allocated_storage        = 20
   instance_class           = var.db_instance_type
   name                     = var.db_name

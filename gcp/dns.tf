@@ -13,6 +13,15 @@ resource "google_dns_managed_zone" "private_zone" {
   }
 }
 
+resource "google_dns_record_set" "bastion_a_record" {
+  project      = data.google_project.project.project_id
+  managed_zone = google_dns_managed_zone.private_zone.name
+  name         = "bastion.az.starburstdata.net."
+  type         = "A"
+  rrdatas      = [google_compute_instance.bastion.network_interface.0.network_ip]
+  ttl          = 3600
+}
+
 resource "google_dns_record_set" "ldap_a_record" {
   project      = data.google_project.project.project_id
   managed_zone = google_dns_managed_zone.private_zone.name
@@ -27,7 +36,7 @@ resource "google_dns_record_set" "starburst_a_record" {
   managed_zone = google_dns_managed_zone.private_zone.name
   name         = "starburst.az.starburstdata.net."
   type         = "A"
-  rrdatas      = [var.mc_stargate_enabled ? google_compute_instance.bastion.network_interface.0.network_ip : local.starburst_address]
+  rrdatas      = [var.upstream_stargate ? google_compute_instance.bastion.network_interface.0.network_ip : local.starburst_address]
   ttl          = 3600
 }
 

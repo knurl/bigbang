@@ -95,11 +95,6 @@ coordinator:
         insights.metrics-persistence-interval=60s
         insights.authorized-users=.*
       {% if AuthNLdap %}
-      {% if Debug %}
-      log.properties: |
-        # Enable verbose logging from Starburst Enterprise
-        io.trino=DEBUG
-      {% endif %}
       password-authenticator.properties: |
         password-authenticator.name=ldap
         ldap.url={{LdapUri}}
@@ -209,11 +204,9 @@ livenessProbe:
 {% endif %}
 
 catalogs:
-  hive: |
-    connector.name=hive-hadoop2
+  {{ HiveCat }}: |
+    connector.name=hive
     hive.metastore.uri=thrift://hive:9083
-    hive.non-managed-table-creates-enabled=true
-    hive.non-managed-table-writes-enabled=true
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
@@ -226,6 +219,20 @@ catalogs:
     hive.gcs.json-key-file-path=secretRef:{{gcskey}}:{{gcskeybf}}
     hive.gcs.use-access-token=false
     {% endif %}
+  {% if Target == "aws" %}
+  delta: |
+    connector.name=delta-lake
+    hive.metastore=glue
+    hive.metastore.glue.pin-client-to-current-region=true
+    hive.security=allow-all
+    hive.max-partitions-per-writers = 1000
+    delta.hide-non-delta-lake-tables=true
+  redshift: |
+    connector.name=redshift
+    connection-url=jdbc:redshift://{{redshift_endpoint}}/{{DBName}}
+    connection-user={{redshift_user}}
+    connection-password={{DBPassword}}
+  {% endif %}
   mysql: |
     connector.name=mysql
     connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/?serverTimezone=UTC
@@ -238,47 +245,52 @@ catalogs:
     connection-user={{postgres_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
-  postgresqlel: |
-    connector.name=postgresql
-    connection-url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
-    connection-user={{evtlog_user}}
-    connection-password={{DBPassword}}
-    allow-drop-table=true
   {% if Target == "gcp" %}
-  bigquery: |
+  bq: |
     connector.name=bigquery
     bigquery.project-id={{ bq_project_id | string }}
-#   TODO: These two settings cause bigquery to fail. Bug?
-#    bigquery.case-insensitive-name-matching=true
-#    bigquery.case-insensitive-name-matching.cache-ttl=60m
   {% endif %}
-  remote_hive: |
-    connector.name=starburst-remote
-    connection-url=jdbc:trino://{{StarburstHost}}:{{StarburstPort}}/hive
+  {% if UpstreamSG %}
+  sg_az_adls: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/adls
     connection-user={{TrinoUser}}
-    {% if RequireCoordTls %}
     connection-password={{TrinoPass}}
     ssl.enabled=true
-    {% else %}
-    ssl.enabled=false
-    {% endif %}
-  remote_postgresql: |
-    connector.name=starburst-remote
-    connection-url=jdbc:trino://{{StarburstHost}}:{{StarburstPort}}/postgresql
+  sg_az_mysql: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/mysql
     connection-user={{TrinoUser}}
-    {% if RequireCoordTls %}
     connection-password={{TrinoPass}}
     ssl.enabled=true
-    {% else %}
-    ssl.enabled=false
-    {% endif %}
-  remote_mysql: |
-    connector.name=starburst-remote
-    connection-url=jdbc:trino://{{StarburstHost}}:{{StarburstPort}}/mysql
+  sg_az_postgresql: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/postgresql
     connection-user={{TrinoUser}}
-    {% if RequireCoordTls %}
     connection-password={{TrinoPass}}
     ssl.enabled=true
-    {% else %}
-    ssl.enabled=false
-    {% endif %}
+  sg_gcp_gcs: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionGcpPort}}/gcs
+    connection-user={{TrinoUser}}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+  sg_gcp_mysql: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionGcpPort}}/mysql
+    connection-user={{TrinoUser}}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+  sg_gcp_postgresql: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionGcpPort}}/postgresql
+    connection-user={{TrinoUser}}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+  sg_gcp_bq: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionGcpPort}}/bq
+    connection-user={{TrinoUser}}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+  {% endif %}

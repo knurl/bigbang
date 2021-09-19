@@ -2,18 +2,21 @@ data "aws_availability_zones" "available" {}
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "3.2.0"
+  version = "3.7.0"
 
   name = var.network_name
   cidr = var.my_cidr
 
-  create_database_subnet_group = true
-  database_subnet_group_name   = "${var.network_name}-sg-db"
-
   azs              = data.aws_availability_zones.available.names
   private_subnets  = [for k in ["prv_a", "prv_b", "prv_c"] : module.subnet_addrs.network_cidr_blocks[k]]
-  public_subnets   = [for k in ["pub_a", "pub_b", "pub_c"] : module.subnet_addrs.network_cidr_blocks[k]]
   database_subnets = [for k in ["db_a", "db_b", "db_c"] : module.subnet_addrs.network_cidr_blocks[k]]
+  public_subnets   = [for k in ["pub_a", "pub_b", "pub_c"] : module.subnet_addrs.network_cidr_blocks[k]]
+  redshift_subnets = [for k in ["red_a", "red_b", "red_c"] : module.subnet_addrs.network_cidr_blocks[k]]
+
+  create_database_subnet_group = true
+  database_subnet_group_name   = "${var.network_name}-sg-db"
+  create_redshift_subnet_group = true
+  redshift_subnet_group_name   = "${var.network_name}-sg-red"
 
   /*
    * We are setting up a fully-private EKS cluster on this VPC, which

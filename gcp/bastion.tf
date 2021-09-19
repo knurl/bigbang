@@ -32,8 +32,11 @@ resource "google_compute_firewall" "fw-bastion" {
   name    = "fw-${var.bastion_name}"
   network = resource.google_compute_network.vpc.self_link
   project = data.google_project.project.project_id
-  # Restrict to home IP or private IPs
-  source_ranges = ["${var.my_public_ip}/32", var.my_cidr]
+  /* Restrict to home IP only normally. For Stargate mode, also allow connects
+   * from the private subnet, as we will be directing the remote catalogs to
+   * point to the bastion, which will use SSH port-forwarding to connect to the
+   * *remote* bastion host */
+  source_ranges = var.bastion_fw_ingress
   allow {
     protocol = "tcp"
     ports    = ["22"]
