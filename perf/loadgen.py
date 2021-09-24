@@ -4,14 +4,12 @@ import prestodb, time, threading
 import time
 
 # Change this array to include the queries you want to rotate through
-queries = [
-        "select max(nationkey) from hive.fdd.nation",
-        "select max(custkey) from hive.fdd.customer",
-        "select max(orderkey) from hive.fdd.orders",
-        "select max(partkey) from hive.fdd.lineitem",
-        "select n.name, sum(l.extendedprice) as totalprice from awsmysql.fdd.customer as c inner join azhive.fdd.orders as o on c.custkey = o.custkey inner join awshive.fdd.lineitem as l on o.orderkey = l.orderkey inner join azpostgresql.fdd.nation as n on c.nationkey = n.nationkey inner join awspostgresql.fdd.region as r on r.regionkey = n.regionkey inner join awshive.fdd.part as p on l.partkey = p.partkey where n.name in ('PERU', 'MOROCCO', 'RUSSIA') group by n.name, totalprice order by totalprice desc"
-        ]
-threadpoolsize = 50
+queries = [ "select max(nationkey) from s3.s.nation",
+        "select min(partkey) from s3.s.part",
+        "select min(custkey) from s3.s.customer",
+        "select max(orderkey) from s3.s.orders"]
+
+threadpoolsize = 200
 newconnectionpause = 0.1
 newquerypause = 0.0
 reportingpause = 1.0
@@ -40,11 +38,11 @@ nq = Counter()
 def runme():
     conn = prestodb.dbapi.connect(
             http_scheme = 'https',
-            auth        = prestodb.auth.BasicAuthentication("presto_service", "test"),
-            host        = 'presto.az.starburstdata.net',
-            port        = 8445,
-            catalog     = 'hive',
-            schema      = 'fdd')
+            auth        = prestodb.auth.BasicAuthentication("starburst_service", "test"),
+            host        = 'starburst.az.starburstdata.net',
+            port        = 8443,
+            catalog     = 's3',
+            schema      = 's')
     cur = conn.cursor()
     q = 0
     while True:

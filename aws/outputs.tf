@@ -3,7 +3,7 @@ output "k8s_api_server" {
 }
 
 output "bastion_address" {
-  value = aws_instance.bastion.public_ip
+  value = aws_eip.bastion_eip.public_ip
 }
 
 output "ldaps_address" {

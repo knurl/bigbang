@@ -47,10 +47,14 @@ variable "bastion_name" {
 }
 
 variable "bastion_fw_ingress" {
+  {% if NoBastionFw %}
+  default = ["0.0.0.0/0"]
+  {% else %}
   {% if DownstreamSG %}
   default = ["{{MyPublicIP}}/32", "{{UpstrBastion}}"]
   {% else %}
   default = ["{{MyPublicIP}}/32"]
+  {% endif %}
   {% endif %}
 }
 
@@ -64,6 +68,10 @@ variable "ldaps_name" {
 
 variable "ldaps_launch_script" {
   default = "{{LdapLaunchScript}}"
+}
+
+variable "bastion_launch_script" {
+  default = "{{BastionLaunchScript}}"
 }
 
 variable "node_count" {
@@ -84,6 +92,10 @@ variable "postgres_server_name" {
 
 variable "postgresql_version" {
   default = "11"
+}
+
+variable "synapse_ws_name" {
+  default = "synapse-ws-{{ShortName}}"
 }
 
 variable "mysql_server_name" {
@@ -114,12 +126,24 @@ variable "redshift_cluster_name" {
   default = "redshift-cluster-{{ShortName}}"
 }
 
-variable "charset" {
-  default = "utf8"
+variable "postgres_charset" {
+  default = "UTF8"
+}
+
+variable "postgres_collation" {
+  default = "en_US.UTF8"
+}
+
+variable "azure_postgres_collation" {
+  default = "en-US"
+}
+
+variable "mysql_charset" {
+  default = "utf8mb4"
 }
 
 variable "mysql_collation" {
-  default = "utf8_general_ci"
+  default = "utf8mb4_0900_ai_ci"
 }
 
 variable "bucket_name" {
