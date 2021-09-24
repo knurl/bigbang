@@ -38,3 +38,7 @@ output "object_key" {
   value     = azurerm_storage_account.storacct.primary_access_key
   sensitive = true
 }
+
+output "synapse_address" {
+  value = azurerm_synapse_workspace.synapse_ws.connectivity_endpoints["sqlOnDemand"]
+}

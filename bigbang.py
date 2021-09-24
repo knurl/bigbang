@@ -46,8 +46,8 @@ trinouser     = "starburst_service"
 trinopass     = "test"
 dbschema      = "s"
 dbevtlog      = "evtlog" # event logger PostgreSQL instance
-dbuser        = "starburst_user"
-dbpwd         = "a029fjg!>dfgBiO8"
+dbuser        = "starburstuser"
+dbpwd         = "a029fjg!>dugBiO8"
 namespace     = "starburst"
 helmns        = f"-n {namespace}"
 kube          = "kubectl"
@@ -66,12 +66,14 @@ ldapfqdn      = "ldap." + domain
 bastionfqdn   = "bastion." + domain
 keystorepass  = "test123"
 hostsf        = "/etc/hosts"
+bastlaunchbf  = "bastlaunch.sh"
+bastlaunchf   = where(bastlaunchbf)
 ldapsetupbf   = "install-slapd.sh"
 ldapsetupf    = where(ldapsetupbf)
 ldaplaunchbf  = "ldaplaunch.sh"
 ldaplaunchf   = where(ldaplaunchbf)
-tpchbigschema = "sf1"
-tpchsmlschema = "sf1"
+tpchbigschema = "tiny"
+tpchsmlschema = "tiny"
 minbucketsize = 1 << 12
 tpchbuckets   = {
         "sf1000": 128,
@@ -110,10 +112,14 @@ p.add_argument('-c', '--skip-cluster-start', action="store_true",
         help="Skip checking to see if cluster needs to be started.")
 p.add_argument('-e', '--empty-nodes', action="store_true",
         help="Unload k8s cluster only. Used with stop or restart.")
+p.add_argument('-i', '--disable-bastion-fw', action="store_true",
+        help="Disable bastion firewall—only protection will be ssh!")
 p.add_argument('-l', '--dont-load', action="store_true",
         help="Don't load databases with tpch data.")
 p.add_argument('-r', '--drop-tables', action="store_true",
         help="Drop all tables before loading with tpch data.")
+p.add_argument('-s', '--summarise-ssh-tunnels', action="store_true",
+        help="Summarise the ssh tunnels on exit.")
 p.add_argument('-t', '--target', action="store",
         help="Force cloud target to specified value.")
 p.add_argument('-z', '--zone', action="store",
@@ -204,6 +210,8 @@ try:
     tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
     tlsinternal  = myvars[tlsinternallabel] # RequireInternalTls
     authnldap    = myvars[authnldaplabel] # AuthNLdap
+    nobastionfw  = myvars["DisableBastionFw"] or ns.disable_bastion_fw
+    
     requireKey("AwsInstanceType", myvars)
     requireKey("AwsSmallInstanceType", myvars)
     requireKey("AwsDbInstanceType", myvars)
@@ -355,8 +363,10 @@ if (upstreamSG or downstreamSG) and not tlscoord:
 #
 # GcpProjectId
 #
-gcpproject = runCollect("gcloud config list --format "
-        "value(core.project)".split()) if target == "gcp" else ""
+gcpproject = ""
+if target == "gcp":
+    gcpproject = runCollect("gcloud config list --format "
+            "value(core.project)".split())
 
 # Generate a unique octet for our subnet. Use that octet with the 'code' we
 # generated above as part of a short name we can use to mark our resources
@@ -588,9 +598,9 @@ def getOutputVars() -> dict:
 # username@hostname to username at hostname (supplied separately). So we must
 # supply usernames in different formats for AWS and Azure.
 def generateDatabaseUsers(env: dict) -> None:
-    for db in ["mysql", "postgres", "evtlog", "redshift"]:
+    for db in ["mysql", "postgres", "evtlog", "synapse", "redshift"]:
         env[db + "_user"] = dbuser
-        if target == "az":
+        if target == "az" and db != "redshift":
             env[db + "_user"] += "@" + env[db + "_address"]
 
 class KubeContextError(Exception):
@@ -879,15 +889,24 @@ class Tunnel:
 
         cmd = "ssh -N -L{ba}{p}:{a}:{k} ubuntu@{b}".format(ba = bx, p = lPort,
                 a = rAddr, k = rPort, b = bastionIp)
+        # TODO: using -t -t with ssh forces tty allocation, which implies that
+        # when the local (laptop) instance of ssh receives a SIGTERM, it will
+        # also kill the one on the bastion. In some cases it's preferable to
+        # actually leave the one on the bastion side running, so we'll remove
+        # it for now.
         if self.jumphost:
-            cmd = f"ssh -t -t ubuntu@{self.jumphost} {cmd}"
-        print(cmd)
+#            cmd = f"ssh -t -t ubuntu@{self.jumphost} {cmd}"
+            cmd = f"ssh ubuntu@{self.jumphost} {cmd}"
+        self.command = cmd
+        print(self.command)
         self.p = subprocess.Popen(cmd.split(), stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL)
         announce("Created tunnel " + str(self))
 
     def __del__(self):
         announce("Terminating tunnel " + str(self))
+        if ns.summarise_ssh_tunnels:
+            print(self.command)
         if self.p != None:
             self.p.terminate()
 
@@ -949,23 +968,35 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
                 ldapfqdn, getRmtPort("ldaps"))
         tuns.append(tun)
 
-    # If this is the upstream Stargate instance, start up remote tunnels within
-    # upstream bastion, from ports 8444 and 8445 to downstream bastions
-    if upstreamSG:
-        starport = getRmtPort("starburst")
-        bindaddr = ipaddress.IPv4Address("0.0.0.0")
-        if azaddrs:
-            tun = Tunnel("az-down", azaddrs["bastion"],
-                    getLclPortSG("starburst", "az"),
-                    str(azaddrs["starburst"]), starport,
-                    env["bastion_address"], bindaddr)
-            tuns.append(tun)
-        if gcpaddrs:
-            tun = Tunnel("gcp-down", gcpaddrs["bastion"],
-                    getLclPortSG("starburst", "gcp"),
-                    str(gcpaddrs["starburst"]), starport,
-                    env["bastion_address"], bindaddr)
-            tuns.append(tun)
+    # Copy my private RSA key over to the bastion.
+    # FIXME Yes, that is slightly dangerous.
+    announce("Copying over private RSA key to bastion")
+    runStdout("scp {r} ubuntu@{h}:/home/ubuntu/.ssh/id_rsa".format(r = rsa, h =
+        env["bastion_address"]).split())
+
+#   TODO I've commented this out for now, as I've moved this functionality into
+#   the launch script for the AWS bastion. The tunnels in the bastion need to
+#   be running all the time, even when bigbang terminates, and I'd prefer to
+#   set up the tunnels with the host at launch time, so they stay permanent no
+#   matter what.
+#
+#    # If this is the upstream Stargate instance, start up remote tunnels within
+#    # upstream bastion, from ports 8444 and 8445 to downstream bastions
+#    if upstreamSG:
+#        starport = getRmtPort("starburst")
+#        bindaddr = ipaddress.IPv4Address("0.0.0.0")
+#        if azaddrs:
+#            tun = Tunnel("az-down", azaddrs["bastion"],
+#                    getLclPortSG("starburst", "az"),
+#                    str(azaddrs["starburst"]), starport,
+#                    env["bastion_address"], bindaddr)
+#            tuns.append(tun)
+#        if gcpaddrs:
+#            tun = Tunnel("gcp-down", gcpaddrs["bastion"],
+#                    getLclPortSG("starburst", "gcp"),
+#                    str(gcpaddrs["starburst"]), starport,
+#                    env["bastion_address"], bindaddr)
+#            tuns.append(tun)
 
     return tuns
 
@@ -982,8 +1013,9 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     announce("Adding aws-auth configmap to cluster")
     runStdout(f"{kube} apply -f {yamltmp}".split())
 
-def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
+def ensureClusterIsStarted(skipClusterStart: bool, nobastionfw: bool = False) -> dict:
     env = myvars | {
+            "BastionLaunchScript": bastlaunchf,
             "BucketName":          bucket,
             "ClusterName":         clustname,
             "DownstreamSG":        downstreamSG,
@@ -999,6 +1031,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
             "MyCIDR":              mySubnetCidr,
             "MyPublicIP":          getMyPublicIp(),
             "NodeCount":           nodeCount,
+            "NoBastionFw":         nobastionfw,
             "SmallInstanceType":   smallInstanceType,
             "SshPublicKey":        getSshPublicKey(),
             "Region":              region,
@@ -1013,6 +1046,8 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
         env["ResourceGroup"] = resourcegrp
         env["StorageAccount"] = storageacct
     parameteriseTemplate(tfvars, tfdir, env)
+
+#    sys.exit(0)
 
     # The terraform run. Perform an init, then an apply.
     if not skipClusterStart:
@@ -1299,7 +1334,7 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
         t.join()
 
 def eraseBucketContents(env: dict):
-    # Delete everything in the S3 bucket
+    # Delete everything in the bucket
     assert target in clouds
 
     cmd = ""
@@ -1816,10 +1851,11 @@ def announceReady(bastionIp: str) -> list:
     return a
 
 def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
-        dropTables: bool = False, dontLoad: bool = False) -> list:
+        dropTables: bool = False, dontLoad: bool = False, \
+                nobastionfw: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the
     # cluster. This will create the control plane and workers.
-    env = ensureClusterIsStarted(skipClusterStart)
+    env = ensureClusterIsStarted(skipClusterStart, nobastionfw)
 
     zid = env["route53_zone_id"] if target == "aws" else None
     env["Region"] = region
@@ -1829,6 +1865,7 @@ def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
     startPortForwardToLBs(env["bastion_address"], zid)
     if dropTables:
         unloadDatabases()
+        eraseBucketContents(env)
     if not dontLoad:
         loadDatabases(env["object_address"])
 
@@ -2008,6 +2045,39 @@ def buildLdapLauncher(fqdn: str) -> None:
                 "cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif\n")
         wh.write("echo finished > /tmp/finished\n")
 
+def buildBastionLauncher() -> None:
+    with open(bastlaunchf, 'w') as wh:
+        wh.write("#!/bin/bash\n\n")
+        wh.write("mkdir -p ~/.ssh\n")
+        wh.write("chmod 700 /root/.ssh\n")
+        wh.write(f"touch /root/.ssh/known_hosts\n")
+        if upstreamSG:
+            def emitSshTunnel(wh, bindaddr: ipaddress.IPv4Address, lclport:
+                    int, rmtIpAddr: ipaddress.IPv4Address, rmtport: int,
+                    dnstrmBast: ipaddress.IPv4Address):
+                wh.write(f"ssh-keygen -R {dnstrmBast}\n")
+                wh.write(f"ssh-keyscan -4 -p22 -H {dnstrmBast} >> "
+                        f"/root/.ssh/known_hosts\n")
+                wh.write("ssh -n -L "
+                        f"{bindaddr}:{lclport}:{rmtIpAddr}:{rmtport} -N "
+                        f"ubuntu@{dnstrmBast} &\n")
+            starport = getRmtPort("starburst")
+            bindaddr = ipaddress.IPv4Address("0.0.0.0")
+            if azaddrs:
+                lclport = getLclPortSG("starburst", "az")
+                rmtaddr = azaddrs["starburst"]
+                dnstrmBast = azaddrs["bastion"]
+                emitSshTunnel(wh, bindaddr, lclport, rmtaddr, starport,
+                        dnstrmBast)
+            if gcpaddrs:
+                lclport = getLclPortSG("starburst", "gcp")
+                rmtaddr = gcpaddrs["starburst"]
+                dnstrmBast = gcpaddrs["bastion"]
+                emitSshTunnel(wh, bindaddr, lclport, rmtaddr, starport,
+                        dnstrmBast)
+
+        wh.write("echo finished > /tmp/finished\n")
+
 def getCloudSummary() -> List[str]:
     if target == "aws":
         cloud = "Amazon Web Services"
@@ -2121,6 +2191,11 @@ creds = getCreds()
 checkRSAKey()
 checkEtcHosts()
 buildLdapLauncher(domain)
+buildBastionLauncher()
+if target == "gcp":
+    announce(f"GCP project is {gcpproject}")
+if nobastionfw:
+    announceBox("Bastion firewall will be disabled!")
 
 w = []
 started = False
@@ -2129,7 +2204,8 @@ if ns.command in ("stop", "restart"):
     svcStop(ns.empty_nodes)
 
 if ns.command in ("start", "restart"):
-    w = svcStart(creds, ns.skip_cluster_start, ns.drop_tables, ns.dont_load)
+    w = svcStart(creds, ns.skip_cluster_start, ns.drop_tables, ns.dont_load,
+            nobastionfw)
     started = True
     announceBox(f"Your {rsaPub} public key has been installed into the "
             "bastion server, so you can ssh there now (user 'ubuntu').")
