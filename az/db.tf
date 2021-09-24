@@ -132,22 +132,22 @@ resource "azurerm_postgresql_database" "evtlog_db" {
   name                = var.db_name_evtlog
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_postgresql_server.postgres.name
-  charset             = var.charset
-  collation           = "English_United States.1252"
+  charset             = var.postgres_charset
+  collation           = var.azure_postgres_collation
 }
 
 resource "azurerm_postgresql_database" "postgres_db" {
   name                = var.db_name
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_postgresql_server.postgres.name
-  charset             = var.charset
-  collation           = "English_United States.1252"
+  charset             = var.postgres_charset
+  collation           = var.azure_postgres_collation
 }
 
 resource "azurerm_mysql_database" "mysql_db" {
   name                = var.db_name
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_mysql_server.mysql.name
-  charset             = var.charset
+  charset             = var.mysql_charset
   collation           = var.mysql_collation
 }

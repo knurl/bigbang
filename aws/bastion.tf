@@ -57,5 +57,13 @@ resource "aws_instance" "bastion" {
   private_ip             = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
   key_name               = aws_key_pair.key_pair.key_name
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  user_data              = file(var.bastion_launch_script)
   tags                   = merge(var.tags, { Name = "${var.bastion_name}" })
+}
+
+resource "aws_eip" "bastion_eip" {
+  vpc                       = true
+  instance                  = aws_instance.bastion.id
+  associate_with_private_ip = aws_instance.bastion.private_ip
+  depends_on                = [module.vpc, aws_instance.bastion]
 }

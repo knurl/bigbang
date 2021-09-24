@@ -15,6 +15,11 @@ resource "azurerm_storage_container" "container" {
   container_access_type = "private"
 }
 
+resource "azurerm_storage_data_lake_gen2_filesystem" "adls_gen2_fs" {
+  name               = "adls-gen2-fs"
+  storage_account_id = azurerm_storage_account.storacct.id
+}
+
 /*
  * TODO: I don't *think* I need to have my own private dns zones and vnet
  * links. I think you only need to create those if you're linking to multiple

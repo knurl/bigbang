@@ -210,7 +210,7 @@ catalogs:
     hive.security=allow-all
     hive.file-status-cache-tables=*
     hive.file-status-cache-expire-time=60m
-    hive.storage-format=PARQUET
+    hive.storage-format=ORC
     hive.compression-codec=SNAPPY
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
@@ -232,6 +232,18 @@ catalogs:
     connection-url=jdbc:redshift://{{redshift_endpoint}}/{{DBName}}
     connection-user={{redshift_user}}
     connection-password={{DBPassword}}
+    allow-drop-table=true
+  {% elif Target == "az" %}
+  synapse: |
+    connector.name=synapse
+    connection-url=jdbc:sqlserver://{{synapse_address}}:1433
+    connection-user={{synapse_user}}
+    connection-password={{DBPassword}}
+    allow-drop-table=true
+  {% elif Target == "gcp" %}
+  bq: |
+    connector.name=bigquery
+    bigquery.project-id={{ bq_project_id | string }}
   {% endif %}
   mysql: |
     connector.name=mysql
@@ -245,11 +257,6 @@ catalogs:
     connection-user={{postgres_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
-  {% if Target == "gcp" %}
-  bq: |
-    connector.name=bigquery
-    bigquery.project-id={{ bq_project_id | string }}
-  {% endif %}
   {% if UpstreamSG %}
   sg_az_adls: |
     connector.name=stargate
@@ -266,6 +273,12 @@ catalogs:
   sg_az_postgresql: |
     connector.name=stargate
     connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/postgresql
+    connection-user={{TrinoUser}}
+    connection-password={{TrinoPass}}
+    ssl.enabled=true
+  sg_az_synapse: |
+    connector.name=stargate
+    connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/synapse
     connection-user={{TrinoUser}}
     connection-password={{TrinoPass}}
     ssl.enabled=true

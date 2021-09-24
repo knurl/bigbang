@@ -22,10 +22,11 @@ resource "aws_redshift_cluster" "redshift" {
   database_name      = var.db_name
   master_username    = var.db_user
   master_password    = var.db_password
-  node_type          = "dc2.large"
-  cluster_type       = "single-node"
+  node_type          = "ra3.4xlarge"
+  cluster_type       = "multi-node"
+  number_of_nodes    = 3
 
-  automated_snapshot_retention_period = 0
+  automated_snapshot_retention_period = 1
   skip_final_snapshot                 = true
 
   vpc_security_group_ids    = [aws_security_group.redshift_sg.id]

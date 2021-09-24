@@ -24,19 +24,22 @@ Zone: europe-west2-b # GCP - London, UK, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 361.0.0
+ChartVersion: 360.0.0
 
 # Number of nodes in K8S cluster.
-NodeCount: 5
+NodeCount: 3
 
 # Require TLS on client <-> coordinator connection.
-RequireCoordTls: True
+RequireCoordTls: False
 
 # Require TLS on coordinator <-> worker connections. Implies RequireCoordTls.
 RequireInternalTls: False
 
 # Authenticate using LDAP. Implies RequireCoordTls.
-AuthNLdap: True
+AuthNLdap: False
+
+# Disable bastion firewall—don't use unless you know the risks!
+DisableBastionFw: False
 
 # node pool instance types - 32 vCPU
 AwsInstanceType: m5.8xlarge
