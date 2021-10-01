@@ -10,3 +10,17 @@ resource "azurerm_synapse_workspace" "synapse_ws" {
 
   tags = var.tags
 }
+
+resource "azurerm_synapse_sql_pool" "synapse_sql_pool" {
+  name                 = var.synapse_sqlpool_name
+  synapse_workspace_id = azurerm_synapse_workspace.synapse_ws.id
+  sku_name             = "DW300c"
+  create_mode          = "Default"
+}
+
+resource "azurerm_synapse_firewall_rule" "example" {
+  name                 = "AllowAllWindowsAzureIps"
+  synapse_workspace_id = azurerm_synapse_workspace.synapse_ws.id
+  start_ip_address     = "0.0.0.0"
+  end_ip_address       = "0.0.0.0"
+}

@@ -33,6 +33,7 @@ def writeableDir(p):
 clouds        = ("aws", "az", "gcp")
 templatedir   = where("templates")
 tmpdir        = "/tmp"
+ingressname   = "coordinator-ingress"
 rsa           = os.path.expanduser("~/.ssh/id_rsa")
 rsaPub        = os.path.expanduser("~/.ssh/id_rsa.pub")
 knownhosts    = os.path.expanduser("~/.ssh/known_hosts")
@@ -42,6 +43,7 @@ dbports       = { "mysql": 3306, "postgres": 5432 }
 tpchcat       = "tpch"
 syscat        = "system"
 bqcat         = "bq" # for now, connector doesn't support INSERT or CTAS
+synapsecat    = "synapse" # for now, connector doesn't support CTAS
 trinouser     = "starburst_service"
 trinopass     = "test"
 dbschema      = "s"
@@ -62,16 +64,14 @@ localhost     = "localhost"
 localhostip   = "127.0.0.1"
 domain        = "az.starburstdata.net"
 starburstfqdn = "starburst." + domain
+rangerfqdn    = "ranger." + domain
 ldapfqdn      = "ldap." + domain
 bastionfqdn   = "bastion." + domain
 keystorepass  = "test123"
 hostsf        = "/etc/hosts"
-bastlaunchbf  = "bastlaunch.sh"
-bastlaunchf   = where(bastlaunchbf)
-ldapsetupbf   = "install-slapd.sh"
-ldapsetupf    = where(ldapsetupbf)
-ldaplaunchbf  = "ldaplaunch.sh"
-ldaplaunchf   = where(ldaplaunchbf)
+bastlaunchf   = where("bastlaunch.sh")
+ldapsetupf    = where("install-slapd.sh")
+ldaplaunchf   = where("ldaplaunch.sh")
 tpchbigschema = "tiny"
 tpchsmlschema = "tiny"
 minbucketsize = 1 << 12
@@ -173,6 +173,7 @@ targetlabel = "Target"
 nodecountlabel = "NodeCount"
 chartvlabel = "ChartVersion"
 tlscoordlabel = "RequireCoordTls"
+externlblabel = "ExternalLoadBalancer"
 tlsinternallabel = "RequireInternalTls"
 authnldaplabel = "AuthNLdap"
 try:
@@ -207,11 +208,14 @@ try:
 
     chartversion = myvars[chartvlabel] # ChartVersion
     nodeCount    = myvars[nodecountlabel] # NodeCount
+    externlb     = myvars[externlblabel] # ExternalLoadBalancer
     tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
     tlsinternal  = myvars[tlsinternallabel] # RequireInternalTls
     authnldap    = myvars[authnldaplabel] # AuthNLdap
+
     nobastionfw  = myvars["DisableBastionFw"] or ns.disable_bastion_fw
-    
+    myvars["DisableBastionFw"] = nobastionfw
+ 
     requireKey("AwsInstanceType", myvars)
     requireKey("AwsSmallInstanceType", myvars)
     requireKey("AwsDbInstanceType", myvars)
@@ -351,6 +355,9 @@ if nodeCount < 2:
     sys.exit(f"Must have at least {minnodes} nodes; {nodeCount} set for "
             f"{nodecountlabel} in {myvarsf}.")
 
+if externlb and tlscoord:
+    sys.exit(f"{externlblabel} and {tlscoordlabel} are mutually exclusive.")
+
 if tlsinternal and not tlscoord:
     sys.exit(f"{tlsinternallabel} requires {tlscoordlabel} to be enabled")
 
@@ -374,6 +381,9 @@ s = username + zone
 octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256
 shortname = code + str(octet).zfill(3)
 
+#
+# Generate the main CIDR we will use in our cloud
+#
 def genmask(target, octet):
     assert octet < 256
     if target in ("aws", "az"):
@@ -436,6 +446,8 @@ svcports    = {
 if tlscoord:
     svcports |= {"starburst": {"local": 8443, "remote": 8443},
                  "ldaps":     {"local": 8636, "remote": 636}}
+elif externlb:
+    svcports |= {"starburst": {"local": 8443, "remote": 443}}
 else:
     svcports |= {"starburst": {"local": 8080, "remote": 8080}}
 
@@ -638,14 +650,14 @@ def updateKubeConfig() -> None:
 def getMyPublicIp() -> ipaddress.IPv4Address:
     announce("Getting public IP address")
     try:
-        i = runCollect("dig +short myip.opendns.com @resolver1.opendns.com "
-                "-4".split())
+        i = runCollect("curl ipinfo.io".split())
     except CalledProcessError as e:
         sys.exit("Unable to reach the internet. Are your DNS resolvers set "
                 "correctly?")
 
     try:
-        myIp = ipaddress.IPv4Address(i)
+        x = json.loads(i)
+        myIp = ipaddress.IPv4Address(x["ip"])
         announceBox(f"Your visible IP address is {myIp}. Ingress to your "
                 "newly-created bastion server will be limited to this address "
                 "exclusively.")
@@ -736,7 +748,7 @@ def getStarburstUrl() -> str:
     port = getLclPort("starburst")
 
     # If we are TLS-protected to the coordinator...
-    if tlscoord:
+    if tlscoord or externlb:
         scheme = "https"
         # If we are TLS-protecting the coordinator connection, but not
         # internal connections, then the cert will require us to use the
@@ -771,24 +783,53 @@ def loadBalancerResponding(service: str) -> bool:
 # in the case when the load balancers aren't yet ready. The caller needs to be
 # prepared for this possibility.
 def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:
-    namesp = f" --namespace {namespace}" if namespace else ""
-    r = runTry(f"{kube}{namesp} get svc -ojson".split() + services)
     lbs: dict[str, str] = {}
-    if r.returncode == 0:
-        servs = json.loads(r.stdout)
-        for s in servs["items"]:
+    namesp = f" --namespace {namespace}" if namespace else ""
+    for serv in services:
+        ingress = None
+        if externlb and serv == "starburst":
+            r = runTry(f"{kube}{namesp} get ing -ojson {ingressname}".split())
+            if r.returncode == 0:
+                jout = json.loads(r.stdout)
+                assert "items" not in jout
+                ingress = jout
+        r = runTry(f"{kube}{namesp} get svc -ojson {serv}".split())
+        if r.returncode == 0:
+            jout = json.loads(r.stdout)
+            assert "items" not in jout
+            s = jout
+
             # Metadata section
             meta = s["metadata"] # this should always be present
             assert meta["namespace"] == namespace # we only asked for this
             if not "name" in meta:
                 continue
             name = meta["name"]
-            assert name in services, f"Didn't find {name} in {services}"
-
+            assert name == serv, f"Unexpected service {name}"
+            
             # Status section - now see if its IP is allocated yet
             if not "status" in s:
                 continue
             status = s["status"]
+
+            if ingress:
+                assert externlb and serv == "starburst"
+                # Metadata section
+                ingmeta = ingress["metadata"] # this should always be present
+                assert ingmeta["namespace"] == namespace
+                if not "name" in ingmeta:
+                    continue
+                ingname = ingmeta["name"]
+                assert ingname == ingressname, f"Unexpected ingress {ingname}"
+
+                annot = meta['annotations'] # NB: annot from the svc, not ing
+                assert "cloud.google.com/neg" in annot
+                assert annot["cloud.google.com/neg"] == '{"ingress":true}'
+
+                if not "status" in ingress:
+                    continue
+                status = ingress["status"] # get status from ing not svc
+
             if "loadBalancer" not in status:
                 continue
             lb = status["loadBalancer"]
@@ -868,7 +909,7 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
             print(' ' * maxlen, end='\r')
             return
         i += 1
-        time.sleep(0.5)
+        time.sleep(1)
 
 # A class for recording ssh tunnels
 class Tunnel:
@@ -889,14 +930,11 @@ class Tunnel:
 
         cmd = "ssh -N -L{ba}{p}:{a}:{k} ubuntu@{b}".format(ba = bx, p = lPort,
                 a = rAddr, k = rPort, b = bastionIp)
-        # TODO: using -t -t with ssh forces tty allocation, which implies that
-        # when the local (laptop) instance of ssh receives a SIGTERM, it will
-        # also kill the one on the bastion. In some cases it's preferable to
-        # actually leave the one on the bastion side running, so we'll remove
-        # it for now.
+        # TODO: Get rid of the extra code added here to set up tunnels in
+        # foreign hosts. It isn't needed any more now that we are setting up
+        # the port-forward on the upstream bastion through a launch script.
         if self.jumphost:
-#            cmd = f"ssh -t -t ubuntu@{self.jumphost} {cmd}"
-            cmd = f"ssh ubuntu@{self.jumphost} {cmd}"
+            cmd = f"ssh -t -t ubuntu@{self.jumphost} {cmd}"
         self.command = cmd
         print(self.command)
         self.p = subprocess.Popen(cmd.split(), stdin=subprocess.DEVNULL,
@@ -974,30 +1012,6 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
     runStdout("scp {r} ubuntu@{h}:/home/ubuntu/.ssh/id_rsa".format(r = rsa, h =
         env["bastion_address"]).split())
 
-#   TODO I've commented this out for now, as I've moved this functionality into
-#   the launch script for the AWS bastion. The tunnels in the bastion need to
-#   be running all the time, even when bigbang terminates, and I'd prefer to
-#   set up the tunnels with the host at launch time, so they stay permanent no
-#   matter what.
-#
-#    # If this is the upstream Stargate instance, start up remote tunnels within
-#    # upstream bastion, from ports 8444 and 8445 to downstream bastions
-#    if upstreamSG:
-#        starport = getRmtPort("starburst")
-#        bindaddr = ipaddress.IPv4Address("0.0.0.0")
-#        if azaddrs:
-#            tun = Tunnel("az-down", azaddrs["bastion"],
-#                    getLclPortSG("starburst", "az"),
-#                    str(azaddrs["starburst"]), starport,
-#                    env["bastion_address"], bindaddr)
-#            tuns.append(tun)
-#        if gcpaddrs:
-#            tun = Tunnel("gcp-down", gcpaddrs["bastion"],
-#                    getLclPortSG("starburst", "gcp"),
-#                    str(gcpaddrs["starburst"]), starport,
-#                    env["bastion_address"], bindaddr)
-#            tuns.append(tun)
-
     return tuns
 
 def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
@@ -1013,7 +1027,7 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     announce("Adding aws-auth configmap to cluster")
     runStdout(f"{kube} apply -f {yamltmp}".split())
 
-def ensureClusterIsStarted(skipClusterStart: bool, nobastionfw: bool = False) -> dict:
+def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     env = myvars | {
             "BastionLaunchScript": bastlaunchf,
             "BucketName":          bucket,
@@ -1031,7 +1045,6 @@ def ensureClusterIsStarted(skipClusterStart: bool, nobastionfw: bool = False) ->
             "MyCIDR":              mySubnetCidr,
             "MyPublicIP":          getMyPublicIp(),
             "NodeCount":           nodeCount,
-            "NoBastionFw":         nobastionfw,
             "SmallInstanceType":   smallInstanceType,
             "SshPublicKey":        getSshPublicKey(),
             "Region":              region,
@@ -1045,9 +1058,8 @@ def ensureClusterIsStarted(skipClusterStart: bool, nobastionfw: bool = False) ->
     if target == "az":
         env["ResourceGroup"] = resourcegrp
         env["StorageAccount"] = storageacct
-    parameteriseTemplate(tfvars, tfdir, env)
 
-#    sys.exit(0)
+    parameteriseTemplate(tfvars, tfdir, env)
 
     # The terraform run. Perform an init, then an apply.
     if not skipClusterStart:
@@ -1165,6 +1177,7 @@ def startPortForwardToLBs(bastionIp: str, route53ZoneId: str = None) -> None:
     # we should have a load balancer for every service we'll forward
     assert len(lbs) == len(services)
     for svc in services:
+        assert svc in lbs
         toreap.append(Tunnel(svc, ipaddress.IPv4Address(bastionIp),
             getLclPort(svc), lbs[svc], getRmtPort(svc)))
 
@@ -1213,7 +1226,7 @@ def sendSql(command: str, verbose = False) -> list:
     url = getStarburstUrl() + "/v1/statement"
     hdr = { "X-Trino-User": trinouser }
     authtype = None
-    if tlscoord:
+    if tlscoord or externlb:
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
     f = lambda: requests.post(url, headers = hdr, auth = authtype, data =
             command, verify = secrets["wildcert"]["f"] if tlsinternal else
@@ -1243,7 +1256,11 @@ def sendSql(command: str, verbose = False) -> list:
                 descr = f"GET nextUri [{command}]")
 
 def dontLoadCat(cat: str) -> bool:
-    avoidcat = {tpchcat, syscat, bqcat}
+    avoidcat = {tpchcat, syscat}
+    if target == "az":
+        avoidcat.add(synapsecat)
+    elif target == "gcp":
+        avoidcat.add(bqcat)
     return cat in avoidcat or cat.startswith("sg_")
 
 def copySchemaTables(srcCatalog: str, srcSchema: str,
@@ -1339,13 +1356,13 @@ def eraseBucketContents(env: dict):
 
     cmd = ""
     if target == "aws":
-        cmd = "aws s3 rm s3://{b} --recursive".format(b = bucket)
+        cmd = "aws s3 rm s3://{b}/ --recursive".format(b = bucket)
     elif target == "az" and "adls_access_key" in env:
         cmd = ("az storage fs directory delete -y --file-system {b} "
                 "--account-name {s} --account-key {a} --name '*'").format(b =
                         bucket, s = storageacct, a = env["adls_access_key"])
     elif target == "gcp" and "object_address" in env:
-        cmd = "gsutil rm -rf {b}".format(b = env["object_address"])
+        cmd = "gsutil rm -rf {b}/*".format(b = env["object_address"])
 
     if cmd != "":
         announce(f"Deleting contents of bucket {bucket}")
@@ -1415,8 +1432,9 @@ def loadDatabases(hive_location):
     announce("Loading/verifying of other tables done in " +
             time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - t)))
 
-def installSecrets(secrets: dict) -> dict:
+def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
     env = {}
+    pairs: dict[str, dict[str, str]] = {}
     announce(f"Installing secrets")
     for name, values in secrets.items():
         # If we are using TLS on internal connections, we don't need these
@@ -1424,7 +1442,7 @@ def installSecrets(secrets: dict) -> dict:
             if name in ('starburstks', 'starburstcert'):
                 continue
         # If we are using TLS on coordinator only, we don't need these
-        elif tlscoord:
+        elif tlscoord or externlb:
             if name in ('wildks', 'wildcert', 'sharedsec'):
                 continue
         # These are needed only for LDAP
@@ -1435,9 +1453,22 @@ def installSecrets(secrets: dict) -> dict:
         if target != "gcp" and name == "gcskey":
             continue
 
-        file = values["f"]
+        if "pair" in values:
+            name = values["pair"]
+            if not externlb or name != "starbursttls":
+                continue
+            env[name] = name
+            assert "type" in values
+            if name in pairs:
+                p = pairs[name]
+                p[values["type"]] = values["f"]
+            else:
+                pairs[name] = { values["type"]: values["f"] }
+            continue
+
         env[name] = name
         env[name + "bf"] = values["bf"]
+        file = values["f"]
         env[name + "f"] = file
 
         r = runTry(f"{kubens} get secrets {name}".split())
@@ -1445,6 +1476,16 @@ def installSecrets(secrets: dict) -> dict:
         if r.returncode != 0:
             runStdout(f"{kubens} create secret generic {name} --from-file "
                 f"{file}".split())
+
+    for pairname, values in pairs.items():
+        assert "cert" in values and "key" in values, \
+                f"cert and key not found together for {pairname}"
+        r = runTry(f"{kubens} get secrets {pairname}".split())
+        # if the secret with that name doesn't yet exist, create it
+        if r.returncode != 0:
+            runStdout("{x} create secret tls {p} --cert {c} --key "
+                    "{k}".format(x = kubens, p = pairname, c = values["cert"],
+                        k = values["key"]).split())
     return env
 
 def helmTry(cmd: str) -> subprocess.CompletedProcess:
@@ -1538,6 +1579,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
               "DBNameEventLogger":  dbevtlog,
               "DBPassword":         dbpwd,
               "HiveCat":            hivecat,
+              "IngressName":        ingressname,
               "KeystorePass":       keystorepass,
               "UpstreamSG":         upstreamSG,
               "StorageAccount":     storageacct,
@@ -1548,8 +1590,9 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
     if authnldap:
         env["LdapUri"] = "ldaps://{h}:{p}".format(h = ldapfqdn, p =
                 getRmtPort("ldaps"))
-    if upstreamSG:
+    if upstreamSG or externlb:
         env["StarburstHost"] = starburstfqdn
+    if upstreamSG:
         env["BastionAzPort"] = getLclPortSG("starburst", "az")
         env["BastionGcpPort"] = getLclPortSG("starburst", "gcp")
 
@@ -1562,10 +1605,14 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
     newchart = charts[module] + "-" + chartversion # which one to install?
 
     hivereset = False
+    if module == 'enterprise':
+        myrepo = '/Users/rob/helmcharts'
+    else:
+        myrepo = repo
     if chart == None: # Nothing installed yet, so we need to install
         announce(f"Installing chart {newchart} using helm")
         helm("{h} install {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
-            r = releases[module], w = repo, c = charts[module], y =
+            r = releases[module], w = myrepo, c = charts[module], y =
             yamltmp, v = chartversion))
         if module == "hive":
             hivereset = True # freshly installed -> new postgres
@@ -1577,7 +1624,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         announce(astr)
         helm("{h} upgrade {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
-            r = releases[module], w = repo, c = charts[module], y =
+            r = releases[module], w = myrepo, c = charts[module], y =
             yamltmp, v = chartversion))
 
         # Hive postgres DB will be rebuilt only if we rev a version
@@ -1720,6 +1767,7 @@ def helmInstallAll(env):
     ensureHelmRepoSetUp(repo)
     env |= planWorkerSize()
     hivereset = False
+
     for module in modules:
         hivereset = helmInstallRelease(module, env) or hivereset
     # If we've installed Hive for the first time, or if we revved the version
@@ -1740,8 +1788,13 @@ def deleteAllServices() -> dict[str, str]:
     # the ENIs and preventing the deletion of the associated subnets
     # https://github.com/kubernetes/kubernetes/issues/93390
     announce("Deleting all k8s services")
+    print("Deleting ingresses...")
+    runStdout(f"{kubens} delete ingress --all".split())
     lbs = getLoadBalancers(services, namespace)
-    print("Load balancers before service delete: " + ", ".join(lbs.keys()))
+    if len(lbs) == 0:
+        print("No LBs running.")
+    else:
+        print("Load balancers before attempt to delete services: " + ", ".join(lbs.keys()))
     runStdout(f"{kubens} delete svc --all".split())
     lbs_after = getLoadBalancers(services, namespace)
     if len(lbs_after) == 0:
@@ -1838,7 +1891,7 @@ class AwsCreds(Creds):
 def announceReady(bastionIp: str) -> list:
     a = [getStarburstUrl() + "/ui/insights"]
     who = f"user: {trinouser}"
-    if tlscoord:
+    if tlscoord or externlb:
         who += f" pwd: {trinopass}"
     a.append(who)
     if downstreamSG:
@@ -1855,7 +1908,7 @@ def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
                 nobastionfw: bool = False) -> list:
     # First see if there isn't a cluster created yet, and create the
     # cluster. This will create the control plane and workers.
-    env = ensureClusterIsStarted(skipClusterStart, nobastionfw)
+    env = ensureClusterIsStarted(skipClusterStart)
 
     zid = env["route53_zone_id"] if target == "aws" else None
     env["Region"] = region
@@ -1883,6 +1936,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion, or our helm and kubectl
     # commands won't work.
     announce("Checking current Terraform status")
+
     if isTerraformSettled():
         announce("Re-establishing bastion tunnel")
         env = getOutputVars()
@@ -2048,10 +2102,10 @@ def buildLdapLauncher(fqdn: str) -> None:
 def buildBastionLauncher() -> None:
     with open(bastlaunchf, 'w') as wh:
         wh.write("#!/bin/bash\n\n")
-        wh.write("mkdir -p ~/.ssh\n")
-        wh.write("chmod 700 /root/.ssh\n")
-        wh.write(f"touch /root/.ssh/known_hosts\n")
         if upstreamSG:
+            wh.write("mkdir -p ~/.ssh\n")
+            wh.write("chmod 700 /root/.ssh\n")
+            wh.write(f"touch /root/.ssh/known_hosts\n")
             def emitSshTunnel(wh, bindaddr: ipaddress.IPv4Address, lclport:
                     int, rmtIpAddr: ipaddress.IPv4Address, rmtport: int,
                     dnstrmBast: ipaddress.IPv4Address):
@@ -2153,7 +2207,7 @@ def checkEtcHosts() -> None:
     # We only need to make sure that we have a binding for the starburst host
     # if we are running with TLS to the coordinator but the internal
     # connections are NOT secured, as in that the cert only has starburst host
-    if not tlscoord or tlsinternal:
+    if not tlscoord or tlsinternal or externlb:
         return
 
     if readableFile(hostsf):
@@ -2196,6 +2250,7 @@ if target == "gcp":
     announce(f"GCP project is {gcpproject}")
 if nobastionfw:
     announceBox("Bastion firewall will be disabled!")
+print(f"Your CIDR is {mySubnetCidr}")
 
 w = []
 started = False
