@@ -30,7 +30,7 @@ ChartVersion: 362.0.0
 NodeCount: 4
 
 # Use an external load balancer as ingress
-ExternalLoadBalancer: True
+IngressLoadBalancer: True
 
 # Require TLS on client <-> coordinator connection.
 RequireCoordTls: False
@@ -39,7 +39,7 @@ RequireCoordTls: False
 RequireInternalTls: False
 
 # Authenticate using LDAP. Implies RequireCoordTls.
-AuthNLdap: False
+AuthNLdap: True
 
 # Disable bastion firewall—don't use unless you know the risks!
 DisableBastionFw: False
