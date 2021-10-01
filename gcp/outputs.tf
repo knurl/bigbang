@@ -11,11 +11,15 @@ output "ldaps_address" {
 }
 
 output "starburst_address" {
-  value = local.starburst_address
+  value = google_compute_address.starburst_static_ip.address
+}
+
+output "starburst_address_name" {
+  value = google_compute_address.starburst_static_ip.name
 }
 
 output "ranger_address" {
-  value = local.ranger_address
+  value = google_compute_address.ranger_static_ip.address
 }
 
 output "evtlog_address" {

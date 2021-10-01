@@ -47,7 +47,7 @@ variable "bastion_name" {
 }
 
 variable "bastion_fw_ingress" {
-  {% if NoBastionFw %}
+  {% if DisableBastionFw %}
   default = ["0.0.0.0/0"]
   {% else %}
   {% if DownstreamSG %}
@@ -92,10 +92,6 @@ variable "postgres_server_name" {
 
 variable "postgresql_version" {
   default = "11"
-}
-
-variable "synapse_ws_name" {
-  default = "synapse-ws-{{ShortName}}"
 }
 
 variable "mysql_server_name" {
@@ -169,6 +165,14 @@ variable "storage_account" {
 
 variable "resource_group_name" {
   default = "{{ResourceGroup}}"
+}
+
+variable "synapse_ws_name" {
+  default = "synapse-ws-{{ShortName}}"
+}
+
+variable "synapse_sqlpool_name" {
+  default = "synsql_{{ShortName}}"
 }
 {% elif Target == "gcp" %}
 #
