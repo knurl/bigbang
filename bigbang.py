@@ -173,7 +173,7 @@ targetlabel = "Target"
 nodecountlabel = "NodeCount"
 chartvlabel = "ChartVersion"
 tlscoordlabel = "RequireCoordTls"
-externlblabel = "ExternalLoadBalancer"
+ingresslblabel = "IngressLoadBalancer"
 tlsinternallabel = "RequireInternalTls"
 authnldaplabel = "AuthNLdap"
 try:
@@ -208,7 +208,7 @@ try:
 
     chartversion = myvars[chartvlabel] # ChartVersion
     nodeCount    = myvars[nodecountlabel] # NodeCount
-    externlb     = myvars[externlblabel] # ExternalLoadBalancer
+    ingresslb    = myvars[ingresslblabel] # ExternalLoadBalancer
     tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
     tlsinternal  = myvars[tlsinternallabel] # RequireInternalTls
     authnldap    = myvars[authnldaplabel] # AuthNLdap
@@ -355,17 +355,20 @@ if nodeCount < 2:
     sys.exit(f"Must have at least {minnodes} nodes; {nodeCount} set for "
             f"{nodecountlabel} in {myvarsf}.")
 
-if externlb and tlscoord:
-    sys.exit(f"{externlblabel} and {tlscoordlabel} are mutually exclusive.")
+if ingresslb and tlscoord:
+    sys.exit(f"{ingresslblabel} and {tlscoordlabel} are mutually exclusive.")
 
 if tlsinternal and not tlscoord:
     sys.exit(f"{tlsinternallabel} requires {tlscoordlabel} to be enabled")
 
-if authnldap and not tlscoord:
-    sys.exit(f"{authnldaplabel} requires {tlscoordlabel} to be enabled")
+if authnldap and not (tlscoord or ingresslb):
+    sys.exit(f"{authnldaplabel} requires {tlscoordlabel} or {ingresslblabel} "
+            "to be enabled")
 
-if (upstreamSG or downstreamSG) and not tlscoord:
+if (upstreamSG or downstreamSG) and not (tlscoord or ingresslb):
     sys.exit(f"Stargate mode requires {tlscoordlabel} to be enabled")
+
+def tlsenabled() -> bool: return ingresslb or tlscoord
 
 #
 # GcpProjectId
@@ -446,8 +449,9 @@ svcports    = {
 if tlscoord:
     svcports |= {"starburst": {"local": 8443, "remote": 8443},
                  "ldaps":     {"local": 8636, "remote": 636}}
-elif externlb:
-    svcports |= {"starburst": {"local": 8443, "remote": 443}}
+elif ingresslb:
+    svcports |= {"starburst": {"local": 8443, "remote": 443},
+                 "ldaps":     {"local": 8636, "remote": 636}}
 else:
     svcports |= {"starburst": {"local": 8080, "remote": 8080}}
 
@@ -748,7 +752,7 @@ def getStarburstUrl() -> str:
     port = getLclPort("starburst")
 
     # If we are TLS-protected to the coordinator...
-    if tlscoord or externlb:
+    if tlsenabled():
         scheme = "https"
         # If we are TLS-protecting the coordinator connection, but not
         # internal connections, then the cert will require us to use the
@@ -787,7 +791,7 @@ def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:
     namesp = f" --namespace {namespace}" if namespace else ""
     for serv in services:
         ingress = None
-        if externlb and serv == "starburst":
+        if ingresslb and serv == "starburst":
             r = runTry(f"{kube}{namesp} get ing -ojson {ingressname}".split())
             if r.returncode == 0:
                 jout = json.loads(r.stdout)
@@ -813,7 +817,7 @@ def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:
             status = s["status"]
 
             if ingress:
-                assert externlb and serv == "starburst"
+                assert ingresslb and serv == "starburst"
                 # Metadata section
                 ingmeta = ingress["metadata"] # this should always be present
                 assert ingmeta["namespace"] == namespace
@@ -913,32 +917,18 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
 
 # A class for recording ssh tunnels
 class Tunnel:
-    def __init__(self, shortname: str,
-            bastionIp: ipaddress.IPv4Address,
-            lPort: int, rAddr: str, rPort: int,
-            jumpHost: ipaddress.IPv4Address = None,
-            bindAddr: ipaddress.IPv4Address = None):
+    def __init__(self, shortname: str, bastionIp: ipaddress.IPv4Address,
+            lPort: int, rAddr: str, rPort: int):
         self.shortname = shortname
         self.bastion = bastionIp
         self.lport = lPort
         self.raddr = rAddr
         self.rport = rPort
         self.p = None
-        self.jumphost = jumpHost
-        self.bindaddr = bindAddr
-        bx = str(self.bindaddr) + ":" if self.bindaddr else ""
-
-        cmd = "ssh -N -L{ba}{p}:{a}:{k} ubuntu@{b}".format(ba = bx, p = lPort,
-                a = rAddr, k = rPort, b = bastionIp)
-        # TODO: Get rid of the extra code added here to set up tunnels in
-        # foreign hosts. It isn't needed any more now that we are setting up
-        # the port-forward on the upstream bastion through a launch script.
-        if self.jumphost:
-            cmd = f"ssh -t -t ubuntu@{self.jumphost} {cmd}"
-        self.command = cmd
+        self.command = "ssh -N -L{p}:{a}:{k} ubuntu@{b}".format(p = lPort, a =
+                rAddr, k = rPort, b = bastionIp)
         print(self.command)
-        self.p = subprocess.Popen(cmd.split(), stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL)
+        self.p = subprocess.Popen(self.command.split())
         announce("Created tunnel " + str(self))
 
     def __del__(self):
@@ -952,11 +942,8 @@ class Tunnel:
         tgtname = self.shortname
         if len(self.raddr) < 16:
             tgtname = "[{n}]{h}".format(n = self.shortname, h = self.raddr)
-        jhlabel = "[JH => {}]".format(str(self.jumphost)) \
-                if self.jumphost else ""
-        return "{x}{l} -> {ra}:{rp} (PID {p})".format(x = jhlabel,
-                p = self.p.pid if self.p else "?", l = self.lport,
-                ra = tgtname, rp = self.rport)
+        return "{l} -> {ra}:{rp} (PID {p})".format(l = self.lport, ra =
+                tgtname, rp = self.rport, p = self.p.pid if self.p else "?")
 
 toreap: list[Tunnel] = [] # Accumulate tunnels to destroy
 
@@ -1001,7 +988,7 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
 
     # Start up the tunnel to the LDAP server
     if authnldap:
-        assert tlscoord
+        assert tlsenabled()
         tun = Tunnel("ldaps", env["bastion_address"], getLclPort("ldaps"),
                 ldapfqdn, getRmtPort("ldaps"))
         tuns.append(tun)
@@ -1226,7 +1213,7 @@ def sendSql(command: str, verbose = False) -> list:
     url = getStarburstUrl() + "/v1/statement"
     hdr = { "X-Trino-User": trinouser }
     authtype = None
-    if tlscoord or externlb:
+    if tlsenabled():
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
     f = lambda: requests.post(url, headers = hdr, auth = authtype, data =
             command, verify = secrets["wildcert"]["f"] if tlsinternal else
@@ -1442,7 +1429,7 @@ def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
             if name in ('starburstks', 'starburstcert'):
                 continue
         # If we are using TLS on coordinator only, we don't need these
-        elif tlscoord or externlb:
+        elif tlsenabled():
             if name in ('wildks', 'wildcert', 'sharedsec'):
                 continue
         # These are needed only for LDAP
@@ -1455,7 +1442,7 @@ def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
 
         if "pair" in values:
             name = values["pair"]
-            if not externlb or name != "starbursttls":
+            if not ingresslb or name != "starbursttls":
                 continue
             env[name] = name
             assert "type" in values
@@ -1590,7 +1577,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
     if authnldap:
         env["LdapUri"] = "ldaps://{h}:{p}".format(h = ldapfqdn, p =
                 getRmtPort("ldaps"))
-    if upstreamSG or externlb:
+    if upstreamSG or ingresslb:
         env["StarburstHost"] = starburstfqdn
     if upstreamSG:
         env["BastionAzPort"] = getLclPortSG("starburst", "az")
@@ -1600,6 +1587,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
     # function returns a tuple, indicating whether the helm chart values file
     # changed, and the location of that same (parameterised) values file.
     changed, yamltmp = parameteriseTemplate(templates[module], tmpdir, env)
+    changed = True
 
     chart = helmWhichChartInstalled(module)
     newchart = charts[module] + "-" + chartversion # which one to install?
@@ -1891,7 +1879,7 @@ class AwsCreds(Creds):
 def announceReady(bastionIp: str) -> list:
     a = [getStarburstUrl() + "/ui/insights"]
     who = f"user: {trinouser}"
-    if tlscoord or externlb:
+    if tlsenabled():
         who += f" pwd: {trinopass}"
     a.append(who)
     if downstreamSG:
@@ -2207,7 +2195,7 @@ def checkEtcHosts() -> None:
     # We only need to make sure that we have a binding for the starburst host
     # if we are running with TLS to the coordinator but the internal
     # connections are NOT secured, as in that the cert only has starburst host
-    if not tlscoord or tlsinternal or externlb:
+    if not tlsinternal or tlsenabled():
         return
 
     if readableFile(hostsf):

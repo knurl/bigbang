@@ -8,7 +8,7 @@ starburstPlatformLicense: {{license}}
 
 # How the starburst service will be exposed.
 expose:
-  {% if ExternalLoadBalancer %}
+  {% if IngressLoadBalancer %}
   type: "ingress"
   ingress:
     ingressName: {{IngressName}}
@@ -24,8 +24,6 @@ expose:
       kubernetes.io/ingress.class: "gce-internal"
       kubernetes.io/ingress.regional-static-ip-name: {{starburst_address_name}}
       kubernetes.io/ingress.allow-http: "false"
-    serviceAnnotations:
-      cloud.google.com/backend-config: '{"default": "http-hc-config"}'
     {% endif %}
   {% else %}
   type: loadBalancer
@@ -75,7 +73,7 @@ coordinator:
         node-scheduler.include-coordinator=false
         http-server.http.port=8080
         http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
-        {% if ExternalLoadBalancer %}
+        {% if IngressLoadBalancer %}
         # These two have to be here because (i) we need to accept headers from
         # the LB promising us that the channel prior to the LB was encrypted,
         # and (ii) because between the LB and Starburst, the communications

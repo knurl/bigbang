@@ -12,7 +12,7 @@ Tunnel	bigbang.py	/^class Tunnel:$/;"	c
 __del__	bigbang.py	/^    def __del__(self):$/;"	m	class:Tunnel	file:
 __init__	bigbang.py	/^    def __init__(self):$/;"	m	class:AwsCreds
 __init__	bigbang.py	/^    def __init__(self, accesskey: str, secret: str):$/;"	m	class:Creds
-__init__	bigbang.py	/^    def __init__(self, shortname: str,$/;"	m	class:Tunnel
+__init__	bigbang.py	/^    def __init__(self, shortname: str, bastionIp: ipaddress.IPv4Address,$/;"	m	class:Tunnel
 __str__	bigbang.py	/^    def __str__(self):$/;"	m	class:Tunnel	file:
 addAwsAuthConfigMap	bigbang.py	/^def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:$/;"	f
 announce	bigbang.py	/^def announce(s):$/;"	f
@@ -30,7 +30,6 @@ awscreds	bigbang.py	/^awscreds      = os.path.expanduser("~\/.aws\/credentials")
 awsdir	bigbang.py	/^awsdir        = os.path.expanduser("~\/.aws")$/;"	v
 azaddrs	bigbang.py	/^    azaddrs = { "bastion": ns.azaddrs[0], "starburst": ns.azaddrs[1] }$/;"	v
 azaddrs	bigbang.py	/^azaddrs = None$/;"	v
-backendcrdf	bigbang.py	/^backendcrdf   = where("gcp\/backendCRD.yaml")$/;"	v
 bastionfqdn	bigbang.py	/^bastionfqdn   = "bastion." + domain$/;"	v
 bastlaunchf	bigbang.py	/^bastlaunchf   = where("bastlaunch.sh")$/;"	v
 bqcat	bigbang.py	/^bqcat         = "bq" # for now, connector doesn't support INSERT or CTAS$/;"	v
@@ -72,11 +71,9 @@ ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(repo: str) -> None:$/;"
 env	bigbang.py	/^        env = getOutputVars()$/;"	v
 eraseBucketContents	bigbang.py	/^def eraseBucketContents(env: dict):$/;"	f
 establishBastionTunnel	bigbang.py	/^def establishBastionTunnel(env: dict) -> list[Tunnel]:$/;"	f
-externlblabel	bigbang.py	/^externlblabel = "ExternalLoadBalancer"$/;"	v
 fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 gcpaddrs	bigbang.py	/^    gcpaddrs = { "bastion": ns.gcpaddrs[0], "starburst": ns.gcpaddrs[1] }$/;"	v
 gcpaddrs	bigbang.py	/^gcpaddrs = None$/;"	v
-gcpproject	bigbang.py	/^    gcpproject = runCollect("gcloud config list --format "$/;"	v
 gcpproject	bigbang.py	/^gcpproject = ""$/;"	v
 generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
@@ -131,6 +128,7 @@ hivecat	bigbang.py	/^    hivecat   = "adls"$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "gcs"$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "s3"$/;"	v
 hostsf	bigbang.py	/^hostsf        = "\/etc\/hosts"$/;"	v
+ingresslblabel	bigbang.py	/^ingresslblabel = "IngressLoadBalancer"$/;"	v
 ingressname	bigbang.py	/^ingressname   = "coordinator-ingress"$/;"	v
 installSecrets	bigbang.py	/^def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:$/;"	f
 instanceType	bigbang.py	/^    instanceType = myvars["AwsInstanceType"]$/;"	v
@@ -222,6 +220,7 @@ templates	bigbang.py	/^templates = {}$/;"	v
 tfdir	bigbang.py	/^tfdir = where(target)$/;"	v
 tfvars	bigbang.py	/^tfvars        = "variables.tf" # basename only, no path!$/;"	v
 tlscoordlabel	bigbang.py	/^tlscoordlabel = "RequireCoordTls"$/;"	v
+tlsenabled	bigbang.py	/^def tlsenabled() -> bool: return ingresslb or tlscoord$/;"	f
 tlsinternallabel	bigbang.py	/^tlsinternallabel = "RequireInternalTls"$/;"	v
 tmpdir	bigbang.py	/^tmpdir        = "\/tmp"$/;"	v
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
