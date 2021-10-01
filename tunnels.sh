@@ -6,9 +6,18 @@ SURL=https://$STARBURSTNAME
 RURL=http://localhost
 LOOPBACK=127.0.0.1
 HOSTSFILE=/etc/hosts
-BASTIONAWS=52.56.97.222
-BASTIONAZU=20.108.53.182
-BASTIONGCP=35.189.95.15
+
+BASTIONAWS=13.37.96.98
+STARBURSTAWS=internal-a554dbe6c992842b5a53f634398f0a27-1597890617.eu-west-3.elb.amazonaws.com
+RANGERAWS=internal-ad67256b5949249b4a3f79e4f0607908-753428237.eu-west-3.elb.amazonaws.com
+
+BASTIONAZU=20.199.118.180
+STARBURSTAZU=10.4.0.103
+RANGERAZU=10.4.0.104
+
+BASTIONGCP=35.205.181.188
+STARBURSTGCP=172.20.208.103
+RANGERGCP=172.20.208.104
 
 cat <<EOM > $KEY
 -----BEGIN OPENSSH PRIVATE KEY-----
@@ -53,50 +62,58 @@ fi
 # This line picks up all the existing processes that looks like tunnels. They
 # will be killed by the time you hit Enter, by the final kill statement below.
 PIDS=$(ps -ef | grep -E 'ssh -i.*bigdata-london.key -N.*ubuntu@' | grep -v grep | awk '{print $2}' ORS=' ')
-kill $PIDS
+if [ -n "$PIDS" ]; then
+    echo Killing existing tunnels $PIDS...
+    kill $PIDS
+    PIDS=""
+fi
 
 echo On Mac Terminal, you can highlight the URLs below with your trackpad,
 echo right-click on the highlighted URL, and go it by clicking 'Open URL'!
 echo Also note: If you get 'Address already in use', just run the script
 echo again and hit Enter, and it will kill all the existing PIDs.
 
-echo Getting host keys
+echo Removing old host keys
+touch ~/.ssh/known_hosts
 ssh-keygen -q -R $BASTIONAWS 2>&1 > /dev/null
 ssh-keygen -q -R $BASTIONAZU 2>&1 > /dev/null
 ssh-keygen -q -R $BASTIONGCP 2>&1 > /dev/null
-ssh-keyscan -4 -p22 -H $BASTIONAWS >> ~/.ssh/known_hosts
-ssh-keyscan -4 -p22 -H $BASTIONAZU >> ~/.ssh/known_hosts
-ssh-keyscan -4 -p22 -H $BASTIONGCP >> ~/.ssh/known_hosts
-echo Host keys are stored in ~/.ssh/known_hosts
+
+echo Adding hosts to known hosts
+ssh-keyscan -4 -p22 -H $BASTIONAWS 2>&1 >> ~/.ssh/known_hosts
+ssh-keyscan -4 -p22 -H $BASTIONAZU 2>&1 >> ~/.ssh/known_hosts
+ssh-keyscan -4 -p22 -H $BASTIONGCP 2>&1 >> ~/.ssh/known_hosts
+
+echo Host keys are now stored in ~/.ssh/known_hosts
 
 # AWS Starburst
 echo Starting AWS Starburst tunnel to $SURL:8443/ui/insights
-ssh -i $KEY -N -L8443:internal-a0e43308320a947b1ac8e3a222d050b1-1702118534.eu-west-2.elb.amazonaws.com:8443 ubuntu@$BASTIONAWS &
+ssh -i $KEY -N -L8443:$STARBURSTAWS:8443 ubuntu@$BASTIONAWS &
 PIDS="$PIDS $!"
 
 # AWS Ranger
 echo Starting AWS Ranger tunnel to $RURL:6080
-ssh -i $KEY -N -L6080:internal-ab6879d61bdf0462488fed74ce3a8614-1354007404.eu-west-2.elb.amazonaws.com:6080 ubuntu@$BASTIONAWS &
+ssh -i $KEY -N -L6080:$RANGERAWS:6080 ubuntu@$BASTIONAWS &
 PIDS="$PIDS $!"
 
 # Azure Starburst
 echo Starting Azure Starburst tunnel to $SURL:8444/ui/insights
-ssh -i $KEY -N -L8444:10.134.0.103:8443 ubuntu@$BASTIONAZU &
+ssh -i $KEY -N -L8444:$STARBURSTAZU:8443 ubuntu@$BASTIONAZU &
 PIDS="$PIDS $!"
 
 # Azure Ranger
 echo Starting Azure Ranger tunnel to $RURL:6081
-ssh -i $KEY -N -L6081:10.134.0.104:6080 ubuntu@$BASTIONAZU &
+ssh -i $KEY -N -L6081:$RANGERAZU:6080 ubuntu@$BASTIONAZU &
 PIDS="$PIDS $!"
 
 # GCP Starburst
-echo Starting GCP Starburst tunnel to $SURL:844/ui/insights5
-ssh -i $KEY -N -L8445:172.20.112.103:8443 ubuntu@$BASTIONGCP &
+echo Starting GCP Starburst tunnel to $SURL:8445/ui/insights
+ssh -i $KEY -N -L8445:$STARBURSTGCP:8443 ubuntu@$BASTIONGCP &
 PIDS="$PIDS $!"
 
 # GCP Ranger
 echo Starting GCP Ranger tunnel to $RURL:6082
-ssh -i $KEY -N -L6082:172.20.112.104:6080 ubuntu@$BASTIONGCP &
+ssh -i $KEY -N -L6082:$RANGERGCP:6080 ubuntu@$BASTIONGCP &
 PIDS="$PIDS $!"
 
 echo Tunnel PIDs are $PIDS

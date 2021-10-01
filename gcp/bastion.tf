@@ -1,3 +1,10 @@
+resource "google_compute_address" "bastion_ip" {
+  project      = data.google_project.project.project_id
+  region       = var.region
+  name         = "bastion-ip"
+  address_type = "EXTERNAL"
+}
+
 resource "google_compute_instance" "bastion" {
   name         = var.bastion_name
   machine_type = var.small_instance_type
@@ -15,7 +22,7 @@ resource "google_compute_instance" "bastion" {
     subnetwork = google_compute_subnetwork.snet.self_link
     network_ip = cidrhost(local.subnetwork_cidr, 101)
     access_config {
-      # Empty list => assign ephemeral external IP
+      nat_ip = google_compute_address.bastion_ip.address
     }
   }
 

@@ -40,5 +40,5 @@ output "object_key" {
 }
 
 output "synapse_address" {
-  value = azurerm_synapse_workspace.synapse_ws.connectivity_endpoints["sqlOnDemand"]
+  value = azurerm_synapse_workspace.synapse_ws.connectivity_endpoints["sql"]
 }

@@ -30,9 +30,12 @@ awscreds	bigbang.py	/^awscreds      = os.path.expanduser("~\/.aws\/credentials")
 awsdir	bigbang.py	/^awsdir        = os.path.expanduser("~\/.aws")$/;"	v
 azaddrs	bigbang.py	/^    azaddrs = { "bastion": ns.azaddrs[0], "starburst": ns.azaddrs[1] }$/;"	v
 azaddrs	bigbang.py	/^azaddrs = None$/;"	v
+backendcrdf	bigbang.py	/^backendcrdf   = where("gcp\/backendCRD.yaml")$/;"	v
 bastionfqdn	bigbang.py	/^bastionfqdn   = "bastion." + domain$/;"	v
+bastlaunchf	bigbang.py	/^bastlaunchf   = where("bastlaunch.sh")$/;"	v
 bqcat	bigbang.py	/^bqcat         = "bq" # for now, connector doesn't support INSERT or CTAS$/;"	v
 bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
+buildBastionLauncher	bigbang.py	/^def buildBastionLauncher() -> None:$/;"	f
 buildLdapLauncher	bigbang.py	/^def buildLdapLauncher(fqdn: str) -> None:$/;"	f
 c	bigbang.py	/^                c = ", ".join(clouds)))$/;"	v
 charts	bigbang.py	/^charts = {}$/;"	v
@@ -52,9 +55,9 @@ dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["AzureDbVmType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["GcpDbMachineType"]$/;"	v
 dbevtlog	bigbang.py	/^dbevtlog      = "evtlog" # event logger PostgreSQL instance$/;"	v
 dbports	bigbang.py	/^dbports       = { "mysql": 3306, "postgres": 5432 }$/;"	v
-dbpwd	bigbang.py	/^dbpwd         = "a029fjg!>dfgBiO8"$/;"	v
+dbpwd	bigbang.py	/^dbpwd         = "a029fjg!>dugBiO8"$/;"	v
 dbschema	bigbang.py	/^dbschema      = "s"$/;"	v
-dbuser	bigbang.py	/^dbuser        = "starburst_user"$/;"	v
+dbuser	bigbang.py	/^dbuser        = "starburstuser"$/;"	v
 deleteAllServices	bigbang.py	/^def deleteAllServices() -> dict[str, str]:$/;"	f
 deltacat	bigbang.py	/^deltacat = "delta"$/;"	v
 domain	bigbang.py	/^domain        = "az.starburstdata.net"$/;"	v
@@ -63,15 +66,18 @@ downstreamSG	bigbang.py	/^        downstreamSG = True$/;"	v
 downstreamSG	bigbang.py	/^downstreamSG = False$/;"	v
 dropExistingSchemaWithTables	bigbang.py	/^def dropExistingSchemaWithTables(catalog: str, schema: str) -> None:$/;"	f
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
+emitSshTunnel	bigbang.py	/^            def emitSshTunnel(wh, bindaddr: ipaddress.IPv4Address, lclport:$/;"	f	function:buildBastionLauncher
 ensureClusterIsStarted	bigbang.py	/^def ensureClusterIsStarted(skipClusterStart: bool) -> dict:$/;"	f
 ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(repo: str) -> None:$/;"	f
 env	bigbang.py	/^        env = getOutputVars()$/;"	v
 eraseBucketContents	bigbang.py	/^def eraseBucketContents(env: dict):$/;"	f
 establishBastionTunnel	bigbang.py	/^def establishBastionTunnel(env: dict) -> list[Tunnel]:$/;"	f
+externlblabel	bigbang.py	/^externlblabel = "ExternalLoadBalancer"$/;"	v
 fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 gcpaddrs	bigbang.py	/^    gcpaddrs = { "bastion": ns.gcpaddrs[0], "starburst": ns.gcpaddrs[1] }$/;"	v
 gcpaddrs	bigbang.py	/^gcpaddrs = None$/;"	v
-gcpproject	bigbang.py	/^gcpproject = runCollect("gcloud config list --format "$/;"	v
+gcpproject	bigbang.py	/^    gcpproject = runCollect("gcloud config list --format "$/;"	v
+gcpproject	bigbang.py	/^gcpproject = ""$/;"	v
 generateDatabaseUsers	bigbang.py	/^def generateDatabaseUsers(env: dict) -> None:$/;"	f
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
 getAccessKeyName	bigbang.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:AwsCreds
@@ -111,6 +117,7 @@ helmcreds	bigbang.py	/^        helmcreds = yaml.load(mypf, Loader = yaml.FullLoa
 helmcredsbf	bigbang.py	/^helmcredsbf = "helm-creds.yaml"$/;"	v
 helmcredsf	bigbang.py	/^helmcredsf  = where("helm-creds.yaml")$/;"	v
 helmns	bigbang.py	/^helmns        = f"-n {namespace}"$/;"	v
+help	bigbang.py	/^        help="Disable bastion firewall—only protection will be ssh!")$/;"	v
 help	bigbang.py	/^        help="Don't load databases with tpch data.")$/;"	v
 help	bigbang.py	/^        help="Drop all tables before loading with tpch data.")$/;"	v
 help	bigbang.py	/^        help="Force cloud target to specified value.")$/;"	v
@@ -118,12 +125,14 @@ help	bigbang.py	/^        help="Force zone\/region to specified value.")$/;"	v
 help	bigbang.py	/^        help="Gather the downstream Azure bastion IP and starburst LB IP as a "$/;"	v
 help	bigbang.py	/^        help="Gather the downstream GCP bastion IP and starburst LB IP as a "$/;"	v
 help	bigbang.py	/^        help="Specify upstream bastion IP address, if this is a downstream "$/;"	v
+help	bigbang.py	/^        help="Summarise the ssh tunnels on exit.")$/;"	v
 help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "adls"$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "gcs"$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "s3"$/;"	v
 hostsf	bigbang.py	/^hostsf        = "\/etc\/hosts"$/;"	v
-installSecrets	bigbang.py	/^def installSecrets(secrets: dict) -> dict:$/;"	f
+ingressname	bigbang.py	/^ingressname   = "coordinator-ingress"$/;"	v
+installSecrets	bigbang.py	/^def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:$/;"	f
 instanceType	bigbang.py	/^    instanceType = myvars["AwsInstanceType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["AzureVmType"]$/;"	v
 instanceType	bigbang.py	/^    instanceType = myvars["GcpMachineType"]$/;"	v
@@ -138,10 +147,8 @@ kubecfgf	bigbang.py	/^kubecfgf      = os.path.expanduser("~\/.kube\/config")$/;"
 kubens	bigbang.py	/^kubens        = f"{kube} -n {namespace}"$/;"	v
 lakecats	bigbang.py	/^lakecats = { hivecat, deltacat }$/;"	v
 ldapfqdn	bigbang.py	/^ldapfqdn      = "ldap." + domain$/;"	v
-ldaplaunchbf	bigbang.py	/^ldaplaunchbf  = "ldaplaunch.sh"$/;"	v
-ldaplaunchf	bigbang.py	/^ldaplaunchf   = where(ldaplaunchbf)$/;"	v
-ldapsetupbf	bigbang.py	/^ldapsetupbf   = "install-slapd.sh"$/;"	v
-ldapsetupf	bigbang.py	/^ldapsetupf    = where(ldapsetupbf)$/;"	v
+ldaplaunchf	bigbang.py	/^ldaplaunchf   = where("ldaplaunch.sh")$/;"	v
+ldapsetupf	bigbang.py	/^ldapsetupf    = where("install-slapd.sh")$/;"	v
 loadBalancerResponding	bigbang.py	/^def loadBalancerResponding(service: str) -> bool:$/;"	f
 loadDatabases	bigbang.py	/^def loadDatabases(hive_location):$/;"	f
 localhost	bigbang.py	/^localhost     = "localhost"$/;"	v
@@ -166,6 +173,7 @@ p	bigbang.py	/^p = argparse.ArgumentParser(description=$/;"	v
 parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,$/;"	f
 planWorkerSize	bigbang.py	/^def planWorkerSize() -> dict:$/;"	f
 portoffset	bigbang.py	/^portoffset = { "aws": 0, "az": 1, "gcp": 2 }$/;"	v
+rangerfqdn	bigbang.py	/^rangerfqdn    = "ranger." + domain$/;"	v
 readableDir	bigbang.py	/^def readableDir(p):$/;"	f
 readableFile	bigbang.py	/^def readableFile(p):$/;"	f
 region	bigbang.py	/^region = getRegionFromZone(zone)$/;"	v
@@ -206,6 +214,7 @@ storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
 svcStart	bigbang.py	/^def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,$/;"	f
 svcStop	bigbang.py	/^def svcStop(onlyEmptyNodes: bool = False) -> None:$/;"	f
 svcports	bigbang.py	/^svcports    = {$/;"	v
+synapsecat	bigbang.py	/^synapsecat    = "synapse" # for now, connector doesn't support CTAS$/;"	v
 syscat	bigbang.py	/^syscat        = "system"$/;"	v
 targetlabel	bigbang.py	/^targetlabel = "Target"$/;"	v
 templatedir	bigbang.py	/^templatedir   = where("templates")$/;"	v
@@ -217,10 +226,10 @@ tlsinternallabel	bigbang.py	/^tlsinternallabel = "RequireInternalTls"$/;"	v
 tmpdir	bigbang.py	/^tmpdir        = "\/tmp"$/;"	v
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds
-tpchbigschema	bigbang.py	/^tpchbigschema = "sf1"$/;"	v
+tpchbigschema	bigbang.py	/^tpchbigschema = "tiny"$/;"	v
 tpchbuckets	bigbang.py	/^tpchbuckets   = {$/;"	v
 tpchcat	bigbang.py	/^tpchcat       = "tpch"$/;"	v
-tpchsmlschema	bigbang.py	/^tpchsmlschema = "sf1"$/;"	v
+tpchsmlschema	bigbang.py	/^tpchsmlschema = "tiny"$/;"	v
 trinopass	bigbang.py	/^trinopass     = "test"$/;"	v
 trinouser	bigbang.py	/^trinouser     = "starburst_service"$/;"	v
 type	bigbang.py	/^        type=ipaddress.IPv4Address,$/;"	v
@@ -234,7 +243,7 @@ username	bigbang.py	/^username = re.sub(invalidchars, "-", emailparts[0]).lower(
 v	bigbang.py	/^    v = vars(ns)$/;"	v
 validchars	bigbang.py	/^validchars = r"a-zA-Z0-9"$/;"	v
 w	bigbang.py	/^        w = announceReady(env["bastion_address"])$/;"	v
-w	bigbang.py	/^    w = svcStart(creds, ns.skip_cluster_start, ns.drop_tables, ns.dont_load)$/;"	v
+w	bigbang.py	/^    w = svcStart(creds, ns.skip_cluster_start, ns.drop_tables, ns.dont_load,$/;"	v
 w	bigbang.py	/^w = []$/;"	v
 waitUntilApiServerResponding	bigbang.py	/^def waitUntilApiServerResponding() -> float:$/;"	f
 waitUntilDeploymentsAvail	bigbang.py	/^        -> float:$/;"	f

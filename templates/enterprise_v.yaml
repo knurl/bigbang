@@ -8,17 +8,41 @@ starburstPlatformLicense: {{license}}
 
 # How the starburst service will be exposed.
 expose:
+  {% if ExternalLoadBalancer %}
+  type: "ingress"
+  ingress:
+    ingressName: {{IngressName}}
+    serviceName: "starburst"
+    servicePort: 8080
+    tls:
+      enabled: true
+      secretName: {{starbursttls}}
+    host: {{StarburstHost}}
+    path: "/*"
+    {% if Target == "gcp" %}
+    annotations:
+      kubernetes.io/ingress.class: "gce-internal"
+      kubernetes.io/ingress.regional-static-ip-name: {{starburst_address_name}}
+      kubernetes.io/ingress.allow-http: "false"
+    serviceAnnotations:
+      cloud.google.com/backend-config: '{"default": "http-hc-config"}'
+    {% endif %}
+  {% else %}
   type: loadBalancer
   loadBalancer:
     # TODO AWS Doesn't support specification of a static IP for the ELB
     {% if Target != "aws" %}
     IP: {{starburst_address | string}}
     {% endif %}
-  {% if RequireInternalTls or RequireCoordTls %}
     ports:
+  {% if RequireInternalTls or RequireCoordTls %}
       https:
         port: 8443
       http: null
+  {% else %}
+      http:
+        port: 8080
+      https: null
   {% endif %}
     annotations:
       {% if Target == "aws" %}
@@ -28,10 +52,11 @@ expose:
       {% elif Target == "gcp" %}
       networking.gke.io/load-balancer-type: "Internal"
       {% endif %}
+  {% endif %}
 
 {% if RequireInternalTls %}
 # Shared secret for internal communication.
-sharedSecret: secretRef.{{sharedsec}}.{{sharedsecbf}}
+sharedSecret: secretRef:{{sharedsec}}:{{sharedsecbf}}
 
 # Use only https and port 8443 for internal communication.
 internal:
@@ -50,6 +75,14 @@ coordinator:
         node-scheduler.include-coordinator=false
         http-server.http.port=8080
         http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
+        {% if ExternalLoadBalancer %}
+        # These two have to be here because (i) we need to accept headers from
+        # the LB promising us that the channel prior to the LB was encrypted,
+        # and (ii) because between the LB and Starburst, the communications
+        # will include passwords but will be in the clear.
+        http-server.process-forwarded=true
+        http-server.authentication.allow-insecure-over-http=true
+        {% endif %}
         task.writer-count = 8
         # TLS everywhere
         {% if RequireInternalTls %}
