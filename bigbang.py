@@ -1,7 +1,7 @@
 #!python
 
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
-import subprocess, ipaddress, glob, threading, time, concurrent.futures
+import subprocess, ipaddress, glob, threading, time, random, string
 import atexit, psutil # type: ignore
 from run import run, runShell, runTry, runStdout, runCollect, retryRun
 from subprocess import CalledProcessError
@@ -69,6 +69,7 @@ ldapfqdn      = "ldap." + domain
 bastionfqdn   = "bastion." + domain
 keystorepass  = "test123"
 hostsf        = "/etc/hosts"
+patchf        = where("sb-ent.diff")
 bastlaunchf   = where("bastlaunch.sh")
 ldapsetupf    = where("install-slapd.sh")
 ldaplaunchf   = where("ldaplaunch.sh")
@@ -1557,6 +1558,10 @@ def helmWhichChartInstalled(module: str) -> Optional[str]:
         chart = installed[release] # Get chart for release
     return chart
 
+def randomString(length: int) -> str:
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choices(chars, k = length))
+
 # Returns a bool indicating if the hive postgres database might have been
 # created--either during an install, or because we revved up a version
 def helmInstallRelease(module: str, env: dict = {}) -> bool:
@@ -1587,20 +1592,30 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
     # function returns a tuple, indicating whether the helm chart values file
     # changed, and the location of that same (parameterised) values file.
     changed, yamltmp = parameteriseTemplate(templates[module], tmpdir, env)
-    changed = True
 
     chart = helmWhichChartInstalled(module)
     newchart = charts[module] + "-" + chartversion # which one to install?
 
     hivereset = False
-    if module == 'enterprise':
-        myrepo = '/Users/rob/helmcharts'
-    else:
-        myrepo = repo
+    workingrepo = repo
+	# The starburst-enterprise helm chart doesn't currently support ingress
+	# load balancers on GKE. Patch the helm chart to fix this.
+    if module == "enterprise" and ingresslb:
+        # Only write if the directory doesn't yet exist
+        tgtdir = f"/tmp/repo-{repo}-{chartversion}"
+        tgtdirtmp = "{td}-tmp-{r}".format(td = tgtdir, r = randomString(8))
+        if not os.path.exists(tgtdir):
+            helm("pull {p}/{c} --version {v} --untar --untardir {d}".format(p =
+                repo, c = charts[module], v = chartversion, d = tgtdirtmp))
+            runStdout(f"patch -d {tgtdirtmp} -p0 -i {patchf}".split())
+            os.rename(tgtdirtmp, tgtdir)
+            changed = True
+        workingrepo = tgtdir
+    
     if chart == None: # Nothing installed yet, so we need to install
         announce(f"Installing chart {newchart} using helm")
         helm("{h} install {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
-            r = releases[module], w = myrepo, c = charts[module], y =
+            r = releases[module], w = workingrepo, c = charts[module], y =
             yamltmp, v = chartversion))
         if module == "hive":
             hivereset = True # freshly installed -> new postgres
@@ -1612,7 +1627,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         announce(astr)
         helm("{h} upgrade {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
-            r = releases[module], w = myrepo, c = charts[module], y =
+            r = releases[module], w = workingrepo, c = charts[module], y =
             yamltmp, v = chartversion))
 
         # Hive postgres DB will be rebuilt only if we rev a version

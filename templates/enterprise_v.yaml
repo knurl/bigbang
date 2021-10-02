@@ -20,6 +20,10 @@ expose:
     host: {{StarburstHost}}
     path: "/*"
     {% if Target == "gcp" %}
+    gcpBackendConfig:
+      name: hc-config
+      url: /v1/info
+      port: 8080
     annotations:
       kubernetes.io/ingress.class: "gce-internal"
       kubernetes.io/ingress.regional-static-ip-name: {{starburst_address_name}}

@@ -1,0 +1,76 @@
+diff -ruN starburst-enterprise-orig/charts/starburst-charts-common/templates/_ingress.tpl starburst-enterprise/charts/starburst-charts-common/templates/_ingress.tpl
+--- starburst-enterprise-orig/charts/starburst-charts-common/templates/_ingress.tpl	2021-09-29 12:18:12.000000000 +0100
++++ starburst-enterprise/charts/starburst-charts-common/templates/_ingress.tpl	2021-10-02 00:36:30.000000000 +0100
+@@ -27,6 +27,11 @@
+       hosts:
+         - {{ $ingress.host }}
+   {{- end }}
++  defaultBackend:
++    service:
++      name: {{ $ingress.serviceName }}
++      port:
++        number: {{ $ingress.servicePort }}
+   rules:
+     - http:
+         paths:
+@@ -53,21 +58,28 @@
+ {{- define "app.ingress.service" }}
+ 
+ {{- if eq .Values.expose.type "ingress" }}
++{{- $ingress := .Values.expose.ingress }}
+ apiVersion: v1
+ kind: Service
+ metadata:
+-  name: {{ .Values.expose.ingress.serviceName }}
++  name: {{ $ingress.serviceName }}
+   labels:
+     {{- include "app.labels" . | nindent 4 }}
+     {{- if (eq "starburst-enterprise" .Chart.Name) }}
+     role: coordinator
+     {{- end }}
++
++  {{- with $ingress.gcpBackendConfig }}
++  annotations:
++    cloud.google.com/backend-config: '{ "default": {{ .name | quote }} }'
++  {{- end }}
++
+ spec:
+   type: ClusterIP
+   ports:
+     - name: http
+       protocol: TCP
+-      port: {{ .Values.expose.ingress.servicePort }}
++      port: {{ $ingress.servicePort }}
+   selector:
+     {{- include "app.labels" . | nindent 4 }}
+     {{- if (eq "starburst-enterprise" .Chart.Name) }}
+@@ -85,4 +97,4 @@
+ apiVersion: networking.k8s.io/v1beta1
+ {{- end }}
+ 
+-{{- end }}
+\ No newline at end of file
++{{- end }}
+diff -ruN starburst-enterprise-orig/templates/expose/ingress/backendcrd.yaml starburst-enterprise/templates/expose/ingress/backendcrd.yaml
+--- starburst-enterprise-orig/templates/expose/ingress/backendcrd.yaml	1970-01-01 01:00:00.000000000 +0100
++++ starburst-enterprise/templates/expose/ingress/backendcrd.yaml	2021-10-01 20:32:09.000000000 +0100
+@@ -0,0 +1,19 @@
++{{- if (eq .Values.expose.type "ingress") }}
++{{- with .Values.expose.ingress.gcpBackendConfig }}
++apiVersion: cloud.google.com/v1
++kind: BackendConfig
++metadata:
++  name: {{ .name | quote }}
++spec:
++  healthCheck:
++    checkIntervalSec: 10              # default 15s
++    timeoutSec: 5                     # default 15s
++    healthyThreshold: 1               # default 1
++    unhealthyThreshold: 3             # default 2
++    type: HTTP                        # HTTP, HTTPS, HTTP2
++    # default /
++    requestPath: {{ .url | quote }}
++    # NEGs: match a containerPort; IGs: match a nodePort
++    port: {{ .port }}
++{{- end }}
++{{- end }}
