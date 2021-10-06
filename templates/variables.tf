@@ -157,6 +157,7 @@ variable "ssh_public_key" {
 }
 
 {% if Target == "az" %}
+
 # Azure-specific stuff
 #
 variable "storage_account" {
@@ -171,14 +172,13 @@ variable "synapse_ws_name" {
   default = "synapse-ws-{{ShortName}}"
 }
 
-variable "synapse_sqlpool_name" {
-  default = "synsql_{{ShortName}}"
-}
 {% elif Target == "gcp" %}
+
 #
 # Google-specific stuff
 #
 variable "gcp_project_id" {
   default = "{{GcpProjectId}}"
 }
+
 {% endif %}

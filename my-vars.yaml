@@ -6,8 +6,8 @@ Email: rob.anderson@starburst.io
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
 #Target: aws
-#Target: az
-Target: gcp
+Target: az
+#Target: gcp
 
 #
 # The zone/region/location you want to run in.
@@ -17,9 +17,9 @@ Target: gcp
 #Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: eu-west-3 # AWS - Paris, France, EU
-#Zone: uksouth # Azure - London, UK, EU
+Zone: uksouth # Azure - London, UK, EU
 #Zone: francecentral # Azure - Paris, France, EU
-Zone: europe-west2-b # GCP - London, UK, EU
+#Zone: europe-west2-b # GCP - London, UK, EU
 #Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
@@ -30,10 +30,10 @@ ChartVersion: 362.0.0
 NodeCount: 4
 
 # Use an external load balancer as ingress
-IngressLoadBalancer: True
+IngressLoadBalancer: False
 
 # Require TLS on client <-> coordinator connection.
-RequireCoordTls: False
+RequireCoordTls: True
 
 # Require TLS on coordinator <-> worker connections. Implies RequireCoordTls.
 RequireInternalTls: False

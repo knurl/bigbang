@@ -43,7 +43,7 @@ dbports       = { "mysql": 3306, "postgres": 5432 }
 tpchcat       = "tpch"
 syscat        = "system"
 bqcat         = "bq" # for now, connector doesn't support INSERT or CTAS
-synapsecat    = "synapse" # for now, connector doesn't support CTAS
+synapseslcat  = "synapse_sl"
 trinouser     = "starburst_service"
 trinopass     = "test"
 dbschema      = "s"
@@ -77,11 +77,11 @@ tpchbigschema = "tiny"
 tpchsmlschema = "tiny"
 minbucketsize = 1 << 12
 tpchbuckets   = {
-        "sf1000": 128,
-        "sf100": 64,
-        "sf10": 16,
-        "sf1": 4,
-        "tiny": 1
+        "sf1000": {"partition": True, "nbuckets": 8 },
+        "sf100": { "partition": True, "nbuckets": 4 },
+        "sf10": { "partition": True, "nbuckets": 2 },
+        "sf1": { "partition": True, "nbuckets": 1 },
+        "tiny": { "partition": False, "nbuckets": 1 }
         }
 assert tpchbigschema in tpchbuckets
 assert tpchsmlschema in tpchbuckets
@@ -615,7 +615,8 @@ def getOutputVars() -> dict:
 # username@hostname to username at hostname (supplied separately). So we must
 # supply usernames in different formats for AWS and Azure.
 def generateDatabaseUsers(env: dict) -> None:
-    for db in ["mysql", "postgres", "evtlog", "synapse", "redshift"]:
+    for db in ["mysql", "postgres", "evtlog", "synapse_sl",
+            "synapse_pool", "redshift"]:
         env[db + "_user"] = dbuser
         if target == "az" and db != "redshift":
             env[db + "_user"] += "@" + env[db + "_address"]
@@ -996,9 +997,10 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
 
     # Copy my private RSA key over to the bastion.
     # FIXME Yes, that is slightly dangerous.
-    announce("Copying over private RSA key to bastion")
-    runStdout("scp {r} ubuntu@{h}:/home/ubuntu/.ssh/id_rsa".format(r = rsa, h =
-        env["bastion_address"]).split())
+    if upstreamSG:
+        announce("Copying over private RSA key to bastion")
+        runTry("scp {r} ubuntu@{h}:/home/ubuntu/.ssh/id_rsa".format(r = rsa,
+            h = env["bastion_address"]).split())
 
     return tuns
 
@@ -1246,13 +1248,14 @@ def sendSql(command: str, verbose = False) -> list:
 def dontLoadCat(cat: str) -> bool:
     avoidcat = {tpchcat, syscat}
     if target == "az":
-        avoidcat.add(synapsecat)
+        avoidcat.add(synapseslcat)
     elif target == "gcp":
         avoidcat.add(bqcat)
     return cat in avoidcat or cat.startswith("sg_")
 
 def copySchemaTables(srcCatalog: str, srcSchema: str,
-        dstCatalogs: list, dstSchema: str, hiveTarget: str, numbuckets: int):
+        dstCatalogs: list, dstSchema: str, hiveTarget: str,
+        partition: bool, numbuckets: int):
     # fetch our source tables
     stab = sendSql(f"show tables in {srcCatalog}.{srcSchema}")
     srctables = [t[0] for t in stab]
@@ -1290,15 +1293,16 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
                 dest_cols = "*"
                 if dstCatalog in lakecats:
                     partitioned_by = []
-                    if srctable == 'lineitem':
-                        partitioned_by = ['returnflag', 'linestatus',
-                        'shipmode']
-                    elif srctable == 'orders':
-                        partitioned_by = ['orderstatus', 'orderpriority',
-                                'shippriority']
-                    elif srctable == 'customer':
-                        partitioned_by = ['mktsegment']
-                    if len(partitioned_by) > 0:
+                    if partition:
+                        if srctable == 'lineitem':
+                            partitioned_by = ['returnflag', 'linestatus',
+                                    'shipmode']
+                        elif srctable == 'orders':
+                            partitioned_by = ['orderstatus', 'orderpriority',
+                                    'shippriority']
+                        elif srctable == 'customer':
+                            partitioned_by = ['mktsegment']
+                    if partitioned_by:
                         cols = [col[0] for col in sendSql("show columns from "
                             f"{srcCatalog}.{srcSchema}.{srctable}") if col[0]
                             not in partitioned_by]
@@ -1315,13 +1319,14 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
                             bucketed_by = ['custkey']
 
                     witharray = []
-                    if len(partitioned_by) > 0:
+                    if partitioned_by:
                         witharray.append("partitioned_by = ARRAY[{p}]".format(p
                             = ", ".join(f"'{w}'" for w in partitioned_by)))
-                    if len(bucketed_by) > 0:
+                    if bucketed_by:
                         witharray.append("bucketed_by = ARRAY[{b}]".format(b =
                             ", ".join(f"'{w}'" for w in bucketed_by)))
                         witharray.append(f"bucket_count = {numbuckets}")
+                    if witharray:
                         withc = " with (" + ", ".join(witharray) + ")"
 
                 c = f"create table {dstCatalog}.{dstSchema}.{srctable}"\
@@ -1338,26 +1343,55 @@ def copySchemaTables(srcCatalog: str, srcSchema: str,
     for t in threads:
         t.join()
 
-def eraseBucketContents(env: dict):
+def randomString(length: int) -> str:
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choices(chars, k = length))
+
+# Incredibly, Azure doesn't currently provide a simple way of doing an rm -rf
+# on a directory. So we'll just move everything we find in the root directory
+# to an archive directory.
+def azArchiveDirectories(accountName: str, accessKey: str, fsName: str) -> None:
+    announce(f"Archiving all files in {fsName}")
+    opt = f"--account-name {accountName} --account-key {accessKey} " \
+            f"--file-system {fsName} --output json"
+
+    # Get a list of the files we've got
+    files = json.loads(runCollect(f"az storage fs file list {opt} "
+        "--recursive false --path /".split()))
+    archivedir = f"archive-" + randomString(8)
+    runCollect(f"az storage fs directory create {opt} "
+            f"--name {archivedir}".split())
+
+    # Move the files into the archive directory
+    for f in files:
+        path = f["name"]
+        newpath = f"{fsName}/{archivedir}/{path}"
+        runCollect(f"az storage fs file move {opt} --path {path} "
+                f"--new-path {newpath}".split())
+        print(f"Archived {path} to {newpath}")
+
+def eraseBucketContents(env: dict) -> None:
     # Delete everything in the bucket
     assert target in clouds
 
-    cmd = ""
+    # Azure is a special case because it has no way of recursively deleting
+    # files and directories, so we'll handle it first.
+    if target == "az":
+        azArchiveDirectories(storageacct, env["adls_access_key"],
+                env["adls_fs_name"])
+        return
+
     if target == "aws":
         cmd = "aws s3 rm s3://{b}/ --recursive".format(b = bucket)
-    elif target == "az" and "adls_access_key" in env:
-        cmd = ("az storage fs directory delete -y --file-system {b} "
-                "--account-name {s} --account-key {a} --name '*'").format(b =
-                        bucket, s = storageacct, a = env["adls_access_key"])
-    elif target == "gcp" and "object_address" in env:
+    else:
+        assert target == "gcp"
         cmd = "gsutil rm -rf {b}/*".format(b = env["object_address"])
 
-    if cmd != "":
-        announce(f"Deleting contents of bucket {bucket}")
-        try:
-            runStdout(cmd.split())
-        except CalledProcessError as e:
-            print(f"Unable to erase bucket {bucket} (already empty?)")
+    announce(f"Deleting contents of bucket {bucket}")
+    try:
+        runStdout(cmd.split())
+    except CalledProcessError as e:
+        print(f"Unable to erase bucket {bucket} (already empty?)")
 
 def dropExistingSchemaWithTables(catalog: str, schema: str) -> None:
     # verify the schema exists first
@@ -1388,20 +1422,26 @@ def unloadDatabases():
     for catalog in catalogs:
         dropExistingSchemaWithTables(catalog, dbschema)
 
-def loadDatabases(hive_location):
+def getObjectStoreUrl(env: dict) -> str:
     if target == "aws":
-        hive_location = f"s3://{bucket}" # replace completely
+        return f"s3://{bucket}" # replace completely
     elif target == "az":
-        hive_location = f"abfs://{bucket}@{hive_location}" # prefix location
+        return "abfs://{f}@{h}".format(f = env["adls_fs_name"], h =
+                env["object_address"]) # use the URL for ADLS
+    else: # target == "gcp"
+        return env["object_address"] # change nothing
 
+def loadDatabases(hive_location: str) -> None:
     # For lakes, determine number of buckets
-    numbuckets = tpchbuckets[tpchbigschema]
+    tpchbucket = tpchbuckets[tpchbigschema]
+    partition = tpchbucket["partition"]
+    numbuckets = tpchbucket["nbuckets"]
 
     # First copy tpch large scale set to hive...
     announce(f"loading/verifying tables in {hivecat}")
     t = time.time()
     copySchemaTables(tpchcat, tpchbigschema, [hivecat], dbschema,
-            hive_location, numbuckets)
+            hive_location, partition, numbuckets)
     announce("hive table loading/verifying done in " +
             time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - t)))
 
@@ -1413,10 +1453,10 @@ def loadDatabases(hive_location):
     t = time.time()
     if tpchbigschema == tpchsmlschema:
         copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema,
-                hive_location, numbuckets)
+                hive_location, partition, numbuckets)
     else:
         copySchemaTables(tpchcat, tpchsmlschema, dstCatalogs, dbschema,
-                hive_location, numbuckets)
+                hive_location, partition, numbuckets)
     announce("Loading/verifying of other tables done in " +
             time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - t)))
 
@@ -1557,10 +1597,6 @@ def helmWhichChartInstalled(module: str) -> Optional[str]:
     if release in installed:
         chart = installed[release] # Get chart for release
     return chart
-
-def randomString(length: int) -> str:
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choices(chars, k = length))
 
 # Returns a bool indicating if the hive postgres database might have been
 # created--either during an install, or because we revved up a version
@@ -1923,7 +1959,7 @@ def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
         unloadDatabases()
         eraseBucketContents(env)
     if not dontLoad:
-        loadDatabases(env["object_address"])
+        loadDatabases(getObjectStoreUrl(env))
 
     return announceReady(env["bastion_address"])
 
