@@ -76,11 +76,4 @@ resource "google_container_node_pool" "node_pool" {
     tags   = ["load-balanced-backend"]
     labels = var.tags
   }
-  /*
-    depends_on = [
-    google_sql_database.db_evtlog,
-    google_sql_database.db_postgres,
-    google_sql_database.db_mysql
-  ]
-  */
 }

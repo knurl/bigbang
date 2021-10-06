@@ -34,11 +34,19 @@ output "object_address" {
   value = azurerm_storage_account.storacct.primary_dfs_host
 }
 
+output "adls_fs_name" {
+  value = azurerm_storage_data_lake_gen2_filesystem.adls_gen2_fs.name
+}
+
 output "object_key" {
   value     = azurerm_storage_account.storacct.primary_access_key
   sensitive = true
 }
 
-output "synapse_address" {
+output "synapse_sl_address" {
+  value = azurerm_synapse_workspace.synapse_ws.connectivity_endpoints["sqlOnDemand"]
+}
+
+output "synapse_pool_address" {
   value = azurerm_synapse_workspace.synapse_ws.connectivity_endpoints["sql"]
 }

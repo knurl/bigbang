@@ -205,10 +205,10 @@ worker:
         internal-communication.https.truststore.key={{KeystorePass}}
         {% endif %}
 
-# If we're not going to be using LDAP, then automatically switch over to using
-# a password database ("file")
 {% if not AuthNLdap %}
-# automatically enables password authenticator
+# If we're not going to be using LDAP, then automatically switch over to using
+# a password database ("file"). Note that just adding userDatabase here
+# automatically enables the password authenticator.
 userDatabase:
   enabled: true
   users:
@@ -269,10 +269,16 @@ catalogs:
     connection-password={{DBPassword}}
     allow-drop-table=true
   {% elif Target == "az" %}
-  synapse: |
+  synapse_sl: |
     connector.name=synapse
-    connection-url=jdbc:sqlserver://{{synapse_address}}:1433
-    connection-user={{synapse_user}}
+    connection-url=jdbc:sqlserver://{{synapse_sl_address}}:1433;database=master
+    connection-user={{synapse_sl_user}}
+    connection-password={{DBPassword}}
+    allow-drop-table=true
+  synapse_pool: |
+    connector.name=synapse
+    connection-url=jdbc:sqlserver://{{synapse_pool_address}}:1433;database={{DBName}}
+    connection-user={{synapse_pool_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
   {% elif Target == "gcp" %}
