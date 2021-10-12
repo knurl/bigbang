@@ -21,11 +21,18 @@ resource "azurerm_synapse_sql_pool" "synapse_sql_pool" {
   tags                 = var.tags
 }
 
-resource "azurerm_synapse_firewall_rule" "example" {
+resource "azurerm_synapse_firewall_rule" "synfw_allow_azure_ips" {
   name                 = "AllowAllWindowsAzureIps"
   synapse_workspace_id = azurerm_synapse_workspace.synapse_ws.id
   start_ip_address     = "0.0.0.0"
   end_ip_address       = "0.0.0.0"
+}
+
+resource "azurerm_synapse_firewall_rule" "synfw_allow_home_ip" {
+  name                 = "AllowHomeIp"
+  synapse_workspace_id = azurerm_synapse_workspace.synapse_ws.id
+  start_ip_address     = var.my_public_ip
+  end_ip_address       = var.my_public_ip
 }
 
 resource "azurerm_synapse_managed_private_endpoint" "synapse_endpoint" {
@@ -33,5 +40,5 @@ resource "azurerm_synapse_managed_private_endpoint" "synapse_endpoint" {
   synapse_workspace_id = azurerm_synapse_workspace.synapse_ws.id
   target_resource_id   = azurerm_storage_account.storacct.id
   subresource_name     = "dfs"
-  depends_on           = [azurerm_synapse_firewall_rule.example]
+  depends_on           = [azurerm_synapse_firewall_rule.synfw_allow_azure_ips, azurerm_synapse_firewall_rule.synfw_allow_home_ip]
 }
