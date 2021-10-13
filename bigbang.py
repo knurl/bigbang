@@ -608,18 +608,26 @@ def getOutputVars() -> dict:
         assert u.scheme == None or u.scheme == "https"
         assert u.port == None or u.port == 443
         env["k8s_api_server"] = u.hostname
-    return env
 
-# Azure does some funky stuff with usernames for databases: It interposes a
-# gateway in front of the database that forwards connections from
-# username@hostname to username at hostname (supplied separately). So we must
-# supply usernames in different formats for AWS and Azure.
-def generateDatabaseUsers(env: dict) -> None:
+    # Azure does some funky stuff with usernames for databases: It interposes a
+    # gateway in front of the database that forwards connections from
+    # username@hostname to username at hostname (supplied separately). So we
+    # must supply usernames in different formats for AWS and Azure.
     for db in ["mysql", "postgres", "evtlog", "synapse_sl",
             "synapse_pool", "redshift"]:
         env[db + "_user"] = dbuser
         if target == "az" and db != "redshift":
             env[db + "_user"] += "@" + env[db + "_address"]
+
+    # Having set up storage, we've received some credentials for it that we'll
+    # need later. For GCP, write out a key file that Hive will use to access
+    # GCS. For Azure, just set a value we'll use for the starburst values file.
+    if target == "gcp":
+        replaceFile(secrets["gcskey"]["f"], env["object_key"])
+    elif target == "az":
+        env["adls_access_key"] = env["object_key"]
+
+    return env
 
 class KubeContextError(Exception):
     pass
@@ -1062,17 +1070,6 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
 
     # Get variables returned from terraform run
     env = getOutputVars()
-
-    # Generate the usernames for the databases
-    generateDatabaseUsers(env) # Modify dict in-place
-
-    # Having set up storage, we've received some credentials for it that we'll
-    # need later. For GCP, write out a key file that Hive will use to access
-    # GCS. For Azure, just set a value we'll use for the starburst values file.
-    if target == "gcp":
-        replaceFile(secrets["gcskey"]["f"], env["object_key"])
-    elif target == "az":
-        env["adls_access_key"] = env["object_key"]
 
     # Start up ssh tunnels via the bastion, so we can run kubectl and ldap
     # locally from the workstation
