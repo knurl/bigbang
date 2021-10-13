@@ -18,6 +18,7 @@ Target: az
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: eu-west-3 # AWS - Paris, France, EU
 Zone: uksouth # Azure - London, UK, EU
+#Zone: eastus # Azure - Virginia, USA
 #Zone: francecentral # Azure - Paris, France, EU
 #Zone: europe-west2-b # GCP - London, UK, EU
 #Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
