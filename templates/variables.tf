@@ -82,6 +82,10 @@ variable "max_pods_per_node" {
   default = "{{MaxPodsPerNode}}"
 }
 
+variable "disable_slow_sources" {
+  default = "{{DisableSlowSources}}" == "True" ? 0 : 1
+}
+
 variable "evtlog_server_name" {
   default = "evtlog-server-{{ShortName}}"
 }
@@ -118,20 +122,12 @@ variable "db_password" {
   default = "{{DBPassword}}"
 }
 
-variable "redshift_cluster_name" {
-  default = "redshift-cluster-{{ShortName}}"
-}
-
 variable "postgres_charset" {
   default = "UTF8"
 }
 
 variable "postgres_collation" {
   default = "en_US.UTF8"
-}
-
-variable "azure_postgres_collation" {
-  default = "en-US"
 }
 
 variable "mysql_charset" {
@@ -156,10 +152,15 @@ variable "ssh_public_key" {
   RSAKEY
 }
 
-{% if Target == "az" %}
+{% if Target == "aws" %}
+variable "redshift_cluster_name" {
+  default = "redshift-cluster-{{ShortName}}"
+}
+{% elif Target == "az" %}
+variable "azure_postgres_collation" {
+  default = "en-US"
+}
 
-# Azure-specific stuff
-#
 variable "storage_account" {
   default = "{{StorageAccount}}"
 }
@@ -171,14 +172,13 @@ variable "resource_group_name" {
 variable "synapse_ws_name" {
   default = "synapse-ws-{{ShortName}}"
 }
-
 {% elif Target == "gcp" %}
-
-#
-# Google-specific stuff
-#
 variable "gcp_project_id" {
   default = "{{GcpProjectId}}"
 }
 
+# account of the user logged in
+variable "gcp_account" {
+  default = "{{GcpAccount}}"
+}
 {% endif %}

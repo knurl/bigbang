@@ -39,7 +39,7 @@ resource "aws_instance" "ldaps" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.small_instance_type
   subnet_id              = module.vpc.private_subnets.0
-  private_ip             = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 102)
+  private_ip             = local.ldap_ip
   key_name               = aws_key_pair.key_pair.key_name
   vpc_security_group_ids = [aws_security_group.ldaps_sg.id]
   user_data              = file(var.ldaps_launch_script)

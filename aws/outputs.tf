@@ -27,7 +27,7 @@ output "mysql_address" {
 }
 
 output "redshift_endpoint" {
-  value = aws_redshift_cluster.redshift.endpoint
+  value = aws_redshift_cluster.redshift.*.endpoint
 }
 
 output "object_address" {

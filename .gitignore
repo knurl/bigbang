@@ -1,4 +1,5 @@
 helm-creds.yaml
+sfdc-creds.yaml
 starburstdata.license
 kubeconfig_*
 .demosvc.swp
@@ -18,3 +19,4 @@ gcp/key.json
 *.swp
 *.info
 commit
+ldaplaunch.sh

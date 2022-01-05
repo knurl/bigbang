@@ -6,8 +6,8 @@ Email: rob.anderson@starburst.io
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
 #Target: aws
-Target: az
-#Target: gcp
+#Target: az
+Target: gcp
 
 #
 # The zone/region/location you want to run in.
@@ -17,15 +17,15 @@ Target: az
 #Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: eu-west-3 # AWS - Paris, France, EU
-Zone: uksouth # Azure - London, UK, EU
+#Zone: uksouth # Azure - London, UK, EU
 #Zone: eastus # Azure - Virginia, USA
 #Zone: francecentral # Azure - Paris, France, EU
 #Zone: europe-west2-b # GCP - London, UK, EU
-#Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
+Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 362.0.0
+ChartVersion: 367.0.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 4
@@ -39,11 +39,15 @@ RequireCoordTls: True
 # Require TLS on coordinator <-> worker connections. Implies RequireCoordTls.
 RequireInternalTls: False
 
-# Authenticate using LDAP. Implies RequireCoordTls.
+# Authenticate using LDAP. Needs a secured connection, and therefore requires
+# either RequireCoordTls, IngressLoadBalancer or RequireTlsToLb.
 AuthNLdap: True
 
 # Disable bastion firewall—don't use unless you know the risks!
 DisableBastionFw: False
+
+# Disable sources that run slowly with Starburst
+DisableSlowSources: True
 
 # node pool instance types - 32 vCPU
 AwsInstanceType: m5.8xlarge
@@ -60,6 +64,9 @@ AwsDbInstanceType: db.m5.8xlarge
 AzureDbVmType: GP_Gen5_32
 GcpDbMachineType: db-custom-32-122880
 
+# Do we want to use the Salesforce connector?
+SalesforceEnabled: True
+
 #
 # Helm repo information
 #
@@ -70,7 +77,13 @@ HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
 #####################
 # XXX IMPORTANT XXX #
 #####################
-# NB: Your helm repo credentials are stored in a separate file called
+# Your helm repo credentials are stored in a separate file called
 # ./helm-creds.yaml. You must create and fill out that file in this format:
 # HelmRepoUser: username
 # HelmRepoPassword: password
+#
+# Your Salesforce credentials are stored in a separate file called
+# ./sfdc-creds.yaml. You must create and fill out that file in this format:
+# SalesforceUser: username
+# SalesforcePassword: password
+# SalesforceSecurityToken: token

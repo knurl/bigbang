@@ -42,8 +42,3 @@ output "object_key" {
   value     = base64decode(google_service_account_key.gke_servacct_key.private_key)
   sensitive = true
 }
-
-output "bq_project_id" {
-  #  value = data.google_project.project.project_id
-  value = "bigquery-public-data"
-}

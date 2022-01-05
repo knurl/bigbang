@@ -50,11 +50,16 @@ resource "aws_security_group" "bastion_sg" {
   tags = merge(var.tags, { Name = "bastion_sg" })
 }
 
+/*
+ * When referring to the public IP address of this bastion, we should instead
+ * refer to the EIP's address (see below) and not use public_ip as this field
+ * will change after the EIP is attached.
+ */
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.small_instance_type
   subnet_id              = module.vpc.public_subnets.0
-  private_ip             = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
+  private_ip             = local.bastion_ip
   key_name               = aws_key_pair.key_pair.key_name
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   user_data              = file(var.bastion_launch_script)

@@ -1,15 +1,17 @@
 #!python
 
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
-import subprocess, ipaddress, glob, threading, time, random, string
+import subprocess, ipaddress, glob, threading, time, random, string, io
 import atexit, psutil # type: ignore
 from run import run, runShell, runTry, runStdout, runCollect, retryRun
 from subprocess import CalledProcessError
-from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict
+from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict, Set
 from urllib.parse import urlparse
 from abc import ABC, abstractmethod
+from google.cloud import bigquery, storage # type: ignore
 import jinja2
 from jinja2.meta import find_undeclared_variables
+from termcolor import cprint, colored
 
 # Do this just to get rid of the warning when we try to read from the
 # api server, and the certificate isn't trusted
@@ -33,7 +35,7 @@ def writeableDir(p):
 clouds        = ("aws", "az", "gcp")
 templatedir   = where("templates")
 tmpdir        = "/tmp"
-ingressname   = "coordinator-ingress"
+ingressname   = "sb-ingress"
 rsa           = os.path.expanduser("~/.ssh/id_rsa")
 rsaPub        = os.path.expanduser("~/.ssh/id_rsa.pub")
 knownhosts    = os.path.expanduser("~/.ssh/known_hosts")
@@ -42,6 +44,7 @@ awsauthcm     = "aws-auth-cm.yaml" # basename only, no path!
 dbports       = { "mysql": 3306, "postgres": 5432 }
 tpchcat       = "tpch"
 syscat        = "system"
+sfdccat       = "sfdc"
 bqcat         = "bq" # for now, connector doesn't support INSERT or CTAS
 synapseslcat  = "synapse_sl"
 trinouser     = "starburst_service"
@@ -76,13 +79,14 @@ ldaplaunchf   = where("ldaplaunch.sh")
 tpchbigschema = "tiny"
 tpchsmlschema = "tiny"
 minbucketsize = 1 << 12
-tpchbuckets   = {
-        "sf1000": {"partition": True, "nbuckets": 8 },
-        "sf100": { "partition": True, "nbuckets": 4 },
-        "sf10": { "partition": True, "nbuckets": 2 },
-        "sf1": { "partition": True, "nbuckets": 1 },
-        "tiny": { "partition": False, "nbuckets": 1 }
+tpchbuckets: dict[str, dict[str, Any]] = {
+        "sf1000": {"partition": True, "nbuckets": 8, "tsizes": {} },
+        "sf100": { "partition": True, "nbuckets": 4, "tsizes": {} },
+        "sf10": { "partition": True, "nbuckets": 2, "tsizes": {} },
+        "sf1": { "partition": True, "nbuckets": 1, "tsizes": {} },
+        "tiny": { "partition": False, "nbuckets": 1, "tsizes": {} }
         }
+tpchtables: Set[str] = set()
 assert tpchbigschema in tpchbuckets
 assert tpchsmlschema in tpchbuckets
 
@@ -177,6 +181,7 @@ tlscoordlabel = "RequireCoordTls"
 ingresslblabel = "IngressLoadBalancer"
 tlsinternallabel = "RequireInternalTls"
 authnldaplabel = "AuthNLdap"
+salesforcelabel = "SalesforceEnabled"
 try:
     with open(myvarsf) as mypf:
         myvars = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -226,6 +231,9 @@ try:
     requireKey("GcpMachineType", myvars)
     requireKey("GcpSmallMachineType", myvars)
     requireKey("GcpDbMachineType", myvars)
+
+    sfdcenabled = myvars[salesforcelabel] # SalesforceEnabled
+
     repo         = myvars["HelmRepo"]
     requireKey("HelmRegistry", myvars)
     repoloc      = myvars["HelmRepoLocation"]
@@ -362,22 +370,24 @@ if ingresslb and tlscoord:
 if tlsinternal and not tlscoord:
     sys.exit(f"{tlsinternallabel} requires {tlscoordlabel} to be enabled")
 
-if authnldap and not (tlscoord or ingresslb):
-    sys.exit(f"{authnldaplabel} requires {tlscoordlabel} or {ingresslblabel} "
-            "to be enabled")
-
 if (upstreamSG or downstreamSG) and not (tlscoord or ingresslb):
     sys.exit(f"Stargate mode requires {tlscoordlabel} to be enabled")
 
 def tlsenabled() -> bool: return ingresslb or tlscoord
 
+if authnldap and not tlsenabled():
+    sys.exit(f"{authnldaplabel} requires a TLS-protected connection")
+
 #
 # GcpProjectId
 #
 gcpproject = ""
+gcpaccount = ""
 if target == "gcp":
     gcpproject = runCollect("gcloud config list --format "
             "value(core.project)".split())
+    gcpaccount = runCollect("gcloud config list --format "
+            "value(core.account)".split())
 
 # Generate a unique octet for our subnet. Use that octet with the 'code' we
 # generated above as part of a short name we can use to mark our resources
@@ -408,7 +418,6 @@ mySubnetCidr = genmask(target, octet)
 # Now, read the credentials file for helm ("./helm-creds.yaml"), also found in
 # this directory.  This is the 2nd configuration file one needs to edit.
 #
-helmcredsbf = "helm-creds.yaml"
 helmcredsf  = where("helm-creds.yaml")
 try:
     with open(helmcredsf) as mypf:
@@ -422,6 +431,23 @@ try:
 except KeyError as e:
     sys.exit(f"Unspecified configuration parameter {e} in {helmcredsf}")
 myvars |= helmcreds
+
+#
+# Now, read the credentials file for Salesforce ("./sfdc-creds.yaml"), also
+# found in this directory.  This is the 3rd configuration file one needs to
+# edit, but only if Salesforce access is desired.
+#
+if sfdcenabled:
+    sfdccredsf  = where("sfdc-creds.yaml")
+    try:
+        with open(sfdccredsf) as mypf:
+            sfdccreds = yaml.load(mypf, Loader = yaml.FullLoader)
+    except IOError as e:
+        sys.exit(f"Couldn't read Salesforce credentials file {e}")
+
+    requireKey("SalesforceUser", sfdccreds)
+    requireKey("SalesforcePassword", sfdccreds)
+    myvars |= sfdccreds
 
 #
 # Create some names for some cloud resources we'll need
@@ -444,15 +470,15 @@ for module in modules:
 
 services = ["starburst", "ranger"]
 svcports    = {
-        "ranger":    {"local": 6080, "remote": 6080},
-        "apiserv":   {"local": 2153, "remote": 443 }
+        "ranger": {"local": 6080, "remote": 6080},
+        "apiserv": {"local": 2153, "remote": 443}
         }
-if tlscoord:
-    svcports |= {"starburst": {"local": 8443, "remote": 8443},
-                 "ldaps":     {"local": 8636, "remote": 636}}
-elif ingresslb:
-    svcports |= {"starburst": {"local": 8443, "remote": 443},
-                 "ldaps":     {"local": 8636, "remote": 636}}
+if tlsenabled():
+    svcports |= {"ldaps": {"local": 8636, "remote": 636}}
+    if ingresslb:
+        svcports |= {"starburst": {"local": 8443, "remote": 443}}
+    else:
+        svcports |= {"starburst": {"local": 8443, "remote": 8443}}
 else:
     svcports |= {"starburst": {"local": 8080, "remote": 8080}}
 
@@ -474,7 +500,7 @@ def getRmtPort(service: str) -> int:
 #
 
 def announce(s):
-    print(f"==> {s}")
+    cprint(f"==> {s}", 'magenta', attrs = ['bold'])
 
 sqlstr = "Issued 🢩 "
 
@@ -490,10 +516,11 @@ def announceLoud(lines: list) -> None:
     rt = " ⮘┃"
     p = ["{l}{t}{r}".format(l = lt, t = i.center(maxl), r = rt) for i in lines]
     pmaxl = maxl + len(lt) + len(rt)
-    print('┏' + '━' * (pmaxl - 2) + '┓')
+    cp = lambda x: cprint(x, 'cyan')
+    cp('┏' + '━' * (pmaxl - 2) + '┓')
     for i in p:
-        print(i)
-    print('┗' + '━' * (pmaxl - 2) + '┛')
+        cp(i)
+    cp('┗' + '━' * (pmaxl - 2) + '┛')
 
 def announceBox(s):
     boundary = 80 # maximum length to wrap to
@@ -509,10 +536,11 @@ def announceBox(s):
     maxl = max(map(len, lines))
     topbord = ul + hz * (maxl + 2) + ur
     botbord = ll + hz * (maxl + 2) + lr
-    print(topbord)
+    cp = lambda x: cprint(x, 'blue')
+    cp(topbord)
     for l in lines:
-        print(bl + l.ljust(maxl) + br)
-    print(botbord)
+        cp(bl + l.ljust(maxl) + br)
+    cp(botbord)
 
 def appendToFile(filepath, contents) -> None:
     with open(filepath, "a+") as fh:
@@ -609,15 +637,24 @@ def getOutputVars() -> dict:
         assert u.port == None or u.port == 443
         env["k8s_api_server"] = u.hostname
 
-    # Azure does some funky stuff with usernames for databases: It interposes a
-    # gateway in front of the database that forwards connections from
-    # username@hostname to username at hostname (supplied separately). So we
-    # must supply usernames in different formats for AWS and Azure.
     for db in ["mysql", "postgres", "evtlog", "synapse_sl",
             "synapse_pool", "redshift"]:
         env[db + "_user"] = dbuser
-        if target == "az" and db != "redshift":
-            env[db + "_user"] += "@" + env[db + "_address"]
+        # Azure does some funky stuff with usernames for databases: It
+        # interposes a gateway in front of the database that forwards
+        # connections from username@hostname to username at hostname.
+        if target == "az":
+
+            if db == "redshift":
+                continue # redshift is AWS-only, not Azure
+
+            synapse_address = db + "_address"
+
+            # if this type of synapse connect isn't supported, then skip
+            if synapse_address not in env:
+                continue
+
+            env[db + "_user"] += "@" + env[synapse_address]
 
     # Having set up storage, we've received some credentials for it that we'll
     # need later. For GCP, write out a key file that Hive will use to access
@@ -918,12 +955,13 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
         space = ' '*r
         s = '   ' + anim1[i % f] + '┠' + arrow + space + '┨' + anim2[i % f]
         maxlen = max(maxlen, len(s))
-        print(s, end='\r', flush=True)
+        cd = lambda x: colored(x, 'red')
+        print(cd(s), end='\r', flush=True)
         if pct == 1.0:
-            print(' ' * maxlen, end='\r')
+            print(cd(' ' * maxlen), end='\r')
             return
         i += 1
-        time.sleep(1)
+        time.sleep(0.25)
 
 # A class for recording ssh tunnels
 class Tunnel:
@@ -954,8 +992,6 @@ class Tunnel:
             tgtname = "[{n}]{h}".format(n = self.shortname, h = self.raddr)
         return "{l} -> {ra}:{rp} (PID {p})".format(l = self.lport, ra =
                 tgtname, rp = self.rport, p = self.p.pid if self.p else "?")
-
-toreap: list[Tunnel] = [] # Accumulate tunnels to destroy
 
 # Input dictionary is the output variables from Terraform.
 def establishBastionTunnel(env: dict) -> list[Tunnel]:
@@ -1025,7 +1061,8 @@ def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
     announce("Adding aws-auth configmap to cluster")
     runStdout(f"{kube} apply -f {yamltmp}".split())
 
-def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
+def ensureClusterIsStarted(skipClusterStart: bool) -> \
+        tuple[list[Tunnel], dict]:
     env = myvars | {
             "BastionLaunchScript": bastlaunchf,
             "BucketName":          bucket,
@@ -1036,7 +1073,6 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
             "DBNameEventLogger":   dbevtlog,
             "DBPassword":          dbpwd,
             "DBUser":              dbuser,
-            "GcpProjectId":        gcpproject,
             "InstanceType":        instanceType,
             "LdapLaunchScript":    ldaplaunchf,
             "MaxPodsPerNode":      maxpodpnode,
@@ -1056,6 +1092,9 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     if target == "az":
         env["ResourceGroup"] = resourcegrp
         env["StorageAccount"] = storageacct
+    elif target == "gcp":
+        env["GcpProjectId"] = gcpproject
+        env["GcpAccount"] = gcpaccount
 
     parameteriseTemplate(tfvars, tfdir, env)
 
@@ -1063,7 +1102,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     if not skipClusterStart:
         announce("Starting terraform run")
         t = time.time()
-        runStdout(f"{tf} init -input=false".split())
+        runStdout(f"{tf} init -upgrade -input=false".split())
         runStdout(f"{tf} apply -auto-approve -input=false".split())
         announce("terraform run completed in " + time.strftime("%Hh%Mm%Ss",
             time.gmtime(time.time() - t)))
@@ -1074,7 +1113,6 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     # Start up ssh tunnels via the bastion, so we can run kubectl and ldap
     # locally from the workstation
     tuns = establishBastionTunnel(env)
-    toreap.extend(tuns) # Ref the tunnels so they don't die when they de-scope
 
     # For AWS, the nodes will not join until we have added the node role ARN to
     # the aws-auth-map-cn.yaml.
@@ -1088,7 +1126,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> dict:
     # Don't continue until all K8S system pods are ready
     announce("Waiting for K8S system pods to come online")
     spinWait(lambda: waitUntilPodsReady(nodeCount*2, "kube-system"))
-    return env
+    return tuns, env
 
 # Starburst pods sometimes get stuck in Terminating phase after a helm upgrade.
 # Kill these off immediately to save time and they will restart quickly.
@@ -1142,7 +1180,10 @@ def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str,
             f"{route53ZoneId} --change-batch file://{batchf}"
     runCollect(cmd.split())
 
-def startPortForwardToLBs(bastionIp: str, route53ZoneId: str = None) -> None:
+def startPortForwardToLBs(bastionIp: str,
+        route53ZoneId: str = None) -> list[Tunnel]:
+    tuns: list[Tunnel] = []
+
     # should be nodeCount - 1 workers with 1 container each, 2 containers for
     # the coordinator, and 2 containers each for Hive and Ranger
     announce("Waiting for pods to be ready")
@@ -1165,7 +1206,7 @@ def startPortForwardToLBs(bastionIp: str, route53ZoneId: str = None) -> None:
     assert len(lbs) == len(services)
     for svc in services:
         assert svc in lbs
-        toreap.append(Tunnel(svc, ipaddress.IPv4Address(bastionIp),
+        tuns.append(Tunnel(svc, ipaddress.IPv4Address(bastionIp),
             getLclPort(svc), lbs[svc], getRmtPort(svc)))
 
     # make sure the load balancers are actually responding
@@ -1180,6 +1221,8 @@ def startPortForwardToLBs(bastionIp: str, route53ZoneId: str = None) -> None:
     if target == "aws":
         assert route53ZoneId
         setRoute53Cname(lbs, route53ZoneId)
+
+    return tuns
 
 class ApiError(Exception):
     pass
@@ -1243,102 +1286,261 @@ def sendSql(command: str, verbose = False) -> list:
                 descr = f"GET nextUri [{command}]")
 
 def dontLoadCat(cat: str) -> bool:
-    avoidcat = {tpchcat, syscat}
+    avoidcat = {tpchcat, syscat, sfdccat}
+    # Synapse serverless pools are read-only
     if target == "az":
         avoidcat.add(synapseslcat)
-    elif target == "gcp":
-        avoidcat.add(bqcat)
     return cat in avoidcat or cat.startswith("sg_")
 
-def copySchemaTables(srcCatalog: str, srcSchema: str,
-        dstCatalogs: list, dstSchema: str, hiveTarget: str,
-        partition: bool, numbuckets: int):
-    # fetch our source tables
-    stab = sendSql(f"show tables in {srcCatalog}.{srcSchema}")
-    srctables = [t[0] for t in stab]
+def getTpchTableSize(scale: str, table: str) -> int:
+    global tpchtables
+    assert table in tpchtables 
+    assert scale in tpchbuckets 
+    b = tpchbuckets[scale]["tsizes"]
+    assert table in b 
+    return b[table]
 
-    threads = []
+class CommandGroup:
+    def __init__(self):
+        self.cv = threading.Condition()
+        self.workToDo = 0
+        self.workDone = 0
+
+    # Must be called with lock held!
+    def allCommandsDone(self) -> bool:
+        assert self.workDone <= self.workToDo
+        return self.workDone == self.workToDo
+
+    def ratioDone(self) -> float:
+        with self.cv:
+            assert self.workDone <= self.workToDo, \
+                    f"{self.workDone} should be <= {self.workToDo}"
+            return float(self.workDone) / float(self.workToDo)
+
+    def checkCopiedTable(self, dstCatalog: str, dstSchema: str, dstTable: str,
+            rows: int) -> None:
+            dest = "{dc}.{ds}.{dt}".format(dc = dstCatalog, ds = dstSchema,
+                dt = dstTable)
+            try:
+                copiedRows = sendSql(f"select count(*) from {dest}")[0][0]
+                if copiedRows < rows:
+                    print(f"Tried to process {rows}, only did {copiedRows}")
+            except ApiError as e:
+                print(f"Couldn't read rows from {dest}")
+
+    def processSqlCommand(self, cmd: str, callback = None) -> None:
+        x = sendSql(cmd)
+        if callback:
+            callback(x)
+        with self.cv:
+            self.workDone += 1
+            self.cv.notify_all()
+
+    def addSqlCommand(self, cmd, callback = None) -> None:
+        t = threading.Thread(target = self.processSqlCommand,
+                args = (cmd, callback, ))
+        with self.cv:
+            self.workToDo += 1
+        t.start()
+
+    def processSqlTableCommand(self, srcTable: str, dstCatalog: str,
+            dstSchema: str, rows: int, cmd: str = None,
+            check: bool = False) -> None:
+        if cmd:
+            sendSql(cmd)
+
+        if check:
+            self.checkCopiedTable(dstCatalog, dstSchema, srcTable, rows)
+
+        # We get here whether it works or not
+        with self.cv:
+            self.workDone += rows
+            self.cv.notify_all()
+
+    def addSqlTableCommand(self, tpchSchema: str, srcTable: str,
+            dstCatalog: str, dstSchema: str, cmd: str = None,
+            check: bool = False) -> None:
+        rows = getTpchTableSize(tpchSchema, srcTable)
+        t = threading.Thread(target = self.processSqlTableCommand,
+                args = (srcTable, dstCatalog, dstSchema, rows, cmd, check, ))
+        with self.cv:
+            self.workToDo += rows
+        t.start()
+
+    def processBqCommand(self, srcCatalog: str, srcSchema: str, srcTable: str,
+            dstSchema: str, rows: int, check: bool = False) -> None:
+        assert srcCatalog == hivecat
+        # Get the list of files to be loaded
+        storage_client = storage.Client()
+        blobs = storage_client.list_blobs(bucket,
+                prefix=f"{srcCatalog}/{srcSchema}/{srcTable}/")
+        paths = [f"gs://{bucket}/{b.name}" for b in blobs if b.name[-1] != '/']
+        assert len(paths) > 0
+
+        # Construct a BigQuery client object.
+        client = bigquery.Client()
+
+        job_config = bigquery.LoadJobConfig(write_disposition =
+            bigquery.WriteDisposition.WRITE_TRUNCATE, source_format =
+            bigquery.SourceFormat.ORC,)
+
+        table_id = "{dp}.{ds}.{st}".format(dp = gcpproject, ds = dstSchema,
+                st = srcTable)
+        load_job = client.load_table_from_uri(paths, table_id,
+                job_config=job_config)  # Make an API request.
+        load_job.result()  # Waits for the job to complete.
+        destination_table = client.get_table(table_id)
+        assert destination_table.num_rows == rows
+
+        if check:
+            self.checkCopiedTable(bqcat, dstSchema, srcTable, rows)
+
+        # We get here whether it works or not
+        with self.cv:
+            self.workDone += rows
+            self.cv.notify_all()
+
+    def addBqCommand(self, tpchSchema: str, srcCatalog: str, srcSchema: str,
+            srcTable: str, dstSchema: str, check: bool = False) -> None:
+        rows = getTpchTableSize(tpchSchema, srcTable)
+        t = threading.Thread(target = self.processBqCommand,
+                args = (srcCatalog, srcSchema, srcTable, dstSchema, rows,
+                    check,))
+        with self.cv:
+            self.workToDo += rows
+        t.start()
+
+    def waitOnAllCopies(self) -> None:
+        with self.cv:
+            self.cv.wait_for(self.allCommandsDone)
+
+def preloadTpchTableSizes(scaleSets: set[str]) -> None:
+    # First, get the list of table names
+    #
+    global tpchtables, tpchbuckets
+    assert len(scaleSets) > 0
+    scale = next(iter(scaleSets))
+    if not tpchtables:
+        tabs = sendSql(f"show tables in {tpchcat}.{scale}")
+        tpchtables = {t[0] for t in tabs}
+    announce("Getting tpch table sizes for scale sets -> "
+            "{}".format(", ".join(scaleSets)))
+
+    # Next, fill in the sizes of each of the tables for each scale
+    #
+    cg = CommandGroup()
+    for scale in scaleSets:
+        assert scale in tpchbuckets
+        b = tpchbuckets[scale]["tsizes"]
+        lock = threading.Lock()
+        for table in tpchtables:
+            if table not in b:
+                # callback will make a closure with b[table], storing the
+                # results there that come back from the SQL call. We have to
+                # use an odd construction here because Python performs
+                # late-binding with closures; to force early binding we'll use
+                # a function-factory. https://tinyurl.com/4x3t2wux
+                def make_cbs(b, scale, table):
+                    def cbs(tablesize):
+                        with lock:
+                            b[table] = tablesize[0][0]
+                    return cbs
+                cg.addSqlCommand("select count(*) from "
+                    f"{tpchcat}.{scale}.{table}",
+                    callback = make_cbs(b, scale, table))
+    spinWait(lambda: cg.ratioDone())
+    cg.waitOnAllCopies() # Should be a no-op
+
+def createSchemas(dstCatalogs: list, dstSchema: str, hiveTarget: str) -> None:
+    cg = CommandGroup()
+    announce("creating schemas in {}".format(", ".join(dstCatalogs)))
     for dstCatalog in dstCatalogs:
-        # We never want to write data to these schemas!
-        if dontLoadCat(dstCatalog) or dstCatalog == srcCatalog:
-            continue
+        clause = ""
+        if dstCatalog in lakecats:
+            clause = " with (location = '{l}/{c}/{s}')".format(l =
+                    hiveTarget, c = dstCatalog, s = dstSchema)
+        cg.addSqlCommand("create schema if not exists "
+                f"{dstCatalog}.{dstSchema}{clause}")
 
-        #
-        # First, we need to make sure our 'dbschema' schema is found in every
-        # database. Hive needs to be treated specially.
-        #
-        stable = sendSql(f"show schemas in {dstCatalog}")
-        schemas = [s[0] for s in stable]
-        dsttables = []
-        if dstSchema not in schemas:
-            clause = " with (location = '{l}/{c}/{s}')".format(l = hiveTarget,
-                    c = dstCatalog, s = dstSchema) \
-                            if dstCatalog in lakecats else ""
-            sendSql("create schema {c}.{s}{w}".format(c = dstCatalog, s =
-                dstSchema, w = clause), verbose = True)
-        else:
-            dtab = sendSql("show tables in {c}.{s}".format(c = dstCatalog, s =
-                dstSchema))
-            dsttables = [d[0] for d in dtab]
+    # Progress meter on all transfers across all destination schemas
+    spinWait(lambda: cg.ratioDone())
+    cg.waitOnAllCopies() # Should be a no-op
 
-        #
-        # Now copy the data over from our source tables, one by one
-        #
-        for srctable in srctables:
-            if srctable not in dsttables:
-                withc = ""
-                dest_cols = "*"
-                if dstCatalog in lakecats:
-                    partitioned_by = []
-                    if partition:
-                        if srctable == 'lineitem':
-                            partitioned_by = ['returnflag', 'linestatus',
-                                    'shipmode']
-                        elif srctable == 'orders':
-                            partitioned_by = ['orderstatus', 'orderpriority',
-                                    'shippriority']
-                        elif srctable == 'customer':
-                            partitioned_by = ['mktsegment']
-                    if partitioned_by:
-                        cols = [col[0] for col in sendSql("show columns from "
-                            f"{srcCatalog}.{srcSchema}.{srctable}") if col[0]
-                            not in partitioned_by]
-                        dest_cols = ", ".join(cols + partitioned_by)
+def copySchemaTables(srcCatalog: str, srcSchema: str, dstCatalogs: list[str],
+        hiveTarget: str, partition: bool, numbuckets: int):
+    # Never write to the source, or to unwritable catalogs
+    dstCatalogs = [c for c in dstCatalogs if not dontLoadCat(c)
+            or c == srcCatalog]
+    # If there are no catalogs to process, then just return
+    if len(dstCatalogs) < 1:
+        return
 
-                    bucketed_by = []
-                    # Delta doesn't support bucketing
-                    if numbuckets > 1 and dstCatalog == hivecat:
-                        if srctable == 'lineitem':
-                            bucketed_by = ['orderkey']
-                        elif srctable == 'orders':
-                            bucketed_by = ['custkey']
-                        elif srctable == 'customer':
-                            bucketed_by = ['custkey']
+    # First, create all the schemas that we need
+    createSchemas(dstCatalogs, dbschema, hiveTarget)
 
-                    witharray = []
-                    if partitioned_by:
-                        witharray.append("partitioned_by = ARRAY[{p}]".format(p
-                            = ", ".join(f"'{w}'" for w in partitioned_by)))
-                    if bucketed_by:
-                        witharray.append("bucketed_by = ARRAY[{b}]".format(b =
-                            ", ".join(f"'{w}'" for w in bucketed_by)))
-                        witharray.append(f"bucket_count = {numbuckets}")
-                    if witharray:
-                        withc = " with (" + ", ".join(witharray) + ")"
+    tpchschema = srcSchema if srcCatalog != hivecat else tpchbigschema
 
-                c = f"create table {dstCatalog}.{dstSchema}.{srctable}"\
-                        f"{withc} as select {dest_cols} from "\
-                        f"{srcCatalog}.{srcSchema}.{srctable}"
+    cg = CommandGroup()
+    announce("creating tables in {}".format(", ".join(dstCatalogs)))
+    for dstCatalog in dstCatalogs:
+        # Now copy the data over from our source tables, one by one.
+        for srctable in tpchtables:
+            cmd = None
+            withc = ""
+            dest_cols = "*"
 
+            if dstCatalog in lakecats:
+                partitioned_by = []
+                if partition:
+                    if srctable == 'lineitem':
+                        partitioned_by = ['returnflag', 'linestatus',
+                                'shipmode']
+                    elif srctable == 'orders':
+                        partitioned_by = ['orderstatus', 'orderpriority',
+                                'shippriority']
+                    elif srctable == 'customer':
+                        partitioned_by = ['mktsegment']
+                if partitioned_by:
+                    cols = [col[0] for col in sendSql("show columns from "
+                        f"{srcCatalog}.{srcSchema}.{srctable}") if col[0]
+                        not in partitioned_by]
+                    dest_cols = ", ".join(cols + partitioned_by)
+
+                bucketed_by = []
+                # Delta doesn't support bucketing
+                if numbuckets > 1 and dstCatalog == hivecat:
+                    if srctable == 'lineitem':
+                        bucketed_by = ['orderkey']
+                    elif srctable == 'orders':
+                        bucketed_by = ['custkey']
+                    elif srctable == 'customer':
+                        bucketed_by = ['custkey']
+
+                witharray = []
+                if partitioned_by:
+                    witharray.append("partitioned_by = ARRAY[{p}]".format(p
+                        = ", ".join(f"'{w}'" for w in partitioned_by)))
+                if bucketed_by:
+                    witharray.append("bucketed_by = ARRAY[{b}]".format(b =
+                        ", ".join(f"'{w}'" for w in bucketed_by)))
+                    witharray.append(f"bucket_count = {numbuckets}")
+                if witharray:
+                    withc = " with (" + ", ".join(witharray) + ")"
+
+            if dstCatalog != bqcat:
+                cmd = "create table if not exists " \
+                    f"{dstCatalog}.{dbschema}.{srctable}"\
+                    f"{withc} as select {dest_cols} from "\
+                    f"{srcCatalog}.{srcSchema}.{srctable}"
+                cg.addSqlTableCommand(tpchschema, srctable, dstCatalog,
+                        dbschema, cmd, True)
             else:
-                c = f"select count(*) from {dstCatalog}.{dstSchema}.{srctable}"
+                cg.addBqCommand(tpchschema, srcCatalog, srcSchema, srctable,
+                        dbschema, True)
 
-            t = threading.Thread(target = sendSql, args = (c,True,))
-            threads.append(t)
-            t.start()
-
-    for t in threads:
-        t.join()
+    # Progress meter on all transfers across all destination schemas
+    spinWait(lambda: cg.ratioDone())
+    cg.waitOnAllCopies() # Should be a no-op
 
 def randomString(length: int) -> str:
     chars = string.ascii_letters + string.digits
@@ -1348,13 +1550,16 @@ def randomString(length: int) -> str:
 # on a directory. So we'll just move everything we find in the root directory
 # to an archive directory.
 def azArchiveDirectories(accountName: str, accessKey: str, fsName: str) -> None:
-    announce(f"Archiving all files in {fsName}")
     opt = f"--account-name {accountName} --account-key {accessKey} " \
             f"--file-system {fsName} --output json"
 
     # Get a list of the files we've got
     files = json.loads(runCollect(f"az storage fs file list {opt} "
         "--recursive false --path /".split()))
+    if not files:
+        return
+
+    announce(f"Archiving all files in {fsName}")
     archivedir = f"archive-" + randomString(8)
     runCollect(f"az storage fs directory create {opt} "
             f"--name {archivedir}".split())
@@ -1390,43 +1595,38 @@ def eraseBucketContents(env: dict) -> None:
     except CalledProcessError as e:
         print(f"Unable to erase bucket {bucket} (already empty?)")
 
-def dropExistingSchemaWithTables(catalog: str, schema: str) -> None:
-    # verify the schema exists first
-    stable = sendSql(f"show schemas in {catalog}")
-    schemas = [s[0] for s in stable]
-    if schema not in schemas:
-        return
+def dropSchemas(catalogs: list[str], schema: str) -> None:
+    cg = CommandGroup()
+    announce("dropping schemas in {}".format(", ".join(catalogs)))
+    for catalog in catalogs:
+        cg.addSqlCommand(f"drop schema if exists {catalog}.{schema}")
+    # Progress meter on all transfers across all destination schemas
+    spinWait(lambda: cg.ratioDone())
+    cg.waitOnAllCopies() # Should be a no-op
 
-    # look for existing tables
-    tab = sendSql(f"show tables in {catalog}.{schema}")
-    tables = [t[0] for t in tab]
+def dropExistingSchemaWithTables(catalogs: list[str], schema: str) -> None:
+    preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
 
-    threads = []
-    for table in tables:
-        c = f"drop table {catalog}.{schema}.{table}"
-        t = threading.Thread(target = sendSql, args = (c,True,))
-        threads.append(t)
-        t.start()
-    for t in threads:
-        t.join()
-
-    sendSql(f"drop schema if exists {catalog}.{schema}")
-
-def unloadDatabases():
-    ctab = sendSql("show catalogs")
-    catalogs = [c[0] for c in ctab if not dontLoadCat(c[0])]
+    # First get rid of all the tables
+    cg = CommandGroup()
     announce("dropping tables in {}".format(", ".join(catalogs)))
     for catalog in catalogs:
-        dropExistingSchemaWithTables(catalog, dbschema)
+        tpchschema = tpchsmlschema if catalog != hivecat else tpchbigschema
+        for table in tpchtables:
+            c = f"drop table if exists {catalog}.{schema}.{table}"
+            cg.addSqlTableCommand(tpchschema, table, catalog, schema, c)
+    spinWait(lambda: cg.ratioDone())
+    cg.waitOnAllCopies() # Should be a no-op
 
-def getObjectStoreUrl(env: dict) -> str:
-    if target == "aws":
-        return f"s3://{bucket}" # replace completely
-    elif target == "az":
-        return "abfs://{f}@{h}".format(f = env["adls_fs_name"], h =
-                env["object_address"]) # use the URL for ADLS
-    else: # target == "gcp"
-        return env["object_address"] # change nothing
+    # Now clean up all the schemas
+    dropSchemas(catalogs, schema)
+
+def getCatalogs(avoid: list[str] = []) -> list[str]:
+    ctab = sendSql("show catalogs")
+    return [c[0] for c in ctab if not (dontLoadCat(c[0]) or c[0] in avoid)]
+
+def unloadDatabases():
+    dropExistingSchemaWithTables(getCatalogs(), dbschema)
 
 def loadDatabases(hive_location: str) -> None:
     # For lakes, determine number of buckets
@@ -1434,33 +1634,40 @@ def loadDatabases(hive_location: str) -> None:
     partition = tpchbucket["partition"]
     numbuckets = tpchbucket["nbuckets"]
 
-    # First copy tpch large scale set to hive...
-    announce(f"loading/verifying tables in {hivecat}")
-    t = time.time()
-    copySchemaTables(tpchcat, tpchbigschema, [hivecat], dbschema,
-            hive_location, partition, numbuckets)
-    announce("hive table loading/verifying done in " +
-            time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - t)))
+    preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
 
-    # Then copy tpch small scale set to everywhere else
-    ctab = sendSql("show catalogs")
-    dstCatalogs = [c[0] for c in ctab if not dontLoadCat(c[0]) or
-            c[0] == hivecat] # We've already loaded hivecat
-    announce("loading/verifying tables in {}".format(", ".join(dstCatalogs)))
-    t = time.time()
+    # First copy tpch large scale set to hive...
+    copySchemaTables(tpchcat, tpchbigschema, [hivecat], hive_location,
+            partition, numbuckets)
+
+    dstCatalogs = getCatalogs(avoid = hivecat) # already done hivecat
+
+    # BigQuery has to be handled specially, as it needs to be loaded from the
+    # files we've already stored in GCS. If we're going to be loading the rest
+    # of the tables from the tpch generator, then we'll need to make a special
+    # case for BigQuery here.
     if tpchbigschema == tpchsmlschema:
-        copySchemaTables(hivecat, dbschema, dstCatalogs, dbschema,
-                hive_location, partition, numbuckets)
+        copySchemaTables(hivecat, dbschema, dstCatalogs, hive_location,
+                partition, numbuckets)
     else:
-        copySchemaTables(tpchcat, tpchsmlschema, dstCatalogs, dbschema,
-                hive_location, partition, numbuckets)
-    announce("Loading/verifying of other tables done in " +
-            time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - t)))
+        if bqcat in dstCatalogs:
+            copySchemaTables(hivecat, dbschema, [bqcat], hive_location,
+                    partition, numbuckets)
+            dstCatalogs.remove(bqcat)
+        if len(dstCatalogs) > 0:
+            # Then copy tpch small scale set to everywhere else
+            copySchemaTables(tpchcat, tpchsmlschema, dstCatalogs,
+                    hive_location, partition, numbuckets)
 
 def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
     env = {}
-    pairs: dict[str, dict[str, str]] = {}
+    groups: dict[str, dict[str, str]] = {}
     announce(f"Installing secrets")
+    installed = []
+    if secrets:
+        installed = runCollect(f"{kubens} get secrets "
+                f"-o=jsonpath={{.items[*].metadata.name}}".split()).split()
+
     for name, values in secrets.items():
         # If we are using TLS on internal connections, we don't need these
         if tlsinternal:
@@ -1470,47 +1677,35 @@ def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
         elif tlsenabled():
             if name in ('wildks', 'wildcert', 'sharedsec'):
                 continue
+
         # These are needed only for LDAP
-        if not authnldap and name in ('slapdkey', 'slapdcert', 'certinfo',
-                'ldapks'):
+        if not authnldap and name == 'ldaptls':
             continue
+
         # These are needed only for GCP
         if target != "gcp" and name == "gcskey":
             continue
 
-        if "pair" in values:
-            name = values["pair"]
-            if not ingresslb or name != "starbursttls":
-                continue
-            env[name] = name
-            assert "type" in values
-            if name in pairs:
-                p = pairs[name]
-                p[values["type"]] = values["f"]
-            else:
-                pairs[name] = { values["type"]: values["f"] }
-            continue
-
+        # We always want to store the secret name, no matter what
         env[name] = name
-        env[name + "bf"] = values["bf"]
-        file = values["f"]
-        env[name + "f"] = file
 
-        r = runTry(f"{kubens} get secrets {name}".split())
-        # if the secret with that name doesn't yet exist, create it
-        if r.returncode != 0:
-            runStdout(f"{kubens} create secret generic {name} --from-file "
-                f"{file}".split())
+        # if this isn't a cert group, then record the base filename and fully
+        # qualified filename to the environment dict
+        if not "isgroup" in values or not values["isgroup"]:
+            env[name + "bf"] = values["bf"]
+            env[name + "f"] = values["f"]
 
-    for pairname, values in pairs.items():
-        assert "cert" in values and "key" in values, \
-                f"cert and key not found together for {pairname}"
-        r = runTry(f"{kubens} get secrets {pairname}".split())
         # if the secret with that name doesn't yet exist, create it
-        if r.returncode != 0:
-            runStdout("{x} create secret tls {p} --cert {c} --key "
-                    "{k}".format(x = kubens, p = pairname, c = values["cert"],
-                        k = values["key"]).split())
+        if name not in installed:
+            # If this isn't a cert group, then install the secret normally. If
+            # this is a cert group, and we are terminating TLS at an
+            # ingress-based LB, then we need to install a secret that we'll use
+            # in the helm chart with the LB.
+            if not "isgroup" in values or not values["isgroup"]:
+                runStdout("{k} create secret generic {n} --from-file "
+                        "{f}".format(k = kubens, n = name, f =
+                            values["f"]).split())
+
     return env
 
 def helmTry(cmd: str) -> subprocess.CompletedProcess:
@@ -1612,11 +1807,17 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
               "TrinoPass":          trinopass,
               "mysql_port":         dbports["mysql"],
               "postgres_port":      dbports["postgres"] }
+
+    if target == "gcp":
+        env["GcpProjectId"] = gcpproject
+
     if authnldap:
         env["LdapUri"] = "ldaps://{h}:{p}".format(h = ldapfqdn, p =
                 getRmtPort("ldaps"))
+
     if upstreamSG or ingresslb:
         env["StarburstHost"] = starburstfqdn
+
     if upstreamSG:
         env["BastionAzPort"] = getLclPortSG("starburst", "az")
         env["BastionGcpPort"] = getLclPortSG("starburst", "gcp")
@@ -1631,8 +1832,9 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
 
     hivereset = False
     workingrepo = repo
-	# The starburst-enterprise helm chart doesn't currently support ingress
-	# load balancers on GKE. Patch the helm chart to fix this.
+    # The starburst-enterprise helm chart doesn't currently support GKE ingress
+    # load balancers, nor does it allow for EKS NLBs to listen on a different
+    # point than they target. Patch the helm chart to fix these problems.
     if module == "enterprise" and ingresslb:
         # Only write if the directory doesn't yet exist
         tgtdir = f"/tmp/repo-{repo}-{chartversion}"
@@ -1924,8 +2126,8 @@ class AwsCreds(Creds):
         assert target == "aws", f"Target is {target} not aws!"
         return super().toDict()
 
-def announceReady(bastionIp: str) -> list:
-    a = [getStarburstUrl() + "/ui/insights"]
+def announceReady(bastionIp: str) -> list[str]:
+    a = [getStarburstUrl()]
     who = f"user: {trinouser}"
     if tlsenabled():
         who += f" pwd: {trinopass}"
@@ -1939,26 +2141,36 @@ def announceReady(bastionIp: str) -> list:
         a.append(f"bastion: {bastionIp}")
     return a
 
+def getObjectStoreUrl(env: dict) -> str:
+    if target == "aws":
+        return f"s3://{bucket}" # replace completely
+    elif target == "az":
+        return "abfs://{f}@{h}".format(f = env["adls_fs_name"], h =
+                env["object_address"]) # use the URL for ADLS
+    else: # target == "gcp"
+        return env["object_address"] # change nothing
+
 def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
         dropTables: bool = False, dontLoad: bool = False, \
-                nobastionfw: bool = False) -> list:
+                nobastionfw: bool = False) -> tuple[list[Tunnel], list[str]]:
     # First see if there isn't a cluster created yet, and create the
     # cluster. This will create the control plane and workers.
-    env = ensureClusterIsStarted(skipClusterStart)
+    tuns: list[Tunnel] = []
+    tuns, env = ensureClusterIsStarted(skipClusterStart)
 
     zid = env["route53_zone_id"] if target == "aws" else None
     env["Region"] = region
     if creds and isinstance(creds, Creds):
         env |= creds.toDict()
     helmInstallAll(env)
-    startPortForwardToLBs(env["bastion_address"], zid)
+    tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
     if dropTables:
         unloadDatabases()
         eraseBucketContents(env)
     if not dontLoad:
         loadDatabases(getObjectStoreUrl(env))
 
-    return announceReady(env["bastion_address"])
+    return tuns, announceReady(env["bastion_address"])
 
 def isTerraformSettled(tgtResource: str = None) -> bool:
     tgt = ""
@@ -1977,8 +2189,13 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
         announce("Re-establishing bastion tunnel")
         env = getOutputVars()
         try:
-            tun = establishBastionTunnel(env)
+            tuns = []
+            tuns.extend(establishBastionTunnel(env))
             t = time.time()
+            zid = env["route53_zone_id"] if target == "aws" else None
+            tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
+            unloadDatabases()
+            eraseBucketContents(env)
             lbs = deleteAllServices()
             # TODO AWS has to be handled differently because of its inability
             # to support specification of static IPs for load balancers.
@@ -1986,10 +2203,8 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 assert len(lbs) == len(services)
                 setRoute53Cname(lbs, env["route53_zone_id"], delete = True)
             helmUninstallAll()
-            eraseBucketContents(env)
             announce("nodes emptied in " + time.strftime("%Hh%Mm%Ss",
                 time.gmtime(time.time() - t)))
-            del tun # Get rid of the tunnel
         except CalledProcessError as e:
             announceBox(textwrap.dedent("""\
                     Your Terraform is set up, but your bastion host is not
@@ -2064,14 +2279,17 @@ def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:
 
 def buildLdapLauncher(fqdn: str) -> None:
     dcs = fqdnToDc(fqdn)
-    with open(ldapsetupf) as sh, \
+    certdir = '/etc/ldap/sasl2'
+    cacertbf = "cacert.pem"
+    ldapkeybf = "ldap.key"
+    ldapcertbf = "ldap.pem"
+    certinfobf = "certinfo.ldif"
+    with \
+            open(ldapsetupf) as sh, \
             open(ldaplaunchf, 'w') as wh, \
-            open(secrets["slapdkey"]["f"]) as kh, \
-            open(secrets["slapdcert"]["f"]) as ch, \
-            open(secrets["certinfo"]["f"]) as cih:
-        slapdkeybf = secrets["slapdkey"]["bf"]
-        slapdcertbf = secrets["slapdcert"]["bf"]
-        certinfobf = secrets["certinfo"]["bf"]
+            open(secrets["ldaptls"]["chain"]) as cach, \
+            open(secrets["ldaptls"]["cert"]) as ch, \
+            open(secrets["ldaptls"]["key"]) as kh:
         # Copy in the script that installs slapd
         for line in sh:
             wh.write(line)
@@ -2079,27 +2297,35 @@ def buildLdapLauncher(fqdn: str) -> None:
         # Now add to the script some other commands. First, we want to turn on
         # LDAPS. Write our server cert and our private key to /etc/ldap and
         # permission them appropriately.
-        wh.write(f"cat <<EOM | sudo tee -a /etc/ldap/{slapdkeybf}\n")
+        wh.write(f"cat <<EOM | sudo tee {certdir}/{cacertbf}\n")
+        for line in cach:
+            wh.write(line)
+        wh.write("EOM\n")
+        wh.write(f"cat <<EOM | sudo tee {certdir}/{ldapkeybf}\n")
         for line in kh:
             wh.write(line)
         wh.write("EOM\n")
-        wh.write(f"cat <<EOM | sudo tee -a /etc/ldap/{slapdcertbf}\n")
+        wh.write(f"cat <<EOM | sudo tee {certdir}/{ldapcertbf}\n")
         for line in ch:
             wh.write(line)
         wh.write("EOM\n")
-        wh.write(f"sudo chown openldap /etc/ldap/{slapdkeybf} "
-                f"/etc/ldap/{slapdcertbf}\n")
-        wh.write(f"sudo chgrp openldap /etc/ldap/{slapdkeybf} "
-                f"/etc/ldap/{slapdcertbf}\n")
-        wh.write(f"sudo chmod 0640 /etc/ldap/{slapdkeybf} "
-                f"/etc/ldap/{slapdcertbf}\n")
+
+        wh.write("sudo chown -R openldap /etc/ldap\n")
+        wh.write("sudo chgrp -R openldap /etc/ldap\n")
+        wh.write(f"sudo chmod 0600 {certdir}/*\n")
 
         # Now add the server cert and private key to slapd.
-        wh.write(f"cat <<EOM > /tmp/{certinfobf}\n")
-        for line in cih:
-            wh.write(line)
+        wh.write(f"cat <<EOM | sudo tee /tmp/{certinfobf}\n")
+        wh.write("dn: cn=config\n")
+        wh.write("changetype: modify\n")
+        wh.write("replace: olcTLSCACertificateFile\n")
+        wh.write(f"olcTLSCACertificateFile: {certdir}/{cacertbf}\n-\n")
+        wh.write("replace: olcTLSCertificateKeyFile\n")
+        wh.write(f"olcTLSCertificateKeyFile: {certdir}/{ldapkeybf}\n-\n")
+        wh.write("replace: olcTLSCertificateFile\n")
+        wh.write(f"olcTLSCertificateFile: {certdir}/{ldapcertbf}\n")
         wh.write("EOM\n")
-        wh.write(f"sudo ldapmodify -Y EXTERNAL -H ldapi:// -f "
+        wh.write("sudo ldapmodify -Y EXTERNAL -H ldapi:// -f "
                 f"/tmp/{certinfobf}\n")
 
         # Enable ldaps
@@ -2108,20 +2334,20 @@ def buildLdapLauncher(fqdn: str) -> None:
         wh.write("sudo systemctl restart slapd\n")
 
         # Configure for LDAP clients
-        wh.write(f"echo URI ldaps://{ldapfqdn}:636 | sudo tee -a "
-                "/etc/ldap/ldap.conf\n")
-        wh.write("echo TLS_CACERT /etc/ssl/certs/ca-certificates.crt | "
-                "sudo tee -a /etc/ldap/ldap.conf\n")
+        wh.write("cat <<EOM | sudo tee /etc/ldap/ldap.conf\n")
+        wh.write(f"URI ldaps://{ldapfqdn}:636\n")
+        wh.write("TLS_CACERT /etc/ssl/certs/ca-certificates.crt\n")
+        wh.write("EOM\n")
 
         # Enable the memberof plugin
-        wh.write("cat <<EOM > /tmp/memberof.ldif\n")
+        wh.write("cat <<EOM | sudo tee /tmp/memberof.ldif\n")
         wh.write(getOverlays())
         wh.write("EOM\n")
-        wh.write("sudo ldapadd -H ldapi:/// -Y EXTERNAL -D 'cn=config' -f "
+        wh.write("sudo ldapadd -H ldapi:// -Y EXTERNAL -D 'cn=config' -f "
                 "/tmp/memberof.ldif\n")
 
         # Populate the slapd database with some basic entries that we'll need.
-        wh.write("cat <<EOM > /tmp/who.ldif\n")
+        wh.write("cat <<EOM | sudo tee /tmp/who.ldif\n")
         wh.write(getOu("People", dcs))
         wh.write(getOu("Groups", dcs))
         wh.write(getUser("alice",   10000, 5000, dcs))
@@ -2133,7 +2359,7 @@ def buildLdapLauncher(fqdn: str) -> None:
         wh.write("EOM\n")
         wh.write("sudo ldapadd -x -w admin -D "
                 "cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif\n")
-        wh.write("echo finished > /tmp/finished\n")
+        wh.write("echo finished | sudo tee /tmp/finished\n")
 
 def buildBastionLauncher() -> None:
     with open(bastlaunchf, 'w') as wh:
@@ -2186,23 +2412,54 @@ def getSecrets() -> None:
     except IOError as e:
         sys.exit(f"Couldn't read secrets file {secretsf}")
 
-    try:
-        for name, values in s.items():
-            base = values["bf"]
-            if "dir" in values:
-                base = values["dir"] + "/" + base
-            values["f"] = where(base)
+    groups: dict[str, dict[str, Any]] = {}
 
-            # If the secret is not generated later by this program, then it is
-            # a pre-made secret, and it must already be on disk and readable.
-            if ("generated" not in values or values["generated"] == False) \
-                    and not readableFile(values["f"]):
-                sys.exit(f"Can't find a readable file for {name} at " +
-                        values["f"])
+    for name, values in s.items():
+        base = values["bf"]
+        if "dir" in values:
+            base = values["dir"] + "/" + base
+        filename = where(base)
 
-            secrets[name] = values
-    except KeyError as e:
-        sys.exit(f"Unable to find key {e}")
+        # If the secret is not generated later by this program, then it is
+        # a pre-made secret, and it must already be on disk and readable.
+        if ("generated" not in values or values["generated"] == False) \
+                and not readableFile(filename):
+            sys.exit(f"Can't find a readable file at {filename} for {name}")
+
+        # Certificate groups should be treated specially, and we should add
+        # these to the set as a single object. Store them away here and return
+        # back after this loop to record them as groups.
+        if "group" in values:
+            groupname = values["group"]
+            grouptype = values["type"]
+            if groupname in groups:
+                groups[groupname][grouptype] = filename
+            else:
+                groups[groupname] = { "isgroup": True, grouptype: filename }
+            continue
+
+        values["f"] = filename
+        secrets[name] = values
+
+    for groupname, values in groups.items():
+        # at least "cert" and "key" have to be members of the group; a "chain"
+        # value may also be present optionally
+        assert "cert" in values and "key" in values, \
+                f"cert and key not found together for {groupname}"
+        # if there is a chain, then verify the certificate and chain
+        if "chain" in values:
+            # openssl always returns 0 as the return code, so we have to
+            # actually parse the output to see if the certificate is valid
+            output = runCollect("openssl verify -untrusted {ch} {c}".format(ch
+                = values["chain"], c = values["cert"]).split()).splitlines()
+            if output[-1] == values['cert'] + ': OK':
+                print('Verified certificate ' + values["cert"])
+            else:
+                print("Unable to verify cert {c} & chain {ch}".format(c =
+                    values["cert"], ch = values["chain"]))
+                print(output)
+                sys.exit(-1)
+        secrets[groupname] = values
 
 def announceSummary() -> None:
     announceLoud(getCloudSummary())
@@ -2274,50 +2531,54 @@ def checkEtcHosts() -> None:
             print(f"Unable to write to {hostsf}. Try yourself?")
     sys.exit(f"Script cannot continue without {starburstfqdn} in {hostsf}")
 
-announce("Verifying environment")
-getSecrets()
-announceSummary()
-creds = getCreds()
-checkRSAKey()
-checkEtcHosts()
-buildLdapLauncher(domain)
-buildBastionLauncher()
-if target == "gcp":
-    announce(f"GCP project is {gcpproject}")
-if nobastionfw:
-    announceBox("Bastion firewall will be disabled!")
-print(f"Your CIDR is {mySubnetCidr}")
+def main() -> None:
+    announce("Verifying environment")
+    getSecrets()
+    announceSummary()
+    creds = getCreds()
+    checkRSAKey()
+    checkEtcHosts()
+    buildLdapLauncher(domain)
+    buildBastionLauncher()
+    if target == "gcp":
+        announce(f"GCP project is {gcpproject}")
+    if nobastionfw:
+        announceBox("Bastion firewall will be disabled!")
+    print(f"Your CIDR is {mySubnetCidr}")
 
-w = []
-started = False
+    w: list[str] = []
+    started = False
 
-if ns.command in ("stop", "restart"):
-    svcStop(ns.empty_nodes)
+    if ns.command in ("stop", "restart"):
+        svcStop(ns.empty_nodes)
 
-if ns.command in ("start", "restart"):
-    w = svcStart(creds, ns.skip_cluster_start, ns.drop_tables, ns.dont_load,
-            nobastionfw)
-    started = True
-    announceBox(f"Your {rsaPub} public key has been installed into the "
-            "bastion server, so you can ssh there now (user 'ubuntu').")
+    tuns: list[Tunnel] = []
+    if ns.command in ("start", "restart"):
+        newtuns, w = svcStart(creds, ns.skip_cluster_start, ns.drop_tables,
+                ns.dont_load, nobastionfw)
+        tuns.extend(newtuns)
+        started = True
+        announceBox(f"Your {rsaPub} public key has been installed into the "
+                "bastion server, so you can ssh there now (user 'ubuntu').")
 
-if ns.command == "status":
-    announce("Fetching current status")
-    started = isTerraformSettled()
-    if started:
-        env = getOutputVars()
-        w = announceReady(env["bastion_address"])
+    if ns.command == "status":
+        announce("Fetching current status")
+        started = isTerraformSettled()
+        if started:
+            env = getOutputVars()
+            w = announceReady(env["bastion_address"])
 
-y = getCloudSummary() + ["Service is " + ("started on:" if started else
-    "stopped")]
-if len(w) > 0:
-    y += w
+    y = getCloudSummary() + ["Service is " + ("started on:" if started else
+        "stopped")]
+    if len(w) > 0:
+        y += w
 
-if ns.command in ("start", "restart") and started:
-    y.append("Connect now to localhost ports:")
-    y += [str(i) for i in toreap]
-    announceLoud(y)
-    input("Press return key to quit and terminate tunnels!")
-    sys.exit(0) # Tunnels destroyed on de-reference
+    if ns.command in ("start", "restart") and started:
+        y.append("Connect now to localhost ports:")
+        y += [str(i) for i in tuns]
+        announceLoud(y)
+        input("Press return key to quit and terminate tunnels!")
+    else:
+        announceLoud(y)
 
-announceLoud(y)
+main()

@@ -7,13 +7,14 @@ registryCredentials:
 expose:
   type: loadBalancer
   loadBalancer:
-    # TODO AWS Doesn't support specification of a static IP for the ELB
+    # NOTE AWS doesn't support specifying a static IP address for LBs
     {% if Target != "aws" %}
     IP: {{ranger_address | string}}
     {% endif %}
     annotations:
       {% if Target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+      service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
       {% elif Target == "az" %}
       service.beta.kubernetes.io/azure-load-balancer-internal: "true"
       {% elif Target == "gcp" %}

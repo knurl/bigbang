@@ -63,8 +63,8 @@ resource "aws_security_group" "worker_sg" {
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
-  cluster_version = "1.19"
-  version         = "15.1.0"
+  cluster_version = "1.21"
+  version         = "17.22.0"
 
   # Where to place the EKS cluster and workers.
   subnets = module.vpc.private_subnets

@@ -11,15 +11,16 @@ expose:
   {% if IngressLoadBalancer %}
   type: "ingress"
   ingress:
-    ingressName: {{IngressName}}
-    serviceName: "starburst"
-    servicePort: 8080
     tls:
       enabled: true
-      secretName: {{starbursttls}}
     host: {{StarburstHost}}
+    {% if Target == "gcs" %}
     path: "/*"
-    {% if Target == "gcp" %}
+    {% endif %}
+    {% if Target == "aws" %}
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    {% elif Target == "gcp" %}
     gcpBackendConfig:
       name: hc-config
       url: /v1/info
@@ -32,20 +33,20 @@ expose:
   {% else %}
   type: loadBalancer
   loadBalancer:
-    # TODO AWS Doesn't support specification of a static IP for the ELB
+    # NOTE AWS doesn't support specifying a static IP address for LBs
     {% if Target != "aws" %}
     IP: {{starburst_address | string}}
     {% endif %}
     ports:
-  {% if RequireInternalTls or RequireCoordTls %}
+      {% if RequireInternalTls or RequireCoordTls %}
       https:
         port: 8443
       http: null
-  {% else %}
+      {% else %}
       http:
         port: 8080
       https: null
-  {% endif %}
+      {% endif %}
     annotations:
       {% if Target == "aws" %}
       service.beta.kubernetes.io/aws-load-balancer-internal: "true"
@@ -73,8 +74,11 @@ coordinator:
     properties:
       config.properties: |
         coordinator=true
-        colocated-joins-enabled=true
         node-scheduler.include-coordinator=false
+        #        colocated-joins-enabled=true
+        #        data-product.starburst-user=starburst_service
+        #        data-product.starburst-password=test
+        #        starburst.data-product.enabled=true
         http-server.http.port=8080
         http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
         {% if IngressLoadBalancer %}
@@ -86,8 +90,8 @@ coordinator:
         http-server.authentication.allow-insecure-over-http=true
         {% endif %}
         task.writer-count = 8
-        # TLS everywhere
         {% if RequireInternalTls %}
+        # TLS everywhere
         http-server.http.enabled=false
         http-server.https.enabled=true
         http-server.https.port=8443
@@ -101,7 +105,7 @@ coordinator:
         # Coordinator cert doesn't have localhost, so can't use https
         discovery.uri=http://localhost:8080
         {% else %}
-        # Not using TLS at all
+        # Not using TLS from coordinator (might be TLS to LB though)
         http-server.http.enabled=true
         http-server.https.enabled=false
         discovery.uri=http://localhost:8080
@@ -243,10 +247,6 @@ catalogs:
     connector.name=hive
     hive.metastore.uri=thrift://hive:9083
     hive.security=allow-all
-    hive.file-status-cache-tables=*
-    hive.file-status-cache-expire-time=60m
-    hive.storage-format=ORC
-    hive.compression-codec=SNAPPY
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
@@ -254,6 +254,11 @@ catalogs:
     hive.gcs.json-key-file-path=secretRef:{{gcskey}}:{{gcskeybf}}
     hive.gcs.use-access-token=false
     {% endif %}
+  sfdc: |
+    connector.name=salesforce
+    salesforce.user={{SalesforceUser}}
+    salesforce.password={{SalesforcePassword}}
+    salesforce.security-token={{SalesforceSecurityToken}}
   {% if Target == "aws" %}
   delta: |
     connector.name=delta-lake
@@ -262,13 +267,16 @@ catalogs:
     hive.security=allow-all
     hive.max-partitions-per-writers = 1000
     delta.hide-non-delta-lake-tables=true
+  {% if not DisableSlowSources %}
   redshift: |
     connector.name=redshift
     connection-url=jdbc:redshift://{{redshift_endpoint}}/{{DBName}}
     connection-user={{redshift_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
+  {% endif %}
   {% elif Target == "az" %}
+  {% if not DisableSlowSources %}
   synapse_sl: |
     connector.name=synapse
     connection-url=jdbc:sqlserver://{{synapse_sl_address}}:1433;database=master
@@ -281,10 +289,11 @@ catalogs:
     connection-user={{synapse_pool_user}}
     connection-password={{DBPassword}}
     allow-drop-table=true
+  {% endif %}
   {% elif Target == "gcp" %}
   bq: |
     connector.name=bigquery
-    bigquery.project-id={{ bq_project_id | string }}
+    bigquery.project-id={{ GcpProjectId | string }}
   {% endif %}
   mysql: |
     connector.name=mysql

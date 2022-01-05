@@ -3,14 +3,14 @@
 # Install Slapd !
 
 # update first
-apt-get -q -y update
-
-# remove any existing install first
-sudo apt-get --purge remove -y slapd ldap-utils
+sudo apt-get -q -y update
 
 # get rid of the database
 sudo rm -rf /var/lib/ldap
 sudo rm -rf /etc/ldap
+
+# remove any existing install first
+sudo apt-get --purge remove -y slapd ldap-utils
 
 cat << EOM | sudo debconf-set-selections
 slapd slapd/password1 password admin
@@ -29,6 +29,14 @@ export DEBIAN_FRONTEND=noninteractive
 
 # now reinstall slapd
 sudo apt-get install -y slapd ldap-utils
+if [[ $? -ne 0 ]]; then
+    echo Failed to install slapd and ldap-utils
+    exit 1
+fi
 
 # set password
 sudo slappasswd -s admin
+if [[ $? -ne 0 ]]; then
+    echo Failed to set admin password
+    exit 1
+fi

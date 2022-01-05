@@ -2,7 +2,7 @@ data "aws_availability_zones" "available" {}
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "3.7.0"
+  version = "3.10.0"
 
   name = var.network_name
   cidr = var.my_cidr
@@ -31,13 +31,20 @@ module "vpc" {
   enable_nat_gateway = true
   single_nat_gateway = true
 
-  # Required to allow ELBs on the private subnets
+  # Required to allow internal ELBs
   private_subnet_tags = {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"           = "1"
   }
 
   tags = var.tags
+}
+
+locals {
+  bastion_ip   = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
+  ldap_ip      = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 102)
+  starburst_ip = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 103)
+  ranger_ip    = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 104)
 }
 
 resource "aws_key_pair" "key_pair" {
