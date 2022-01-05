@@ -56,7 +56,7 @@ clustname	bigbang.py	/^clustname = shortname + "cl"$/;"	v
 code	bigbang.py	/^code = username[:codelen]$/;"	v
 codelen	bigbang.py	/^codelen = min(3, len(username))$/;"	v
 components	bigbang.py	/^components = chartversion.split('.')$/;"	v
-copySchemaTables	bigbang.py	/^def copySchemaTables(srcCatalog: str, srcSchema: str,$/;"	f
+copySchemaTables	bigbang.py	/^def copySchemaTables(srcCatalog: str, srcSchema: str, dstCatalogs: list[str],$/;"	f
 createSchemas	bigbang.py	/^def createSchemas(dstCatalogs: list, dstSchema: str, hiveTarget: str) -> None:$/;"	f
 dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["AwsDbInstanceType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["AzureDbVmType"]$/;"	v
@@ -88,6 +88,7 @@ gcpproject	bigbang.py	/^gcpproject = ""$/;"	v
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
 getAccessKeyName	bigbang.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:AwsCreds
 getAccessKeyName	bigbang.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:Creds
+getCatalogs	bigbang.py	/^def getCatalogs(avoid: list[str] = []) -> list[str]:$/;"	f
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f
 getCreds	bigbang.py	/^def getCreds() -> Optional[Creds]:$/;"	f
 getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:$/;"	f
