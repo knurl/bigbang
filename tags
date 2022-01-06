@@ -57,6 +57,7 @@ code	bigbang.py	/^code = username[:codelen]$/;"	v
 codelen	bigbang.py	/^codelen = min(3, len(username))$/;"	v
 components	bigbang.py	/^components = chartversion.split('.')$/;"	v
 copySchemaTables	bigbang.py	/^def copySchemaTables(srcCatalog: str, srcSchema: str, dstCatalogs: list[str],$/;"	f
+countUp	bigbang.py	/^    def countUp(maxinc: float) -> float:$/;"	f	function:spinWaitTest
 createSchemas	bigbang.py	/^def createSchemas(dstCatalogs: list, dstSchema: str, hiveTarget: str) -> None:$/;"	f
 dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["AwsDbInstanceType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["AzureDbVmType"]$/;"	v
@@ -72,13 +73,14 @@ domain	bigbang.py	/^domain        = "az.starburstdata.net"$/;"	v
 dontLoadCat	bigbang.py	/^def dontLoadCat(cat: str) -> bool:$/;"	f
 downstreamSG	bigbang.py	/^        downstreamSG = True$/;"	v
 downstreamSG	bigbang.py	/^downstreamSG = False$/;"	v
-dropExistingSchemaWithTables	bigbang.py	/^def dropExistingSchemaWithTables(catalogs: list[str], schema: str) -> None:$/;"	f
+dropSchemaTables	bigbang.py	/^def dropSchemaTables(catalogs: list[str], schema: str) -> None:$/;"	f
 dropSchemas	bigbang.py	/^def dropSchemas(catalogs: list[str], schema: str) -> None:$/;"	f
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
 emitSshTunnel	bigbang.py	/^            def emitSshTunnel(wh, bindaddr: ipaddress.IPv4Address, lclport:$/;"	f	function:buildBastionLauncher
 ensureClusterIsStarted	bigbang.py	/^        tuple[list[Tunnel], dict]:$/;"	f
 ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(repo: str) -> None:$/;"	f
 eraseBucketContents	bigbang.py	/^def eraseBucketContents(env: dict) -> None:$/;"	f
+eraseLine	bigbang.py	/^    def eraseLine(flush: bool = False):$/;"	f	function:spinWait
 establishBastionTunnel	bigbang.py	/^def establishBastionTunnel(env: dict) -> list[Tunnel]:$/;"	f
 fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 gcpaccount	bigbang.py	/^gcpaccount = ""$/;"	v
@@ -135,6 +137,7 @@ help	bigbang.py	/^        help="Gather the downstream GCP bastion IP and starbur
 help	bigbang.py	/^        help="Specify upstream bastion IP address, if this is a downstream "$/;"	v
 help	bigbang.py	/^        help="Summarise the ssh tunnels on exit.")$/;"	v
 help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
+help	bigbang.py	/^        help=argparse.SUPPRESS)$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "adls"$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "gcs"$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "s3"$/;"	v
@@ -226,6 +229,7 @@ smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AwsSmallInstanceT
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AzureSmallVmType"]$/;"	v
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["GcpSmallMachineType"]$/;"	v
 spinWait	bigbang.py	/^def spinWait(waitFunc: Callable[[], float]) -> None:$/;"	f
+spinWaitTest	bigbang.py	/^def spinWaitTest():$/;"	f
 sqlstr	bigbang.py	/^sqlstr = "Issued 🢩 "$/;"	v
 starburstfqdn	bigbang.py	/^starburstfqdn = "starburst." + domain$/;"	v
 startPortForwardToLBs	bigbang.py	/^def startPortForwardToLBs(bastionIp: str,$/;"	f
@@ -252,7 +256,6 @@ tpchsmlschema	bigbang.py	/^tpchsmlschema = "tiny"$/;"	v
 trinopass	bigbang.py	/^trinopass     = "test"$/;"	v
 trinouser	bigbang.py	/^trinouser     = "starburst_service"$/;"	v
 type	bigbang.py	/^        type=ipaddress.IPv4Address,$/;"	v
-unloadDatabases	bigbang.py	/^def unloadDatabases():$/;"	f
 updateKubeConfig	bigbang.py	/^def updateKubeConfig() -> None:$/;"	f
 upstrBastion	bigbang.py	/^        upstrBastion = ipaddress.IPv4Address(ns.bastion)$/;"	v
 upstrBastion	bigbang.py	/^upstrBastion = None$/;"	v

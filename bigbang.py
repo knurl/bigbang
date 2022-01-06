@@ -9,9 +9,11 @@ from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict, Set
 from urllib.parse import urlparse
 from abc import ABC, abstractmethod
 from google.cloud import bigquery, storage # type: ignore
+import google.api_core.exceptions
 import jinja2
 from jinja2.meta import find_undeclared_variables
 from termcolor import cprint, colored
+from shutil import get_terminal_size
 
 # Do this just to get rid of the warning when we try to read from the
 # api server, and the certificate isn't trusted
@@ -148,6 +150,8 @@ p.add_argument('command',
         help="""Command to issue for demo services.
            start/stop/restart: Start/stop/restart the demo environment.
            status: Show whether the environment is running or not.""")
+p.add_argument('-p', '--progmeter-test', action="store_true",
+        help=argparse.SUPPRESS)
 
 ns = p.parse_args()
 
@@ -500,7 +504,7 @@ def getRmtPort(service: str) -> int:
 #
 
 def announce(s):
-    cprint(f"==> {s}", 'magenta', attrs = ['bold'])
+    cprint(f"==> {s}", 'blue', attrs = ['bold'])
 
 sqlstr = "Issued 🢩 "
 
@@ -516,7 +520,7 @@ def announceLoud(lines: list) -> None:
     rt = " ⮘┃"
     p = ["{l}{t}{r}".format(l = lt, t = i.center(maxl), r = rt) for i in lines]
     pmaxl = maxl + len(lt) + len(rt)
-    cp = lambda x: cprint(x, 'cyan')
+    cp = lambda x: cprint(x, 'green', attrs = ['bold'])
     cp('┏' + '━' * (pmaxl - 2) + '┓')
     for i in p:
         cp(i)
@@ -536,7 +540,7 @@ def announceBox(s):
     maxl = max(map(len, lines))
     topbord = ul + hz * (maxl + 2) + ur
     botbord = ll + hz * (maxl + 2) + lr
-    cp = lambda x: cprint(x, 'blue')
+    cp = lambda x: cprint(x, 'magenta', attrs = ['bold'])
     cp(topbord)
     for l in lines:
         cp(bl + l.ljust(maxl) + br)
@@ -925,19 +929,30 @@ def waitUntilApiServerResponding() -> float:
     return 0.0
 
 def spinWait(waitFunc: Callable[[], float]) -> None:
+    ls = ' '
+    lb = '┠'
+    rb = '┨'
     anim1 = ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷']
     anim2 = ['⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽', '⣾']
+    bs = len(ls) + len(anim1[0]) + len(lb) + len(rb) + len(anim2[0])
     maxlen = 0
     f = min(len(anim1), len(anim2))
-    barlength = 64
+    barlength = None
+    minpctsz = len("─1%─┤")
+    cd = lambda x: colored(x, 'yellow')
+    def eraseLine(flush: bool = False):
+        cprint(cd(' ' * maxlen), end = '\r', flush = flush)
+
     i = 0
     pct = 0.0
     while pct < 1.0:
         pct = waitFunc()
-        assert(pct <= 1.0)
+        assert pct <= 1.0
+        newbarlength = get_terminal_size(fallback = (72, 24)).columns - bs
+        if barlength and barlength != newbarlength:
+            eraseLine(flush = True)
+        barlength = newbarlength
         c = int(pct * barlength)
-        p100 = int(100 * pct)
-        minpctsz = len("─1%─┤")
         if c == 0:
             arrow = ""
         elif c == 1:
@@ -945,23 +960,35 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
         elif c < minpctsz:
             arrow = (c - 1) * '─' + '┤'
         else:
-            p100s = f"{p100}%"
-            rmdr = c - len(p100s) - 1 # 1 for arrowhead
-            rmdr1 = int(rmdr / 2)
-            rmdr2 = rmdr - rmdr1
-            arrow = rmdr1 * '─' + p100s + rmdr2 * '─' + '┤'
-        assert len(arrow) == c, "{arrow} is not len {c}"
-        r = barlength - c
-        space = ' '*r
-        s = '   ' + anim1[i % f] + '┠' + arrow + space + '┨' + anim2[i % f]
+            p100 = str(int(100 * pct)) + '%'
+            rmdr = c - len(p100) - 1 # 1 for arrowhead
+            left = rmdr >> 1
+            right = rmdr - left
+            arrow = left * '─' + p100 + right * '─' + '┤'
+        s = ls + anim1[i % f] + lb + arrow + ' ' * (barlength - c) + \
+                rb + anim2[i % f]
         maxlen = max(maxlen, len(s))
-        cd = lambda x: colored(x, 'red')
         print(cd(s), end='\r', flush=True)
         if pct == 1.0:
-            print(cd(' ' * maxlen), end='\r')
+            # When we finish, erase all traces of progress meter
+            eraseLine(flush = False)
             return
         i += 1
         time.sleep(0.25)
+
+def spinWaitTest():
+    count = 0.0
+    def countUp(maxinc: float) -> float:
+        nonlocal count
+        count += random.uniform(0.0, maxinc)
+        if count > 1.0:
+            count = 1.0
+        return count
+    maxinc = 0.01
+    for i in range(1,6):
+        spinWait(lambda: countUp(maxinc))
+        count = 0.0
+        maxinc *= 1.5
 
 # A class for recording ssh tunnels
 class Tunnel:
@@ -1030,7 +1057,7 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
 
     # Ensure that we can talk to the api server
     announce("Waiting for api server to respond")
-    spinWait(lambda: waitUntilApiServerResponding())
+    spinWait(waitUntilApiServerResponding)
 
     # Start up the tunnel to the LDAP server
     if authnldap:
@@ -1306,7 +1333,10 @@ class CommandGroup:
         self.workToDo = 0
         self.workDone = 0
 
-    # Must be called with lock held!
+    # Methods modifying state protected by cv (condition variable) lock
+
+    # Must be called with lock held--and this is only called by wait_for on the
+    # condition variable, which always guarantees the lock is held
     def allCommandsDone(self) -> bool:
         assert self.workDone <= self.workToDo
         return self.workDone == self.workToDo
@@ -1315,7 +1345,11 @@ class CommandGroup:
         with self.cv:
             assert self.workDone <= self.workToDo, \
                     f"{self.workDone} should be <= {self.workToDo}"
-            return float(self.workDone) / float(self.workToDo)
+            # It's possible that no commands were processed, in which case
+            # avoid doing a division-by-zero by saying we're finished.
+            ratio = float(self.workDone) / self.workToDo \
+                    if self.workToDo > 0 else 1.0
+            return ratio
 
     def checkCopiedTable(self, dstCatalog: str, dstSchema: str, dstTable: str,
             rows: int) -> None:
@@ -1380,15 +1414,22 @@ class CommandGroup:
         # Construct a BigQuery client object.
         client = bigquery.Client()
 
+        # TODO this could break if someone changes to Parquet format
         job_config = bigquery.LoadJobConfig(write_disposition =
-            bigquery.WriteDisposition.WRITE_TRUNCATE, source_format =
+            bigquery.WriteDisposition.WRITE_EMPTY, source_format =
             bigquery.SourceFormat.ORC,)
 
         table_id = "{dp}.{ds}.{st}".format(dp = gcpproject, ds = dstSchema,
                 st = srcTable)
-        load_job = client.load_table_from_uri(paths, table_id,
-                job_config=job_config)  # Make an API request.
-        load_job.result()  # Waits for the job to complete.
+        try:
+            load_job = client.load_table_from_uri(paths, table_id,
+                    job_config=job_config)  # Make an API request.
+            load_job.result()  # Waits for the job to complete.
+        except google.api_core.exceptions.Conflict as e:
+            # This exception indicates that there was already a table. That's
+            # fine and we can completely ignore that message.
+            pass
+        # This check should pass even if we got a write conflict
         destination_table = client.get_table(table_id)
         assert destination_table.num_rows == rows
 
@@ -1448,7 +1489,7 @@ def preloadTpchTableSizes(scaleSets: set[str]) -> None:
                 cg.addSqlCommand("select count(*) from "
                     f"{tpchcat}.{scale}.{table}",
                     callback = make_cbs(b, scale, table))
-    spinWait(lambda: cg.ratioDone())
+    spinWait(cg.ratioDone)
     cg.waitOnAllCopies() # Should be a no-op
 
 def createSchemas(dstCatalogs: list, dstSchema: str, hiveTarget: str) -> None:
@@ -1463,7 +1504,7 @@ def createSchemas(dstCatalogs: list, dstSchema: str, hiveTarget: str) -> None:
                 f"{dstCatalog}.{dstSchema}{clause}")
 
     # Progress meter on all transfers across all destination schemas
-    spinWait(lambda: cg.ratioDone())
+    spinWait(cg.ratioDone)
     cg.waitOnAllCopies() # Should be a no-op
 
 def copySchemaTables(srcCatalog: str, srcSchema: str, dstCatalogs: list[str],
@@ -1539,7 +1580,7 @@ def copySchemaTables(srcCatalog: str, srcSchema: str, dstCatalogs: list[str],
                         dbschema, True)
 
     # Progress meter on all transfers across all destination schemas
-    spinWait(lambda: cg.ratioDone())
+    spinWait(cg.ratioDone)
     cg.waitOnAllCopies() # Should be a no-op
 
 def randomString(length: int) -> str:
@@ -1601,12 +1642,10 @@ def dropSchemas(catalogs: list[str], schema: str) -> None:
     for catalog in catalogs:
         cg.addSqlCommand(f"drop schema if exists {catalog}.{schema}")
     # Progress meter on all transfers across all destination schemas
-    spinWait(lambda: cg.ratioDone())
+    spinWait(cg.ratioDone)
     cg.waitOnAllCopies() # Should be a no-op
 
-def dropExistingSchemaWithTables(catalogs: list[str], schema: str) -> None:
-    preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
-
+def dropSchemaTables(catalogs: list[str], schema: str) -> None:
     # First get rid of all the tables
     cg = CommandGroup()
     announce("dropping tables in {}".format(", ".join(catalogs)))
@@ -1615,7 +1654,7 @@ def dropExistingSchemaWithTables(catalogs: list[str], schema: str) -> None:
         for table in tpchtables:
             c = f"drop table if exists {catalog}.{schema}.{table}"
             cg.addSqlTableCommand(tpchschema, table, catalog, schema, c)
-    spinWait(lambda: cg.ratioDone())
+    spinWait(cg.ratioDone)
     cg.waitOnAllCopies() # Should be a no-op
 
     # Now clean up all the schemas
@@ -1625,31 +1664,29 @@ def getCatalogs(avoid: list[str] = []) -> list[str]:
     ctab = sendSql("show catalogs")
     return [c[0] for c in ctab if not (dontLoadCat(c[0]) or c[0] in avoid)]
 
-def unloadDatabases():
-    dropExistingSchemaWithTables(getCatalogs(), dbschema)
-
 def loadDatabases(hive_location: str) -> None:
     # For lakes, determine number of buckets
     tpchbucket = tpchbuckets[tpchbigschema]
     partition = tpchbucket["partition"]
     numbuckets = tpchbucket["nbuckets"]
 
-    preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
-
     # First copy tpch large scale set to hive...
     copySchemaTables(tpchcat, tpchbigschema, [hivecat], hive_location,
             partition, numbuckets)
 
-    dstCatalogs = getCatalogs(avoid = hivecat) # already done hivecat
+    dstCatalogs = getCatalogs(avoid = [hivecat]) # already done hivecat
 
     # BigQuery has to be handled specially, as it needs to be loaded from the
     # files we've already stored in GCS. If we're going to be loading the rest
     # of the tables from the tpch generator, then we'll need to make a special
     # case for BigQuery here.
     if tpchbigschema == tpchsmlschema:
+        # in this case, the we'll be copying from hive, so we'll handle
+        # BigQuery with all of the remaining data sources to be loaded
         copySchemaTables(hivecat, dbschema, dstCatalogs, hive_location,
                 partition, numbuckets)
     else:
+        # otherwise we'll do BQ first and then the rest
         if bqcat in dstCatalogs:
             copySchemaTables(hivecat, dbschema, [bqcat], hive_location,
                     partition, numbuckets)
@@ -1848,7 +1885,8 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
         workingrepo = tgtdir
     
     if chart == None: # Nothing installed yet, so we need to install
-        announce(f"Installing chart {newchart} using helm")
+        announce("Installing chart {c} as {r}".format(c = newchart, r =
+            releases[module]))
         helm("{h} install {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
             r = releases[module], w = workingrepo, c = charts[module], y =
             yamltmp, v = chartversion))
@@ -2164,8 +2202,9 @@ def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
         env |= creds.toDict()
     helmInstallAll(env)
     tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
+    preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
     if dropTables:
-        unloadDatabases()
+        dropSchemaTables(getCatalogs(), dbschema)
         eraseBucketContents(env)
     if not dontLoad:
         loadDatabases(getObjectStoreUrl(env))
@@ -2194,7 +2233,8 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
             t = time.time()
             zid = env["route53_zone_id"] if target == "aws" else None
             tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
-            unloadDatabases()
+            preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
+            dropSchemaTables(getCatalogs(), dbschema)
             eraseBucketContents(env)
             lbs = deleteAllServices()
             # TODO AWS has to be handled differently because of its inability
@@ -2532,6 +2572,8 @@ def checkEtcHosts() -> None:
     sys.exit(f"Script cannot continue without {starburstfqdn} in {hostsf}")
 
 def main() -> None:
+    if ns.progmeter_test:
+        spinWaitTest()
     announce("Verifying environment")
     getSecrets()
     announceSummary()
