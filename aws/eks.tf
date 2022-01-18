@@ -36,12 +36,12 @@ resource "aws_security_group" "worker_sg" {
   vpc_id                 = module.vpc.vpc_id
   revoke_rules_on_delete = true
 
-  /* Allow communication to any port from the private subnets */
+  /* Allow communication to any port from the public or private subnets */
   ingress {
     from_port   = 0
     to_port     = 0
     protocol    = -1
-    cidr_blocks = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
+    cidr_blocks = local.pubpriv_cidrs
   }
 
   /*
@@ -67,8 +67,8 @@ module "eks" {
   version         = "17.22.0"
 
   # Where to place the EKS cluster and workers.
-  subnets = module.vpc.private_subnets
   vpc_id  = module.vpc.vpc_id
+  subnets = module.vpc.private_subnets
 
   # Which subnets get to access the private api server endpoint
   cluster_endpoint_private_access_cidrs = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)

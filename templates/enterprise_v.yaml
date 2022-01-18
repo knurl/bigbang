@@ -143,11 +143,6 @@ coordinator:
         ldap.user-base-dn=ou=People,dc=az,dc=starburstdata,dc=net
         ldap.user-bind-pattern=uid=${USER},ou=People,dc=az,dc=starburstdata,dc=net
       {% endif %}
-      event-listener.properties: |
-        event-listener.name=event-logger
-        jdbc.url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
-        jdbc.user={{evtlog_user}}
-        jdbc.password={{DBPassword}}
       access-control.properties: |
         access-control.name=ranger
         ranger.authentication-type=BASIC
@@ -265,7 +260,6 @@ catalogs:
     hive.metastore=glue
     hive.metastore.glue.pin-client-to-current-region=true
     hive.security=allow-all
-    hive.max-partitions-per-writers = 1000
     delta.hide-non-delta-lake-tables=true
   {% if not DisableSlowSources %}
   redshift: |

@@ -45,6 +45,10 @@ locals {
   ldap_ip      = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 102)
   starburst_ip = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 103)
   ranger_ip    = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 104)
+  pubpriv_cidrs = concat(
+    module.vpc.private_subnets_cidr_blocks,
+    module.vpc.public_subnets_cidr_blocks
+  )
 }
 
 resource "aws_key_pair" "key_pair" {
