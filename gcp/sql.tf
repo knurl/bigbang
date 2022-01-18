@@ -71,17 +71,19 @@ resource "google_sql_database_instance" "sql_mysql" {
  */
 
 resource "google_sql_user" "user_postgres" {
-  project  = data.google_project.project.project_id
-  instance = google_sql_database_instance.sql_postgres.name
-  name     = var.db_user
-  password = var.db_password
+  project    = data.google_project.project.project_id
+  instance   = google_sql_database_instance.sql_postgres.name
+  name       = var.db_user
+  password   = var.db_password
+  depends_on = [google_sql_database_instance.sql_postgres]
 }
 
 resource "google_sql_user" "user_mysql" {
-  project  = data.google_project.project.project_id
-  instance = google_sql_database_instance.sql_mysql.name
-  name     = var.db_user
-  password = var.db_password
+  project    = data.google_project.project.project_id
+  instance   = google_sql_database_instance.sql_mysql.name
+  name       = var.db_user
+  password   = var.db_password
+  depends_on = [google_sql_database_instance.sql_mysql]
 }
 
 /*
@@ -89,25 +91,28 @@ resource "google_sql_user" "user_mysql" {
  */
 
 resource "google_sql_database" "db_evtlog" {
-  name      = var.db_name_evtlog
-  project   = data.google_project.project.project_id
-  instance  = google_sql_database_instance.sql_postgres.name
-  charset   = var.postgres_charset
-  collation = var.postgres_collation
+  name       = var.db_name_evtlog
+  project    = data.google_project.project.project_id
+  instance   = google_sql_database_instance.sql_postgres.name
+  charset    = var.postgres_charset
+  collation  = var.postgres_collation
+  depends_on = [google_sql_user.user_postgres]
 }
 
 resource "google_sql_database" "db_postgres" {
-  name      = var.db_name
-  project   = data.google_project.project.project_id
-  instance  = google_sql_database_instance.sql_postgres.name
-  charset   = var.postgres_charset
-  collation = var.postgres_collation
+  name       = var.db_name
+  project    = data.google_project.project.project_id
+  instance   = google_sql_database_instance.sql_postgres.name
+  charset    = var.postgres_charset
+  collation  = var.postgres_collation
+  depends_on = [google_sql_user.user_postgres]
 }
 
 resource "google_sql_database" "db_mysql" {
-  name      = var.db_name
-  project   = data.google_project.project.project_id
-  instance  = google_sql_database_instance.sql_mysql.name
-  charset   = var.mysql_charset
-  collation = var.mysql_collation
+  name       = var.db_name
+  project    = data.google_project.project.project_id
+  instance   = google_sql_database_instance.sql_mysql.name
+  charset    = var.mysql_charset
+  collation  = var.mysql_collation
+  depends_on = [google_sql_user.user_mysql]
 }
