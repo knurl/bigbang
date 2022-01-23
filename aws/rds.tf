@@ -33,6 +33,7 @@ resource "aws_db_instance" "evtlog" {
   delete_automated_backups = true
   db_subnet_group_name     = module.vpc.database_subnet_group
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
+  apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.evtlog_server_name })
 }
 
@@ -49,6 +50,7 @@ resource "aws_db_instance" "postgres" {
   delete_automated_backups = true
   db_subnet_group_name     = module.vpc.database_subnet_group
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
+  apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.postgres_server_name })
 }
 
@@ -65,5 +67,6 @@ resource "aws_db_instance" "mysql" {
   delete_automated_backups = true
   db_subnet_group_name     = module.vpc.database_subnet_group
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
+  apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.mysql_server_name })
 }

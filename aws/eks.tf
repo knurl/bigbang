@@ -1,77 +1,12 @@
-resource "aws_security_group" "apiserver_sg" {
-  name                   = "apiserver_sg"
-  vpc_id                 = module.vpc.vpc_id
-  revoke_rules_on_delete = true
-
-  /* Allow access from any internal IP (including the worker nodes, and the
-     bastion server) to the api server endpoint. */
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
-  }
-
-  # Allow access on any protocol between members of the control plane.
-  ingress {
-    from_port = 0
-    to_port   = 0
-    protocol  = -1
-    self      = true
-  }
-
-  # Allow any access outward.
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = -1
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(var.tags, { Name = "apiserver_sg" })
-}
-
-resource "aws_security_group" "worker_sg" {
-  name                   = "worker_sg"
-  vpc_id                 = module.vpc.vpc_id
-  revoke_rules_on_delete = true
-
-  /* Allow communication to any port from the public or private subnets */
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = -1
-    cidr_blocks = local.pubpriv_cidrs
-  }
-
-  /*
-   * AWS security groups disallow outbound communication by default, so we have
-   * to explictly enable outbound traffic. AWS security groups are also
-   * stateful and keep track of "connections" (even for UDP/ICMP), so if you
-   * set a rule here the responses will be ignored for inbound, and vice-versa.
-   */
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = -1
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(var.tags, { Name = "worker_sg" })
-}
-
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
   cluster_version = "1.21"
-  version         = "17.22.0"
+  version         = "18.2.2"
 
   # Where to place the EKS cluster and workers.
-  vpc_id  = module.vpc.vpc_id
-  subnets = module.vpc.private_subnets
-
-  # Which subnets get to access the private api server endpoint
-  cluster_endpoint_private_access_cidrs = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
 
   /*
    * We want a cluster with a private api server endpoint. That comes with
@@ -81,51 +16,113 @@ module "eks" {
    */
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = false
-  manage_aws_auth                 = false # Can't for private clusters
-  cluster_create_security_group   = false
-  cluster_security_group_id       = aws_security_group.apiserver_sg.id
 
-  /*
-   * The workers by default are allowed to talk to each other (usually
-   * facilitated by a recursive reference to their own security group), and
-   * to receive communication from the api server private endpoint. To this we
-   * want to allow them to be pinged by anyone on the private networks, and for
-   * us to be able to ssh into them
-   */
-  worker_additional_security_group_ids = [aws_security_group.worker_sg.id]
-
-  # Don't need a kubectl physical file
-  write_kubeconfig = false
-
-  worker_groups_launch_template = [
-    {
-      name                 = "worker-group"
-      instance_type        = var.instance_type
-      asg_min_size         = var.node_count
-      asg_desired_capacity = var.node_count
-      asg_max_size         = var.node_count
-      key_name             = aws_key_pair.key_pair.key_name
+  cluster_security_group_additional_rules = {
+    admin_access = {
+      description = "Ingress to K8S API server from public & private subnets"
+      cidr_blocks = local.pubpriv_cidrs
+      protocol    = "tcp"
+      from_port   = 443
+      to_port     = 443
+      type        = "ingress"
     }
-  ]
+  }
 
-  workers_additional_policies = [
-    "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess",
-    "arn:aws:iam::188806360106:policy/EKS-S3-Glue"
-  ]
+  eks_managed_node_groups = {
+    ng = {
+      name         = "${var.cluster_name}-ng"
+      min_size     = 0
+      max_size     = var.node_count
+      desired_size = var.node_count
+
+      instance_types = var.instance_types
+      capacity_type  = var.capacity_type == "Spot" ? "SPOT" : "ON_DEMAND"
+
+      security_group_rules = {
+        icmp_ingress = {
+          description = "Ingress to node via ICMP"
+          cidr_blocks = local.pubpriv_cidrs
+          protocol    = "icmp"
+          from_port   = 8
+          to_port     = 0
+          type        = "ingress"
+        }
+
+        /* By default, eks module does not allow node-to-node communication.
+         * Without that communication the Starburst coordinator will not be
+         * able to communicate with the Starburst workers. Allow ingress from
+         * other worker nodes here, and following rule allows egress to other
+         * workers, as well as elsewhere.
+         */
+        worker_ingress = {
+          description = "Allow ingress from other workers"
+          from_port   = 0
+          to_port     = 0
+          protocol    = -1
+          self        = true
+          type        = "ingress"
+        }
+
+        worker_egress = {
+          description = "Allow egress anywhere"
+          from_port   = 0
+          to_port     = 0
+          protocol    = -1
+          cidr_blocks = ["0.0.0.0/0"]
+          type        = "egress"
+        }
+      }
+
+      # TODO: IMDSv2 is the default, but doesn't work with our EKS containers.
+      # Note that "http_endpoint" is enabled by default, but for some reason
+      # Terraform occasionally crashes with an error message saying it's set to
+      # '', so I'm setting it explicitly here to avoid that.
+      metadata_options = {
+        "http_endpoint" : "enabled",
+        "http_tokens" : "optional",
+        "http_put_response_hop_limit" : 64
+      }
+
+      tags = var.tags
+    }
+  }
 
   tags = merge(var.tags, { Name = var.cluster_name })
 }
 
-data "aws_eks_cluster" "eks_cluster" {
-  name = module.eks.cluster_id
+resource "aws_iam_policy" "eks_trino_worker_policy" {
+  name = "eks-trino-worker-policy"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:*",
+          "cloudformation:*",
+          "glue:*",
+          "sts:AssumeRole",
+          "secretsmanager:GetResourcePolicy",
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:ListSecretVersionIds"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+  tags = var.tags
 }
 
-data "aws_eks_cluster_auth" "eks_cluster_auth" {
-  name = module.eks.cluster_id
+# Attach policies separately due to Terraform bug https://tinyurl.com/2zj7a42r
+resource "aws_iam_role_policy_attachment" "attach_eks_trino_worker" {
+  for_each   = module.eks.eks_managed_node_groups
+  policy_arn = aws_iam_policy.eks_trino_worker_policy.arn
+  role       = each.value.iam_role_name
 }
 
-provider "kubernetes" {
-  host                   = data.aws_eks_cluster.eks_cluster.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks_cluster.certificate_authority.0.data)
-  token                  = data.aws_eks_cluster_auth.eks_cluster_auth.token
+resource "aws_iam_role_policy_attachment" "attach_elb_full_access" {
+  for_each   = module.eks.eks_managed_node_groups
+  policy_arn = "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess"
+  role       = each.value.iam_role_name
 }

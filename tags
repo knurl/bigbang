@@ -16,7 +16,6 @@ __init__	bigbang.py	/^    def __init__(self):$/;"	m	class:CommandGroup
 __init__	bigbang.py	/^    def __init__(self, accesskey: str, secret: str):$/;"	m	class:Creds
 __init__	bigbang.py	/^    def __init__(self, shortname: str, bastionIp: ipaddress.IPv4Address,$/;"	m	class:Tunnel
 __str__	bigbang.py	/^    def __str__(self):$/;"	m	class:Tunnel	file:
-addAwsAuthConfigMap	bigbang.py	/^def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:$/;"	f
 addBqCommand	bigbang.py	/^    def addBqCommand(self, tpchSchema: str, srcCatalog: str, srcSchema: str,$/;"	m	class:CommandGroup
 addSqlCommand	bigbang.py	/^    def addSqlCommand(self, cmd, callback = None) -> None:$/;"	m	class:CommandGroup
 addSqlTableCommand	bigbang.py	/^    def addSqlTableCommand(self, tpchSchema: str, srcTable: str,$/;"	m	class:CommandGroup
@@ -30,10 +29,12 @@ announceSqlStart	bigbang.py	/^def announceSqlStart(s):$/;"	f
 announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
 appendToFile	bigbang.py	/^def appendToFile(filepath, contents) -> None:$/;"	f
 authnldaplabel	bigbang.py	/^authnldaplabel = "AuthNLdap"$/;"	v
-awsauthcm	bigbang.py	/^awsauthcm     = "aws-auth-cm.yaml" # basename only, no path!$/;"	v
+awscaptypelabel	bigbang.py	/^awscaptypelabel = "CapacityType"$/;"	v
 awsconfig	bigbang.py	/^awsconfig     = os.path.expanduser("~\/.aws\/config")$/;"	v
 awscreds	bigbang.py	/^awscreds      = os.path.expanduser("~\/.aws\/credentials")$/;"	v
 awsdir	bigbang.py	/^awsdir        = os.path.expanduser("~\/.aws")$/;"	v
+awsinstlabel	bigbang.py	/^awsinstlabel = "AwsInstanceTypes"$/;"	v
+awsinsttypes	bigbang.py	/^    awsinsttypes      = myvars[awsinstlabel]$/;"	v
 azArchiveDirectories	bigbang.py	/^def azArchiveDirectories(accountName: str, accessKey: str, fsName: str) -> None:$/;"	f
 azaddrs	bigbang.py	/^    azaddrs = { "bastion": ns.azaddrs[0], "starburst": ns.azaddrs[1] }$/;"	v
 azaddrs	bigbang.py	/^azaddrs = None$/;"	v
@@ -44,6 +45,8 @@ bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 buildBastionLauncher	bigbang.py	/^def buildBastionLauncher() -> None:$/;"	f
 buildLdapLauncher	bigbang.py	/^def buildLdapLauncher(fqdn: str) -> None:$/;"	f
 c	bigbang.py	/^                c = ", ".join(clouds)))$/;"	v
+capacityType	bigbang.py	/^    capacityType      = awsinsttypes[awscaptypelabel]$/;"	v
+capacitytypes	bigbang.py	/^capacitytypes = {"Spot", "OnDemand"}$/;"	v
 cbs	bigbang.py	/^                    def cbs(tablesize):$/;"	f	function:preloadTpchTableSizes.make_cbs
 charts	bigbang.py	/^charts = {}$/;"	v
 chartvlabel	bigbang.py	/^chartvlabel = "ChartVersion"$/;"	v
@@ -59,9 +62,10 @@ components	bigbang.py	/^components = chartversion.split('.')$/;"	v
 copySchemaTables	bigbang.py	/^def copySchemaTables(srcCatalog: str, srcSchema: str, dstCatalogs: list[str],$/;"	f
 countUp	bigbang.py	/^    def countUp(maxinc: float) -> float:$/;"	f	function:spinWaitTest
 createSchemas	bigbang.py	/^def createSchemas(dstCatalogs: list, dstSchema: str, hiveTarget: str) -> None:$/;"	f
-dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["AwsDbInstanceType"]$/;"	v
-dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["AzureDbVmType"]$/;"	v
-dbInstanceType	bigbang.py	/^    dbInstanceType = myvars["GcpDbMachineType"]$/;"	v
+dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AwsDbInstanceType"]$/;"	v
+dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AzureDbVmType"]$/;"	v
+dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["GcpDbMachineType"]$/;"	v
+dbInstanceType	bigbang.py	/^dbInstanceType = ""$/;"	v
 dbevtlog	bigbang.py	/^dbevtlog      = "evtlog" # event logger PostgreSQL instance$/;"	v
 dbports	bigbang.py	/^dbports       = { "mysql": 3306, "postgres": 5432 }$/;"	v
 dbpwd	bigbang.py	/^dbpwd         = "a029fjg!>dugBiO8"$/;"	v
@@ -75,6 +79,7 @@ downstreamSG	bigbang.py	/^        downstreamSG = True$/;"	v
 downstreamSG	bigbang.py	/^downstreamSG = False$/;"	v
 dropSchemaTables	bigbang.py	/^def dropSchemaTables(catalogs: list[str], schema: str) -> None:$/;"	f
 dropSchemas	bigbang.py	/^def dropSchemas(catalogs: list[str], schema: str) -> None:$/;"	f
+dumpNodesAndPods	bigbang.py	/^    def dumpNodesAndPods() -> None:$/;"	f	function:getMinNodeResources
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
 emitSshTunnel	bigbang.py	/^            def emitSshTunnel(wh, bindaddr: ipaddress.IPv4Address, lclport:$/;"	f	function:buildBastionLauncher
 ensureClusterIsStarted	bigbang.py	/^        tuple[list[Tunnel], dict]:$/;"	f
@@ -103,6 +108,7 @@ getObjectStoreUrl	bigbang.py	/^def getObjectStoreUrl(env: dict) -> str:$/;"	f
 getOu	bigbang.py	/^def getOu(outype: str, dcs: str) -> str:$/;"	f
 getOutputVars	bigbang.py	/^def getOutputVars() -> dict:$/;"	f
 getOverlays	bigbang.py	/^def getOverlays() -> str:$/;"	f
+getPodStatus	bigbang.py	/^def getPodStatus(namespace: str = None) -> tuple:$/;"	f
 getRegionFromZone	bigbang.py	/^def getRegionFromZone(zone: str) -> str:$/;"	f
 getRmtPort	bigbang.py	/^def getRmtPort(service: str) -> int:$/;"	f
 getSecretName	bigbang.py	/^    def getSecretName(self) -> str:$/;"	m	class:AwsCreds
@@ -145,17 +151,18 @@ hostsf	bigbang.py	/^hostsf        = "\/etc\/hosts"$/;"	v
 ingresslblabel	bigbang.py	/^ingresslblabel = "IngressLoadBalancer"$/;"	v
 ingressname	bigbang.py	/^ingressname   = "sb-ingress"$/;"	v
 installSecrets	bigbang.py	/^def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:$/;"	f
-instanceType	bigbang.py	/^    instanceType = myvars["AwsInstanceType"]$/;"	v
-instanceType	bigbang.py	/^    instanceType = myvars["AzureVmType"]$/;"	v
-instanceType	bigbang.py	/^    instanceType = myvars["GcpMachineType"]$/;"	v
+instanceTypes	bigbang.py	/^        instanceTypes = awsinsttypes["OnDemand"]$/;"	v
+instanceTypes	bigbang.py	/^        instanceTypes = awsinsttypes["Spot"]$/;"	v
+instanceTypes	bigbang.py	/^    instanceTypes     = myvars["AzureVmTypes"]$/;"	v
+instanceTypes	bigbang.py	/^    instanceTypes     = myvars["GcpMachineTypes"]$/;"	v
 invalidchars	bigbang.py	/^invalidchars = r'[^' + validchars + r']'$/;"	v
 isTerraformSettled	bigbang.py	/^def isTerraformSettled(tgtResource: str = None) -> bool:$/;"	f
 isTokenFresh	bigbang.py	/^    def isTokenFresh(self, awsAccess: str) -> bool:$/;"	m	class:AwsCreds
+json2str	bigbang.py	/^def json2str(jsondict: dict) -> str:$/;"	f
 keystorepass	bigbang.py	/^keystorepass  = "test123"$/;"	v
 killAllTerminatingPods	bigbang.py	/^def killAllTerminatingPods() -> None:$/;"	f
 knownhosts	bigbang.py	/^knownhosts    = os.path.expanduser("~\/.ssh\/known_hosts")$/;"	v
 kube	bigbang.py	/^kube          = "kubectl"$/;"	v
-kubecfgf	bigbang.py	/^kubecfgf      = os.path.expanduser("~\/.kube\/config")$/;"	v
 kubens	bigbang.py	/^kubens        = f"{kube} -n {namespace}"$/;"	v
 lakecats	bigbang.py	/^lakecats = { hivecat, deltacat }$/;"	v
 ldapfqdn	bigbang.py	/^ldapfqdn      = "ldap." + domain$/;"	v
@@ -182,6 +189,7 @@ nodecountlabel	bigbang.py	/^nodecountlabel = "NodeCount"$/;"	v
 normaliseCPU	bigbang.py	/^def normaliseCPU(cpu) -> int:$/;"	f
 normaliseMem	bigbang.py	/^def normaliseMem(mem) -> int:$/;"	f
 ns	bigbang.py	/^ns = p.parse_args()$/;"	v
+numberOfContainers	bigbang.py	/^def numberOfContainers(numNodes: int) -> int:$/;"	f
 octet	bigbang.py	/^octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256$/;"	v
 p	bigbang.py	/^p = argparse.ArgumentParser(description=$/;"	v
 parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,$/;"	f
@@ -228,6 +236,7 @@ shortname	bigbang.py	/^shortname = code + str(octet).zfill(3)$/;"	v
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AwsSmallInstanceType"]$/;"	v
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AzureSmallVmType"]$/;"	v
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["GcpSmallMachineType"]$/;"	v
+smallInstanceType	bigbang.py	/^smallInstanceType = ""$/;"	v
 spinWait	bigbang.py	/^def spinWait(waitFunc: Callable[[], float]) -> None:$/;"	f
 spinWaitTest	bigbang.py	/^def spinWaitTest():$/;"	f
 sqlstr	bigbang.py	/^sqlstr = "Issued 🢩 "$/;"	v

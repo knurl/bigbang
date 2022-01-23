@@ -5,30 +5,30 @@ Email: rob.anderson@starburst.io
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-#Target: aws
+Target: aws
 #Target: az
-Target: gcp
+#Target: gcp
 
 #
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
 # This value can be overridden with -z flag on commandline
 #
-#Zone: eu-west-2 # AWS - London, UK, EU
+Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: eu-west-3 # AWS - Paris, France, EU
 #Zone: uksouth # Azure - London, UK, EU
 #Zone: eastus # Azure - Virginia, USA
 #Zone: francecentral # Azure - Paris, France, EU
 #Zone: europe-west2-b # GCP - London, UK, EU
-Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
+#Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
 ChartVersion: 367.0.0
 
 # Number of nodes in K8S cluster.
-NodeCount: 4
+NodeCount: 2
 
 # Use an external load balancer as ingress
 IngressLoadBalancer: False
@@ -49,10 +49,20 @@ DisableBastionFw: False
 # Disable sources that run slowly with Starburst
 DisableSlowSources: True
 
-# node pool instance types - 32 vCPU
-AwsInstanceType: m5.8xlarge
-AzureVmType: Standard_D32_v3
-GcpMachineType: n2-standard-32
+# node pool instance types - min 32 vCPU, all provided by Spot Instance Advisor
+AwsInstanceTypes:
+  CapacityType: Spot
+  OnDemand:
+    - m5.4xlarge  # 16 vCPU / 64 GB
+  Spot: # all with 16 vCPU / 64 GB
+    - m5a.4xlarge
+    - m5.4xlarge
+    - m6i.4xlarge
+    - m4.4xlarge
+AzureVmTypes:
+    - Standard_D16_v5 
+GcpMachineTypes:
+    - e2-standard-16
 
 # smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM
 AwsSmallInstanceType: m5.large
@@ -60,7 +70,7 @@ AzureSmallVmType: Standard_B2ms
 GcpSmallMachineType: e2-standard-2
 
 # DB instance types
-AwsDbInstanceType: db.m5.8xlarge
+AwsDbInstanceType: db.m5.4xlarge
 AzureDbVmType: GP_Gen5_32
 GcpDbMachineType: db-custom-32-122880
 

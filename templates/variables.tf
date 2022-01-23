@@ -30,8 +30,9 @@ variable "network_name" {
   default = "{{ClusterName}}-net"
 }
 
-variable "instance_type" {
-  default = "{{InstanceType}}"
+variable "instance_types" {
+  type = list(string)
+  default = {{ InstanceTypes|tojson }}
 }
 
 variable "small_instance_type" {
@@ -153,6 +154,10 @@ variable "ssh_public_key" {
 }
 
 {% if Target == "aws" %}
+variable "capacity_type" {
+  default = "{{CapacityType}}"
+}
+
 variable "redshift_cluster_name" {
   default = "redshift-cluster-{{ShortName}}"
 }

@@ -64,16 +64,12 @@ resource "google_container_node_pool" "node_pool" {
   # TODO: add autoscaling
 
   node_config {
-    machine_type = var.instance_type
+    machine_type = var.instance_types[0]
     # Google recommends custom service accounts that have cloud-platform scope
     # and permissions granted via IAM Roles.
     service_account = google_service_account.gke_servacct.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
-    metadata = {
-      ssh-keys                 = "ubuntu:${var.ssh_public_key}"
-      disable-legacy-endpoints = true
-    }
-    tags   = ["load-balanced-backend"]
-    labels = var.tags
+    tags            = ["load-balanced-backend"]
+    labels          = var.tags
   }
 }

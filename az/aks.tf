@@ -16,7 +16,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   default_node_pool {
     name                  = "default"
     node_count            = var.node_count
-    vm_size               = var.instance_type
+    vm_size               = var.instance_types[0]
     enable_node_public_ip = false
     vnet_subnet_id        = azurerm_subnet.private_sub.id
     tags                  = var.tags

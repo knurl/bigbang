@@ -42,7 +42,6 @@ rsa           = os.path.expanduser("~/.ssh/id_rsa")
 rsaPub        = os.path.expanduser("~/.ssh/id_rsa.pub")
 knownhosts    = os.path.expanduser("~/.ssh/known_hosts")
 tfvars        = "variables.tf" # basename only, no path!
-awsauthcm     = "aws-auth-cm.yaml" # basename only, no path!
 dbports       = { "mysql": 3306, "postgres": 5432 }
 tpchcat       = "tpch"
 syscat        = "system"
@@ -58,7 +57,6 @@ dbpwd         = "a029fjg!>dugBiO8"
 namespace     = "starburst"
 helmns        = f"-n {namespace}"
 kube          = "kubectl"
-kubecfgf      = os.path.expanduser("~/.kube/config")
 kubens        = f"{kube} -n {namespace}"
 minnodes      = 2
 maxpodpnode   = 16
@@ -185,7 +183,10 @@ tlscoordlabel = "RequireCoordTls"
 ingresslblabel = "IngressLoadBalancer"
 tlsinternallabel = "RequireInternalTls"
 authnldaplabel = "AuthNLdap"
+awsinstlabel = "AwsInstanceTypes"
+awscaptypelabel = "CapacityType"
 salesforcelabel = "SalesforceEnabled"
+capacitytypes = {"Spot", "OnDemand"}
 try:
     with open(myvarsf) as mypf:
         myvars = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -226,13 +227,13 @@ try:
     nobastionfw  = myvars["DisableBastionFw"] or ns.disable_bastion_fw
     myvars["DisableBastionFw"] = nobastionfw
  
-    requireKey("AwsInstanceType", myvars)
+    requireKey("AwsInstanceTypes", myvars)
     requireKey("AwsSmallInstanceType", myvars)
     requireKey("AwsDbInstanceType", myvars)
-    requireKey("AzureVmType", myvars)
+    requireKey("AzureVmTypes", myvars)
     requireKey("AzureSmallVmType", myvars)
     requireKey("AzureDbVmType", myvars)
-    requireKey("GcpMachineType", myvars)
+    requireKey("GcpMachineTypes", myvars)
     requireKey("GcpSmallMachineType", myvars)
     requireKey("GcpDbMachineType", myvars)
 
@@ -328,18 +329,31 @@ region = getRegionFromZone(zone)
 # Verify the cloud target is set up correctly, and gather up other related
 # items based on which cloud target it is.
 
+instanceTypes: list[str] = []
+smallInstanceType = ""
+dbInstanceType = ""
 if target == "aws":
-    instanceType = myvars["AwsInstanceType"]
+    awsinsttypes      = myvars[awsinstlabel]
+    capacityType      = awsinsttypes[awscaptypelabel]
+    if capacityType == "OnDemand":
+        instanceTypes = awsinsttypes["OnDemand"]
+    elif capacityType == "Spot":
+        instanceTypes = awsinsttypes["Spot"]
+    else:
+        sys.exit("{awscaptypelabel} must be in {capacitytypes}")
+    assert len(instanceTypes) > 0
     smallInstanceType = myvars["AwsSmallInstanceType"]
-    dbInstanceType = myvars["AwsDbInstanceType"]
+    dbInstanceType    = myvars["AwsDbInstanceType"]
 elif target == "az":
-    instanceType = myvars["AzureVmType"]
+    instanceTypes     = myvars["AzureVmTypes"]
+    assert len(instanceTypes) == 1
     smallInstanceType = myvars["AzureSmallVmType"]
-    dbInstanceType = myvars["AzureDbVmType"]
+    dbInstanceType    = myvars["AzureDbVmType"]
 elif target == "gcp":
-    instanceType = myvars["GcpMachineType"]
+    instanceTypes     = myvars["GcpMachineTypes"]
+    assert len(instanceTypes) == 1
     smallInstanceType = myvars["GcpSmallMachineType"]
-    dbInstanceType = myvars["GcpDbMachineType"]
+    dbInstanceType    = myvars["GcpDbMachineType"]
 else:
     sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
             "{c}".format(t = target, tl = targetlabel, m = myvarsf,
@@ -546,6 +560,9 @@ def announceBox(s):
         cp(bl + l.ljust(maxl) + br)
     cp(botbord)
 
+def json2str(jsondict: dict) -> str:
+    return json.dumps(jsondict, indent=4, sort_keys=True)
+
 def appendToFile(filepath, contents) -> None:
     with open(filepath, "a+") as fh:
         fh.write(contents)
@@ -731,55 +748,56 @@ def getSshPublicKey() -> str:
 
 def waitUntilNodesReady(minnodes: int) -> float:
     numer = 0
-    denom = 0
-    r = runTry(f"{kube} get no --no-headers".split())
+    denom = minnodes
+    r = runTry(f"{kube} get nodes --no-headers".split())
     if r.returncode == 0:
         lines = r.stdout.splitlines()
-        denom = len(lines)
         for line in lines:
             cols = line.split()
             assert len(cols) == 5
             if cols[1] == "Ready":
                 # We've found a node that's ready. Count it.
                 numer += 1
-    denom = max(denom, minnodes)
-    assert numer <= denom
+    assert numer <= denom, f"{numer}, {denom}"
     return float(numer) / float(denom)
 
-def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:
+def getPodStatus(namespace: str = None) -> tuple:
     numer = 0
     denom = 0
     namesp = f" --namespace {namespace}" if namespace else ""
-    r = runTry(f"{kube}{namesp} get po --no-headers".split())
+    r = runTry(f"{kube}{namesp} get pods --no-headers -o json".split())
     if r.returncode == 0:
-        lines = r.stdout.splitlines()
-        for line in lines:
-            cols = line.split()
-            assert len(cols) == 5
-            readyratio = cols[1].split('/')
-            contready = int(readyratio[0])
-            conttotal = int(readyratio[1])
-            assert contready <= conttotal # common sense
-            denom += conttotal
+        pods = json.loads(r.stdout)["items"]
+        for pod in pods:
+            # We've asked for a specific namespace, but check it
+            ns = pod["metadata"]["namespace"]
+            assert ns == namespace
 
-            # Since the cluster is brand-new and launching, we would only
-            # expect pods to be advancing towards the Running/Ready state.
-            # But some of GCP's K8S system pods have a habit of crashing on
-            # start. So we have to check not just the number ready, but that
-            # they're not terminating. https://tinyurl.com/54ramy8k 
-            if cols[2] == "Terminating":
-                continue # None count since they're terminating
+            # See how many containers are in the spec
+            containers = pod["spec"]["containers"]
+            denom += len(containers)
 
-            # Now they're either Running or heading there.
-            numer += contready
+            # Now see how many are actually running
+            try:
+                cstatuses = pod["status"]["containerStatuses"]
+            except KeyError as e:
+                continue
+
+            for cstatus in cstatuses:
+                if cstatus["ready"] == True:
+                    numer += 1
+    assert numer <= denom, f"{numer}, {denom}"
+    return numer, denom
+
+def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:
+    numer, denom = getPodStatus(namespace)
     denom = max(denom, mincontainers)
-    assert numer <= denom
     return float(numer) / float(denom)
 
 def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
         -> float:
     numer = 0
-    denom = 0
+    denom = minreplicas
     namesp = f" --namespace {namespace}" if namespace else ""
     r = runTry(f"{kube}{namesp} get deployments --no-headers".split())
     if r.returncode == 0:
@@ -792,9 +810,7 @@ def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
             reptotal = int(readyratio[1])
             assert repready <= reptotal
             numer += repready
-            denom += reptotal
-    denom = max(denom, minreplicas)
-    assert numer <= denom
+    assert numer <= denom, f"{numer}, {denom}"
     return float(numer) / float(denom)
 
 def getStarburstUrl() -> str:
@@ -939,7 +955,7 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
     f = min(len(anim1), len(anim2))
     barlength = None
     minpctsz = len("─1%─┤")
-    cd = lambda x: colored(x, 'yellow')
+    cd = lambda x: colored(x, 'red')
     def eraseLine(flush: bool = False):
         cprint(cd(' ' * maxlen), end = '\r', flush = flush)
 
@@ -1075,18 +1091,28 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
 
     return tuns
 
-def addAwsAuthConfigMap(workerIamRoleArn: str) -> None:
-    # If we've already got an aws auth config map, we're done
-    r = runTry(f"{kube} describe configmap -n kube-system aws-auth".split())
-    if r.returncode == 0:
-        announce("aws-auth configmap already installed")
-        return
-    # Parameterise the aws auth config map template with the node role arn
-    changed, yamltmp = parameteriseTemplate(awsauthcm, tfdir, {"NodeRoleARN":
-        workerIamRoleArn}, {'EC2PrivateDNSName'})
-    # Nodes should start joining after this
-    announce("Adding aws-auth configmap to cluster")
-    runStdout(f"{kube} apply -f {yamltmp}".split())
+# This function should be compared to planWorkerSize(), which also has an
+# implicit count of the number of containers.
+def numberOfContainers(numNodes: int) -> int:
+    numContainers = 0
+
+    # We start with the assumption that we have at least one node for the
+    # coordinator, and one for each worker.
+    assert numNodes >= 2
+
+    # Count hive
+    numContainers += 2
+
+    # Count ranger
+    numContainers += 3
+
+    # Count the coordinator
+    numNodes -= 1
+    numContainers += 2
+
+    # Now count all workers. Each worker has one container.
+    numContainers += numNodes # This is the number of workers.
+    return numContainers
 
 def ensureClusterIsStarted(skipClusterStart: bool) -> \
         tuple[list[Tunnel], dict]:
@@ -1100,7 +1126,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
             "DBNameEventLogger":   dbevtlog,
             "DBPassword":          dbpwd,
             "DBUser":              dbuser,
-            "InstanceType":        instanceType,
+            "InstanceTypes":       instanceTypes,
             "LdapLaunchScript":    ldaplaunchf,
             "MaxPodsPerNode":      maxpodpnode,
             "MyCIDR":              mySubnetCidr,
@@ -1116,7 +1142,9 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
             "Zone":                zone
             }
     assert target in clouds
-    if target == "az":
+    if target == "aws":
+        env["CapacityType"] = capacityType
+    elif target == "az":
         env["ResourceGroup"] = resourcegrp
         env["StorageAccount"] = storageacct
     elif target == "gcp":
@@ -1140,11 +1168,6 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
     # Start up ssh tunnels via the bastion, so we can run kubectl and ldap
     # locally from the workstation
     tuns = establishBastionTunnel(env)
-
-    # For AWS, the nodes will not join until we have added the node role ARN to
-    # the aws-auth-map-cn.yaml.
-    if target == "aws":
-        addAwsAuthConfigMap(env["worker_iam_role_arn"])
 
     # Don't continue until all nodes are ready
     announce("Waiting for nodes to come online")
@@ -1211,10 +1234,12 @@ def startPortForwardToLBs(bastionIp: str,
         route53ZoneId: str = None) -> list[Tunnel]:
     tuns: list[Tunnel] = []
 
-    # should be nodeCount - 1 workers with 1 container each, 2 containers for
-    # the coordinator, and 2 containers each for Hive and Ranger
     announce("Waiting for pods to be ready")
-    spinWait(lambda: waitUntilPodsReady(nodeCount + 5, namespace))
+    expectedContainers = numberOfContainers(nodeCount)
+    spinWait(lambda: waitUntilPodsReady(expectedContainers, namespace))
+    ready, total = getPodStatus(namespace)
+    # check that 'numberOfContainers' function is returning correct number
+    assert expectedContainers == total, f"{expectedContainers} {total}"
 
     # coordinator, worker, hive, ranger, 1 replica each = 4 replicas
     announce("Waiting for deployments to be available")
@@ -1281,7 +1306,7 @@ def sendSql(command: str, verbose = False) -> list:
     httpmaxretries = 10
     if verbose: announceSqlStart(command)
     url = getStarburstUrl() + "/v1/statement"
-    hdr = { "X-Trino-User": trinouser }
+    hdr = { "X-Trino-User": trinouser, "X-Trino-Source": "bigbang" }
     authtype = None
     if tlsenabled():
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
@@ -1941,6 +1966,9 @@ def normaliseMem(mem) -> int:
 def getMinNodeResources() -> tuple:
     n = json.loads(runCollect(f"{kube} get nodes -o json".split()))["items"]
     p = json.loads(runCollect(f"{kube} get pods -A -o json".split()))["items"]
+    def dumpNodesAndPods() -> None:
+        print(json2str(n))
+        print(json2str(p))
 
     nodes = {t["metadata"]["name"]: {"cpu":
         normaliseCPU(t["status"]["allocatable"]["cpu"]), "mem":
@@ -1955,12 +1983,16 @@ def getMinNodeResources() -> tuple:
         try:
             nodename = q["spec"]["nodeName"] # see what node it's on
         except KeyError as e:
-            qpt = json.dumps(q)
-            ppt = json.dumps(p)
-            print(f"'nodeName' not in {qpt}; pods: {ppt}, e: {e}")
+            print(f"'nodeName' not found in")
+            print(json2str(q))
+            dumpNodesAndPods()
             raise
 
-        assert nodename in nodes
+        if nodename not in nodes:
+            print(f"{nodename} should be in {nodes}")
+            dumpNodesAndPods()
+            sys.exit(-1)
+
         x = nodes[nodename]
         for c in q["spec"]["containers"]: # for every container in pod
             r = c["resources"]
@@ -2441,9 +2473,15 @@ def getCloudSummary() -> List[str]:
         cloud = "Microsoft Azure"
     else:
         cloud = "Google Cloud Services"
+    if len(instanceTypes) > 1:
+        itype = "[SPOT like {}, {}, &c]".format(instanceTypes[0],
+                instanceTypes[1])
+    else:
+        itype = instanceTypes[0]
     return [f"Cloud: {cloud}",
         f"Region: {region}",
-        f"Cluster: {nodeCount} × {instanceType}"]
+        # FIXME this should show the instance type actually selected!
+        f"Cluster: {nodeCount} × {itype}"]
 
 def getSecrets() -> None:
     try:
