@@ -91,6 +91,10 @@ variable "evtlog_server_name" {
   default = "evtlog-server-{{ShortName}}"
 }
 
+variable "hmsdb_server_name" {
+  default = "hmsdb-server-{{ShortName}}"
+}
+
 variable "postgres_server_name" {
   default = "postgres-server-{{ShortName}}"
 }
@@ -113,6 +117,10 @@ variable "db_name" {
 
 variable "db_name_evtlog" {
   default = "{{DBNameEventLogger}}"
+}
+
+variable "db_name_hms" {
+  default = "{{DBNameHms}}"
 }
 
 variable "db_user" {

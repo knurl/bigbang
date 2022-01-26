@@ -99,6 +99,15 @@ resource "google_sql_database" "db_evtlog" {
   depends_on = [google_sql_user.user_postgres]
 }
 
+resource "google_sql_database" "db_hms" {
+  name       = var.db_name_hms
+  project    = data.google_project.project.project_id
+  instance   = google_sql_database_instance.sql_postgres.name
+  charset    = var.postgres_charset
+  collation  = var.postgres_collation
+  depends_on = [google_sql_user.user_postgres]
+}
+
 resource "google_sql_database" "db_postgres" {
   name       = var.db_name
   project    = data.google_project.project.project_id

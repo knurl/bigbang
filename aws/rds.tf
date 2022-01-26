@@ -37,6 +37,23 @@ resource "aws_db_instance" "evtlog" {
   tags                     = merge(var.tags, { Name = var.evtlog_server_name })
 }
 
+# for Hive
+resource "aws_db_instance" "hmsdb" {
+  identifier               = var.hmsdb_server_name
+  engine                   = "postgres"
+  allocated_storage        = 20
+  instance_class           = var.db_instance_type
+  name                     = var.db_name_hms
+  username                 = var.db_user
+  password                 = var.db_password
+  skip_final_snapshot      = true
+  delete_automated_backups = true
+  db_subnet_group_name     = module.vpc.database_subnet_group
+  vpc_security_group_ids   = [aws_security_group.rds_sg.id]
+  apply_immediately        = true
+  tags                     = merge(var.tags, { Name = var.hmsdb_server_name })
+}
+
 resource "aws_db_instance" "postgres" {
   identifier               = var.postgres_server_name
   engine                   = "postgres"

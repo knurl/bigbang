@@ -38,7 +38,7 @@ expose:
     IP: {{starburst_address | string}}
     {% endif %}
     ports:
-      {% if RequireInternalTls or RequireCoordTls %}
+      {% if RequireCoordTls %}
       https:
         port: 8443
       http: null
@@ -57,92 +57,40 @@ expose:
       {% endif %}
   {% endif %}
 
-{% if RequireInternalTls %}
-# Shared secret for internal communication.
-sharedSecret: secretRef:{{sharedsec}}:{{sharedsecbf}}
-
-# Use only https and port 8443 for internal communication.
-internal:
-  ports:
-    https:
-      port: 8443
-    http: null
-{% endif %}
-
 coordinator:
+  additionalProperties: |
+    starburst.data-product.enabled=true
+    data-product.starburst-user=starburst_service
+    data-product.starburst-password=test
+    {% if RequireCoordTls %}
+    data-product.starburst-jdbc-url=jdbc:trino://coordinator.example.com:8443?SSL=true
+    {% else %}
+    data-product.starburst-jdbc-url=jdbc:trino://coordinator.example.com:8080
+    {% endif %}
+    {% if IngressLoadBalancer %}
+    # These two have to be here because (i) we need to accept headers from
+    # the LB promising us that the channel prior to the LB was encrypted,
+    # and (ii) because between the LB and Starburst, the communications
+    # will include passwords but will be in the clear.
+    http-server.process-forwarded=true
+    http-server.authentication.allow-insecure-over-http=true
+    {% endif %}
+    {% if RequireCoordTls %}
+    # TLS for coordinator only
+    http-server.https.enabled=true
+    http-server.https.keystore.path=secretRef:{{starburstks}}:{{starburstksbf}}
+    http-server.https.keystore.key={{KeystorePass}}
+    {% endif %}
+    insights.persistence-enabled=true
+    insights.metrics-persistence-enabled=true
+    insights.jdbc.url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
+    insights.jdbc.user={{evtlog_user}}
+    insights.jdbc.password={{DBPassword}}
+    insights.metrics-collection-interval=15s
+    insights.metrics-persistence-interval=60s
+    insights.authorized-users=.*
   etcFiles:
     properties:
-      config.properties: |
-        coordinator=true
-        node-scheduler.include-coordinator=false
-        #        colocated-joins-enabled=true
-        #        data-product.starburst-user=starburst_service
-        #        data-product.starburst-password=test
-        #        starburst.data-product.enabled=true
-        http-server.http.port=8080
-        http-server.authentication.type=PASSWORD,DELEGATED-PASSWORD
-        {% if IngressLoadBalancer %}
-        # These two have to be here because (i) we need to accept headers from
-        # the LB promising us that the channel prior to the LB was encrypted,
-        # and (ii) because between the LB and Starburst, the communications
-        # will include passwords but will be in the clear.
-        http-server.process-forwarded=true
-        http-server.authentication.allow-insecure-over-http=true
-        {% endif %}
-        task.writer-count = 8
-        {% if RequireInternalTls %}
-        # TLS everywhere
-        http-server.http.enabled=false
-        http-server.https.enabled=true
-        http-server.https.port=8443
-        # Coordinator cert does have localhost, so https OK
-        discovery.uri=https://localhost:8443
-        {% elif RequireCoordTls %}
-        # TLS for coordinator only
-        http-server.http.enabled=true
-        http-server.https.enabled=true
-        http-server.https.port=8443
-        # Coordinator cert doesn't have localhost, so can't use https
-        discovery.uri=http://localhost:8080
-        {% else %}
-        # Not using TLS from coordinator (might be TLS to LB though)
-        http-server.http.enabled=true
-        http-server.https.enabled=false
-        discovery.uri=http://localhost:8080
-        {% endif %}
-        {% if RequireInternalTls %}
-        http-server.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
-        http-server.https.keystore.key={{KeystorePass}}
-        {% elif RequireCoordTls %}
-        http-server.https.keystore.path=secretRef:{{starburstks}}:{{starburstksbf}}
-        http-server.https.keystore.key={{KeystorePass}}
-        {% endif %}
-        {% if RequireInternalTls %}
-        node.internal-address-source=FQDN
-        internal-communication.https.required=true
-        internal-communication.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
-        internal-communication.https.keystore.key={{KeystorePass}}
-        internal-communication.https.truststore.path=secretRef:{{wildks}}:{{wildksbf}}
-        internal-communication.https.truststore.key={{KeystorePass}}
-        {% endif %}
-        insights.persistence-enabled=true
-        insights.metrics-persistence-enabled=true
-        insights.jdbc.url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
-        insights.jdbc.user={{evtlog_user}}
-        insights.jdbc.password={{DBPassword}}
-        insights.metrics-collection-interval=15s
-        insights.metrics-persistence-interval=60s
-        insights.authorized-users=.*
-      {% if AuthNLdap %}
-      password-authenticator.properties: |
-        password-authenticator.name=ldap
-        ldap.url={{LdapUri}}
-        ldap.bind-dn=cn=admin,dc=az,dc=starburstdata,dc=net
-        ldap.bind-password=admin
-        ldap.group-auth-pattern=(&(objectClass=inetOrgPerson)(uid=${USER}))
-        ldap.user-base-dn=ou=People,dc=az,dc=starburstdata,dc=net
-        ldap.user-bind-pattern=uid=${USER},ou=People,dc=az,dc=starburstdata,dc=net
-      {% endif %}
       access-control.properties: |
         access-control.name=ranger
         ranger.authentication-type=BASIC
@@ -151,6 +99,16 @@ coordinator:
         ranger.service-name=starburst-enterprise
         ranger.policy-rest-url=http://ranger:6080
         ranger.policy-refresh-interval=10s
+  {% if AuthNLdap %}
+      password-authenticator.properties: |
+        password-authenticator.name=ldap
+        ldap.url={{LdapUri}}
+        ldap.bind-dn=cn=admin,dc=az,dc=starburstdata,dc=net
+        ldap.bind-password=admin
+        ldap.group-auth-pattern=(&(objectClass=inetOrgPerson)(uid=${USER}))
+        ldap.user-base-dn=ou=People,dc=az,dc=starburstdata,dc=net
+        ldap.user-bind-pattern=uid=${USER},ou=People,dc=az,dc=starburstdata,dc=net
+  {% endif %}
   resources:
     requests:
       memory: {{coordinator_mem}}
@@ -168,41 +126,6 @@ worker:
     limits:
       memory: {{worker_mem}}
       cpu: {{worker_cpu}}
-  etcFiles:
-    properties:
-      config.properties: |
-        coordinator=false
-        {% if not RequireInternalTls %}
-        # TLS on coordinator only, or no TLS
-        # In this case our cert doesn't include the coordinator service name as
-        # a SAN, which means we'll get a host mismatch when we try to connect.
-        # Therefore in this case we'll have to leave port 8080 open and have
-        # the workers connect there.
-        discovery.uri=http://coordinator.starburst.svc:8080
-        {% else %}
-        # TLS everywhere
-        # The cert _does_ include a SAN for the coordinator service name
-        discovery.uri=https://coordinator.starburst.svc:8443
-        {% endif %}
-        {% if not RequireInternalTls %}
-        http-server.http.enabled=true
-        http-server.http.port=8080
-        {% else %}
-        # When enabling TLS for internal communication don't set node.internal-address since
-        # it'll be set automatically to <pod-ip>.worker.<namespace>.svc.
-        # Add DNS:starburst, DNS:coordinator.<namespace>.svc and DNS:*.worker.<namespace>.svc as SAN in your certs
-        http-server.http.enabled=false
-        http-server.https.enabled=true
-        http-server.https.port=8443
-        http-server.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
-        http-server.https.keystore.key={{KeystorePass}}
-        node.internal-address-source=FQDN
-        internal-communication.https.required=true
-        internal-communication.https.keystore.path=secretRef:{{wildks}}:{{wildksbf}}
-        internal-communication.https.keystore.key={{KeystorePass}}
-        internal-communication.https.truststore.path=secretRef:{{wildks}}:{{wildksbf}}
-        internal-communication.https.truststore.key={{KeystorePass}}
-        {% endif %}
 
 {% if not AuthNLdap %}
 # If we're not going to be using LDAP, then automatically switch over to using
@@ -219,22 +142,6 @@ userDatabase:
       password: {{TrinoPass}}
     - username: carol
       password: {{TrinoPass}}
-{% endif %}
-
-{% if RequireInternalTls %}
-readinessProbe:
-  exec:
-    command:
-      - /bin/sh
-      - -c
-      - curl -k --max-time 5 -s https://localhost:8443/v1/info | grep \"starting\":false
-
-livenessProbe:
-  exec:
-    command:
-      - /bin/sh
-      - -c
-      - curl -k --max-time 5 -s https://localhost:8443/v1/info | grep \"starting\":false
 {% endif %}
 
 catalogs:

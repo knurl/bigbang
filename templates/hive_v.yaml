@@ -5,14 +5,12 @@ registryCredentials:
   password: {{HelmRepoPassword}}
 
 database:
-  internal:
-    resources:
-      requests:
-        memory: {{hive_db_mem}}
-        cpu: {{hive_db_cpu}}
-      limits:
-        memory: {{hive_db_mem}}
-        cpu: {{hive_db_cpu}}
+  type: external
+  external:
+    jdbcUrl: jdbc:postgresql://{{hmsdb_address}}:{{postgres_port}}/{{DBNameHms}}
+    driver: org.postgresql.Driver
+    user: {{hmsdb_user}}
+    password: {{DBPassword}}
 
 resources:
   requests:

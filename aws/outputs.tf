@@ -18,6 +18,10 @@ output "evtlog_address" {
   value = aws_db_instance.evtlog.address
 }
 
+output "hmsdb_address" {
+  value = aws_db_instance.hmsdb.address
+}
+
 output "postgres_address" {
   value = aws_db_instance.postgres.address
 }

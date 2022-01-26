@@ -26,6 +26,10 @@ output "evtlog_address" {
   value = google_sql_database_instance.sql_postgres.private_ip_address
 }
 
+output "hmsdb_address" {
+  value = google_sql_database_instance.sql_postgres.private_ip_address
+}
+
 output "postgres_address" {
   value = google_sql_database_instance.sql_postgres.private_ip_address
 }

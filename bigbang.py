@@ -1,9 +1,10 @@
 #!python
 
+from run import run, runShell, runTry, runStdout, runCollect, retryRun
+from capcalc import json2str, planWorkerSize
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
 import subprocess, ipaddress, glob, threading, time, random, string, io
 import atexit, psutil # type: ignore
-from run import run, runShell, runTry, runStdout, runCollect, retryRun
 from subprocess import CalledProcessError
 from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict, Set
 from urllib.parse import urlparse
@@ -51,14 +52,15 @@ synapseslcat  = "synapse_sl"
 trinouser     = "starburst_service"
 trinopass     = "test"
 dbschema      = "s"
-dbevtlog      = "evtlog" # event logger PostgreSQL instance
+dbhms		  = "hms" # Hive metastore persistent database
+dbevtlog      = "evtlog" # event logger PostgreSQL database
 dbuser        = "starburstuser"
 dbpwd         = "a029fjg!>dugBiO8"
 namespace     = "starburst"
 helmns        = f"-n {namespace}"
 kube          = "kubectl"
 kubens        = f"{kube} -n {namespace}"
-minnodes      = 2
+minNodes      = 3 # See getMinNodeResources(); allows rolling upgrades
 maxpodpnode   = 16
 awsdir        = os.path.expanduser("~/.aws")
 awsconfig     = os.path.expanduser("~/.aws/config")
@@ -72,7 +74,6 @@ ldapfqdn      = "ldap." + domain
 bastionfqdn   = "bastion." + domain
 keystorepass  = "test123"
 hostsf        = "/etc/hosts"
-patchf        = where("sb-ent.diff")
 bastlaunchf   = where("bastlaunch.sh")
 ldapsetupf    = where("install-slapd.sh")
 ldaplaunchf   = where("ldaplaunch.sh")
@@ -102,7 +103,7 @@ secretsf     = where(secretsbf)
 #
 
 p = argparse.ArgumentParser(description=
-        f"""Create your own Starbust demo service in AWS, Azure or GCP,
+        """Create your own Starbust demo service in AWS, Azure or GCP,
         starting from nothing. It's zero to demo in 20 minutes or less. You
         provide your target cloud, zone/region, version of software, and your
         cluster size and instance type, and everything is set up for you,
@@ -121,6 +122,8 @@ p.add_argument('-i', '--disable-bastion-fw', action="store_true",
         help="Disable bastion firewall—only protection will be ssh!")
 p.add_argument('-l', '--dont-load', action="store_true",
         help="Don't load databases with tpch data.")
+p.add_argument('-n', '--node-layout', action="store_true",
+        help="Show how containers lay out in nodes.")
 p.add_argument('-r', '--drop-tables', action="store_true",
         help="Drop all tables before loading with tpch data.")
 p.add_argument('-s', '--summarise-ssh-tunnels', action="store_true",
@@ -181,7 +184,6 @@ nodecountlabel = "NodeCount"
 chartvlabel = "ChartVersion"
 tlscoordlabel = "RequireCoordTls"
 ingresslblabel = "IngressLoadBalancer"
-tlsinternallabel = "RequireInternalTls"
 authnldaplabel = "AuthNLdap"
 awsinstlabel = "AwsInstanceTypes"
 awscaptypelabel = "CapacityType"
@@ -221,7 +223,6 @@ try:
     nodeCount    = myvars[nodecountlabel] # NodeCount
     ingresslb    = myvars[ingresslblabel] # ExternalLoadBalancer
     tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
-    tlsinternal  = myvars[tlsinternallabel] # RequireInternalTls
     authnldap    = myvars[authnldaplabel] # AuthNLdap
 
     nobastionfw  = myvars["DisableBastionFw"] or ns.disable_bastion_fw
@@ -378,15 +379,12 @@ if len(components) != 3 or not all(map(str.isdigit, components)):
 #
 # The yaml files for the coordinator and worker specify they should be on
 # different nodes, so we need a 2-node cluster at minimum.
-if nodeCount < 2:
-    sys.exit(f"Must have at least {minnodes} nodes; {nodeCount} set for "
+if nodeCount < minNodes:
+    sys.exit(f"Must have at least {minNodes} nodes; {nodeCount} set for "
             f"{nodecountlabel} in {myvarsf}.")
 
 if ingresslb and tlscoord:
     sys.exit(f"{ingresslblabel} and {tlscoordlabel} are mutually exclusive.")
-
-if tlsinternal and not tlscoord:
-    sys.exit(f"{tlsinternallabel} requires {tlscoordlabel} to be enabled")
 
 if (upstreamSG or downstreamSG) and not (tlscoord or ingresslb):
     sys.exit(f"Stargate mode requires {tlscoordlabel} to be enabled")
@@ -560,9 +558,6 @@ def announceBox(s):
         cp(bl + l.ljust(maxl) + br)
     cp(botbord)
 
-def json2str(jsondict: dict) -> str:
-    return json.dumps(jsondict, indent=4, sort_keys=True)
-
 def appendToFile(filepath, contents) -> None:
     with open(filepath, "a+") as fh:
         fh.write(contents)
@@ -658,7 +653,7 @@ def getOutputVars() -> dict:
         assert u.port == None or u.port == 443
         env["k8s_api_server"] = u.hostname
 
-    for db in ["mysql", "postgres", "evtlog", "synapse_sl",
+    for db in ["mysql", "postgres", "hmsdb", "evtlog", "synapse_sl",
             "synapse_pool", "redshift"]:
         env[db + "_user"] = dbuser
         # Azure does some funky stuff with usernames for databases: It
@@ -746,9 +741,9 @@ def getSshPublicKey() -> str:
     except IOError as e:
         sys.exit(f"Unable to read your public RSA key {rsaPub}")
 
-def waitUntilNodesReady(minnodes: int) -> float:
+def waitUntilNodesReady(minNodes: int) -> float:
     numer = 0
-    denom = minnodes
+    denom = minNodes
     r = runTry(f"{kube} get nodes --no-headers".split())
     if r.returncode == 0:
         lines = r.stdout.splitlines()
@@ -794,23 +789,26 @@ def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:
     denom = max(denom, mincontainers)
     return float(numer) / float(denom)
 
-def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
-        -> float:
+def getDeploymentStatus(namespace) -> tuple:
     numer = 0
-    denom = minreplicas
+    denom = 0
     namesp = f" --namespace {namespace}" if namespace else ""
-    r = runTry(f"{kube}{namesp} get deployments --no-headers".split())
+    r = runTry(f"{kube}{namesp} get deployments -o json".split())
     if r.returncode == 0:
-        lines = r.stdout.splitlines()
-        for line in lines:
-            cols = line.split()
-            assert len(cols) == 5
-            readyratio = cols[1].split('/')
-            repready = int(readyratio[0])
-            reptotal = int(readyratio[1])
+        deps = json.loads(r.stdout)['items']
+        for dep in deps:
+            repready = dep["status"]["readyReplicas"]
+            reptotal = dep["spec"]["replicas"]
             assert repready <= reptotal
             numer += repready
+            denom += reptotal
     assert numer <= denom, f"{numer}, {denom}"
+    return numer, denom
+
+def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
+        -> float:
+    numer, denom = getDeploymentStatus(namespace)
+    denom = max(denom, minreplicas)
     return float(numer) / float(denom)
 
 def getStarburstUrl() -> str:
@@ -821,11 +819,7 @@ def getStarburstUrl() -> str:
     # If we are TLS-protected to the coordinator...
     if tlsenabled():
         scheme = "https"
-        # If we are TLS-protecting the coordinator connection, but not
-        # internal connections, then the cert will require us to use the
-        # starburst hostname, as that is the only valid name in that cert.
-        if not tlsinternal:
-            host = starburstfqdn
+        host = starburstfqdn
     return f"{scheme}://{host}:{port}"
 
 def loadBalancerResponding(service: str) -> bool:
@@ -840,8 +834,7 @@ def loadBalancerResponding(service: str) -> bool:
         url = f"http://{localhost}:{port}/login.jsp"
 
     try:
-        r = requests.get(url, verify = secrets["wildcert"]["f"] if service ==
-                "starburst" and tlsinternal else None)
+        r = requests.get(url, verify = None)
         return r.status_code == 200
     except requests.exceptions.ConnectionError as e:
         pass
@@ -1095,23 +1088,14 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
 # implicit count of the number of containers.
 def numberOfContainers(numNodes: int) -> int:
     numContainers = 0
-
     # We start with the assumption that we have at least one node for the
     # coordinator, and one for each worker.
     assert numNodes >= 2
-
-    # Count hive
-    numContainers += 2
-
-    # Count ranger
-    numContainers += 3
-
-    # Count the coordinator
-    numNodes -= 1
-    numContainers += 2
-
+    numContainers += 1 # hive has 1 (hive)
+    numContainers += 3 # ranger has 3 (usync, db, admin)
+    numContainers += 1 # coordinator has 1
     # Now count all workers. Each worker has one container.
-    numContainers += numNodes # This is the number of workers.
+    numContainers += numNodes - 1 # number of workers (deducting 1 for coord)
     return numContainers
 
 def ensureClusterIsStarted(skipClusterStart: bool) -> \
@@ -1124,6 +1108,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
             "DbInstanceType":      dbInstanceType,
             "DBName":              dbschema,
             "DBNameEventLogger":   dbevtlog,
+			"DBNameHms":		   dbhms,
             "DBPassword":          dbpwd,
             "DBUser":              dbuser,
             "InstanceTypes":       instanceTypes,
@@ -1241,9 +1226,14 @@ def startPortForwardToLBs(bastionIp: str,
     # check that 'numberOfContainers' function is returning correct number
     assert expectedContainers == total, f"{expectedContainers} {total}"
 
-    # coordinator, worker, hive, ranger, 1 replica each = 4 replicas
+    # coordinator, hive, ranger, 1 replica each = 3 replicas
+    # and to that we need to add 1 replica for each worker
     announce("Waiting for deployments to be available")
-    spinWait(lambda: waitUntilDeploymentsAvail(4, namespace))
+    expectedReplicas = 2 + nodeCount
+    spinWait(lambda: waitUntilDeploymentsAvail(expectedReplicas, namespace))
+    ready, total = getDeploymentStatus(namespace)
+    # check that our math above is correct
+    assert expectedReplicas == total, f"{expectedReplicas} {total}"
 
     # now the load balancers need to be running with their IPs assigned
     announce("Waiting for load-balancers to launch")
@@ -1311,8 +1301,7 @@ def sendSql(command: str, verbose = False) -> list:
     if tlsenabled():
         authtype = requests.auth.HTTPBasicAuth(trinouser, trinopass)
     f = lambda: requests.post(url, headers = hdr, auth = authtype, data =
-            command, verify = secrets["wildcert"]["f"] if tlsinternal else
-            None)
+            command, verify = None)
     r = retryHttp(f, maxretries = httpmaxretries, descr = f"POST [{command}]")
 
     data = []
@@ -1328,12 +1317,7 @@ def sendSql(command: str, verbose = False) -> list:
                     = command, e = str(j["error"])))
             if verbose: announceSqlEnd(command)
             return data # the only way out is success, or an exception
-        if tlsinternal:
-            f = lambda: requests.get(j["nextUri"], headers = hdr, verify =
-                    secrets["wildcert"]["f"])
-        else:
-            f = lambda: requests.get(j["nextUri"], headers = hdr, verify =
-                    None)
+        f = lambda: requests.get(j["nextUri"], headers = hdr, verify = None)
         r = retryHttp(f, maxretries = httpmaxretries,
                 descr = f"GET nextUri [{command}]")
 
@@ -1731,15 +1715,6 @@ def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
                 f"-o=jsonpath={{.items[*].metadata.name}}".split()).split()
 
     for name, values in secrets.items():
-        # If we are using TLS on internal connections, we don't need these
-        if tlsinternal:
-            if name in ('starburstks', 'starburstcert'):
-                continue
-        # If we are using TLS on coordinator only, we don't need these
-        elif tlsenabled():
-            if name in ('wildks', 'wildcert', 'sharedsec'):
-                continue
-
         # These are needed only for LDAP
         if not authnldap and name == 'ldaptls':
             continue
@@ -1854,10 +1829,11 @@ def helmWhichChartInstalled(module: str) -> Optional[str]:
 
 # Returns a bool indicating if the hive postgres database might have been
 # created--either during an install, or because we revved up a version
-def helmInstallRelease(module: str, env: dict = {}) -> bool:
+def helmInstallRelease(module: str, env: dict = {}) -> None:
     env |= myvars |\
             { "BucketName":         bucket,
               "DBName":             dbschema,
+              "DBNameHms":          dbhms,
               "DBNameEventLogger":  dbevtlog,
               "DBPassword":         dbpwd,
               "HiveCat":            hivecat,
@@ -1891,32 +1867,13 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
 
     chart = helmWhichChartInstalled(module)
     newchart = charts[module] + "-" + chartversion # which one to install?
-
-    hivereset = False
-    workingrepo = repo
-    # The starburst-enterprise helm chart doesn't currently support GKE ingress
-    # load balancers, nor does it allow for EKS NLBs to listen on a different
-    # point than they target. Patch the helm chart to fix these problems.
-    if module == "enterprise" and ingresslb:
-        # Only write if the directory doesn't yet exist
-        tgtdir = f"/tmp/repo-{repo}-{chartversion}"
-        tgtdirtmp = "{td}-tmp-{r}".format(td = tgtdir, r = randomString(8))
-        if not os.path.exists(tgtdir):
-            helm("pull {p}/{c} --version {v} --untar --untardir {d}".format(p =
-                repo, c = charts[module], v = chartversion, d = tgtdirtmp))
-            runStdout(f"patch -d {tgtdirtmp} -p0 -i {patchf}".split())
-            os.rename(tgtdirtmp, tgtdir)
-            changed = True
-        workingrepo = tgtdir
     
     if chart == None: # Nothing installed yet, so we need to install
         announce("Installing chart {c} as {r}".format(c = newchart, r =
             releases[module]))
         helm("{h} install {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
-            r = releases[module], w = workingrepo, c = charts[module], y =
+            r = releases[module], w = repo, c = charts[module], y =
             yamltmp, v = chartversion))
-        if module == "hive":
-            hivereset = True # freshly installed -> new postgres
     # If either the chart values file changed, or we need to update to a
     # different version of the chart, then we have to upgrade
     elif changed or chart != newchart:
@@ -1925,167 +1882,21 @@ def helmInstallRelease(module: str, env: dict = {}) -> bool:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         announce(astr)
         helm("{h} upgrade {r} {w}/{c} -f {y} --version {v}".format(h = helmns,
-            r = releases[module], w = workingrepo, c = charts[module], y =
+            r = releases[module], w = repo, c = charts[module], y =
             yamltmp, v = chartversion))
-
-        # Hive postgres DB will be rebuilt only if we rev a version
-        if module == "hive" and chart != newchart:
-            hivereset = True
     else:
         print(f"{chart} values unchanged ➼ avoiding helm upgrade")
 
-    return hivereset
-
 def helmUninstallRelease(release: str) -> None:
     helm(f"{helmns} uninstall {release}")
-
-# Normalise CPU to 1000ths of a CPU ("mCPU")
-def normaliseCPU(cpu) -> int:
-    if cpu.endswith("m"):
-        cpu = cpu[:-1]
-        assert cpu.isdigit()
-        cpu = int(cpu)
-    else:
-        assert cpu.isdigit()
-        cpu = int(cpu) * 1000
-    return cpu
-
-# Normalise memory to Ki
-def normaliseMem(mem) -> int:
-    normalise = { "Ki": 0, "Mi": 10, "Gi": 20 }
-    assert len(mem) > 2
-    unit = mem[-2:]
-    assert unit.isalpha()
-    assert unit in normalise
-    mem = mem[:-2]
-    assert mem.isdigit()
-    mem = int(mem)
-    mem <<= normalise[unit]
-    return mem
-
-def getMinNodeResources() -> tuple:
-    n = json.loads(runCollect(f"{kube} get nodes -o json".split()))["items"]
-    p = json.loads(runCollect(f"{kube} get pods -A -o json".split()))["items"]
-    def dumpNodesAndPods() -> None:
-        print(json2str(n))
-        print(json2str(p))
-
-    nodes = {t["metadata"]["name"]: {"cpu":
-        normaliseCPU(t["status"]["allocatable"]["cpu"]), "mem":
-        normaliseMem(t["status"]["allocatable"]["memory"])} for t in n}
-    assert len(nodes) >= minnodes
-
-    for q in p: # for every pod
-        # If it's Starburst pods, then skip them
-        if q["metadata"]["namespace"] == namespace:
-            continue
-
-        try:
-            nodename = q["spec"]["nodeName"] # see what node it's on
-        except KeyError as e:
-            print(f"'nodeName' not found in")
-            print(json2str(q))
-            dumpNodesAndPods()
-            raise
-
-        if nodename not in nodes:
-            print(f"{nodename} should be in {nodes}")
-            dumpNodesAndPods()
-            sys.exit(-1)
-
-        x = nodes[nodename]
-        for c in q["spec"]["containers"]: # for every container in pod
-            r = c["resources"]
-            if "requests" in r:
-                t = r["requests"]
-                if "cpu" in t:
-                    x["cpu"] -= normaliseCPU(t["cpu"])
-                if "memory" in t:
-                    x["mem"] -= normaliseMem(t["memory"])
-
-    mincpu = minmem = 0
-    for node, allocatable in nodes.items():
-        cpu = allocatable["cpu"]
-        if mincpu == 0 or mincpu > cpu:
-            mincpu = cpu
-        mem = allocatable["mem"]
-        if minmem == 0 or minmem > mem:
-            minmem = mem
-    assert mincpu > 0 and minmem > 0
-    print("All nodes have >= {c}m CPU and {m}Ki mem after K8S "
-            "system pods".format(c = mincpu, m = minmem))
-    return mincpu, minmem
-
-def planWorkerSize() -> dict:
-    # Strategy: Each worker or coordinator gets 7/8 of the resource on each
-    # node (after resources for K8S system pods are removed). We put the
-    # coordinator and workers all on different nodes, which means every node
-    # has a remaining 1/8 capacity, which we reserve for _either_ Ranger or
-    # Hive. We guarantee by using pod anti-affinity rules that Hive and Ranger
-    # will end up on different nodes.
-    c, m = getMinNodeResources()
-    cpu = {}
-    mem = {}
-
-    # 7/8 for coordinator and workers
-    cpu["worker"] = cpu["coordinator"] = (c >> 3) * 7
-    mem["worker"] = mem["coordinator"] = (m >> 3) * 7
-    print("Workers & coordinator get {c}m CPU and {m}Mi mem".format(c =
-        cpu["worker"], m = mem["worker"] >> 10))
-
-    # Hive - each container gets 1/16
-    cpu["hive"] = cpu["hive_db"] = c >> 4
-    mem["hive"] = mem["hive_db"] = m >> 4
-    hivecpu = cpu["hive"] + cpu["hive_db"]
-    hivemem = mem["hive"] + mem["hive_db"]
-    assert cpu["worker"] + hivecpu <= c
-    assert mem["worker"] + hivemem <= m
-    print("hive total resources: {c}m CPU and {m}Mi mem".format(c = hivecpu, m
-        = hivemem))
-    print("hive and hive-db get {c}m CPU and {m}Mi mem".format(c = cpu["hive"],
-        m = mem["hive"] >> 10))
-
-    # Ranger - admin gets 2/32, db and usync each get 1/32
-    cpu["ranger_usync"] = cpu["ranger_db"] = c >> 5
-    cpu["ranger_admin"] = c >> 4
-    mem["ranger_usync"] = mem["ranger_db"] = m >> 5
-    mem["ranger_admin"] = m >> 4
-    rangercpu = cpu["ranger_admin"] + cpu["ranger_db"] + cpu["ranger_usync"]
-    rangermem = mem["ranger_admin"] + mem["ranger_db"] + mem["ranger_usync"]
-    assert cpu["worker"] + rangercpu <= c
-    assert mem["worker"] + rangermem <= m
-    print("ranger total resources: {c}m CPU and {m}Mi mem".format(c =
-        rangercpu, m = rangermem))
-    print("ranger-usync and -db get {c}m CPU and {m}Mi mem".format(c =
-        cpu["ranger_usync"], m = mem["ranger_usync"] >> 10))
-    print("ranger-admin gets {c}m CPU and {m}Mi mem".format(c =
-        cpu["ranger_admin"], m = mem["ranger_admin"] >> 10))
-
-    # Convert format of our internal variables, ready to populate our templates
-    env = {f"{k}_cpu": f"{v}m" for k, v in cpu.items()}
-    env |= {f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in
-        mem.items()}
-    assert nodeCount >= minnodes
-    env["workerCount"] = nodeCount - 1
-    return env
 
 def helmInstallAll(env):
     helmCreateNamespace()
     env |= installSecrets(secrets)
     ensureHelmRepoSetUp(repo)
-    env |= planWorkerSize()
-    hivereset = False
-
+    env |= planWorkerSize(namespace)
     for module in modules:
-        hivereset = helmInstallRelease(module, env) or hivereset
-    # If we've installed Hive for the first time, or if we revved the version
-    # of the Hive helm chart, then it will have set up fresh the internal
-    # PostgreSQL DB used for metadata, which means there also shouldn't be any
-    # files in our filesystem, in order to be in sync. Do this to avoid errors
-    # about finding existing files.
-    if hivereset:
-        eraseBucketContents(env)
-
+        helmInstallRelease(module, env)
     # Speed up the deployment of the updated pods by killing the old ones
     killAllTerminatingPods()
 
@@ -2578,7 +2389,7 @@ def checkEtcHosts() -> None:
     # We only need to make sure that we have a binding for the starburst host
     # if we are running with TLS to the coordinator but the internal
     # connections are NOT secured, as in that the cert only has starburst host
-    if not tlsinternal or tlsenabled():
+    if not tlsenabled():
         return
 
     if readableFile(hostsf):
@@ -2612,6 +2423,11 @@ def checkEtcHosts() -> None:
 def main() -> None:
     if ns.progmeter_test:
         spinWaitTest()
+        sys.exit(0)
+    elif ns.node_layout:
+        planWorkerSize(namespace, verbose = True)
+        sys.exit(0)
+
     announce("Verifying environment")
     getSecrets()
     announceSummary()

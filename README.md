@@ -155,7 +155,7 @@ Then once you've got that installed, you should install the required python
 libraries using python itself, like this:
 
 `python -m pip install jinja2 pyyaml psutil requests google-cloud-bigquery
-google-cloud-storage termcolor`
+google-cloud-storage termcolor tabulate`
 
 ## Other
 

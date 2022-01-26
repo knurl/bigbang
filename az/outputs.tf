@@ -22,6 +22,10 @@ output "evtlog_address" {
   value = azurerm_postgresql_server.postgres.fqdn
 }
 
+output "hmsdb_address" {
+  value = azurerm_postgresql_server.postgres.fqdn
+}
+
 output "postgres_address" {
   value = azurerm_postgresql_server.postgres.fqdn
 }
