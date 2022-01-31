@@ -2,7 +2,7 @@ module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
   cluster_version = "1.21"
-  version         = "18.2.2"
+  version         = "18.2.3"
 
   # Where to place the EKS cluster and workers.
   vpc_id     = module.vpc.vpc_id
@@ -19,8 +19,8 @@ module "eks" {
 
   cluster_security_group_additional_rules = {
     admin_access = {
-      description = "Ingress to K8S API server from public & private subnets"
-      cidr_blocks = local.pubpriv_cidrs
+      description = "Ingress to K8S API server from bastion"
+      cidr_blocks = ["${aws_instance.bastion.private_ip}/32"]
       protocol    = "tcp"
       from_port   = 443
       to_port     = 443
@@ -39,27 +39,18 @@ module "eks" {
       capacity_type  = var.capacity_type == "Spot" ? "SPOT" : "ON_DEMAND"
 
       security_group_rules = {
-        icmp_ingress = {
-          description = "Ingress to node via ICMP"
-          cidr_blocks = local.pubpriv_cidrs
-          protocol    = "icmp"
-          from_port   = 8
-          to_port     = 0
-          type        = "ingress"
-        }
-
         /* By default, eks module does not allow node-to-node communication.
          * Without that communication the Starburst coordinator will not be
          * able to communicate with the Starburst workers. Allow ingress from
          * other worker nodes here, and following rule allows egress to other
-         * workers, as well as elsewhere.
+         * workers, as well as elsewhere (e.g. for loading container images).
          */
         worker_ingress = {
           description = "Allow ingress from other workers"
           from_port   = 0
           to_port     = 0
           protocol    = -1
-          self        = true
+          self        = true # only from other workers
           type        = "ingress"
         }
 

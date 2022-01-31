@@ -35,7 +35,7 @@ resource "azurerm_private_dns_a_record" "starburst_a_record" {
   zone_name           = azurerm_private_dns_zone.private_dns.name
   resource_group_name = azurerm_resource_group.rg.name
   ttl                 = 3600
-  records             = [var.upstream_stargate ? azurerm_linux_virtual_machine.bastion.private_ip_address : local.starburst_address]
+  records             = [var.upstream_stargate ? azurerm_linux_virtual_machine.bastion.private_ip_address : local.starburst_ip]
   tags                = var.tags
 }
 
@@ -44,6 +44,6 @@ resource "azurerm_private_dns_a_record" "ranger_a_record" {
   zone_name           = azurerm_private_dns_zone.private_dns.name
   resource_group_name = azurerm_resource_group.rg.name
   ttl                 = 3600
-  records             = [local.ranger_address]
+  records             = [local.ranger_ip]
   tags                = var.tags
 }

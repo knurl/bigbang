@@ -61,7 +61,7 @@ helmns        = f"-n {namespace}"
 kube          = "kubectl"
 kubens        = f"{kube} -n {namespace}"
 minNodes      = 3 # See getMinNodeResources(); allows rolling upgrades
-maxpodpnode   = 16
+maxpodpnode   = 32
 awsdir        = os.path.expanduser("~/.aws")
 awsconfig     = os.path.expanduser("~/.aws/config")
 awscreds      = os.path.expanduser("~/.aws/credentials")
@@ -185,8 +185,7 @@ chartvlabel = "ChartVersion"
 tlscoordlabel = "RequireCoordTls"
 ingresslblabel = "IngressLoadBalancer"
 authnldaplabel = "AuthNLdap"
-awsinstlabel = "AwsInstanceTypes"
-awscaptypelabel = "CapacityType"
+captypelabel = "CapacityType"
 salesforcelabel = "SalesforceEnabled"
 capacitytypes = {"Spot", "OnDemand"}
 try:
@@ -228,6 +227,7 @@ try:
     nobastionfw  = myvars["DisableBastionFw"] or ns.disable_bastion_fw
     myvars["DisableBastionFw"] = nobastionfw
  
+    capacityType = myvars[captypelabel]
     requireKey("AwsInstanceTypes", myvars)
     requireKey("AwsSmallInstanceType", myvars)
     requireKey("AwsDbInstanceType", myvars)
@@ -333,32 +333,28 @@ region = getRegionFromZone(zone)
 instanceTypes: list[str] = []
 smallInstanceType = ""
 dbInstanceType = ""
+instanceLibrary = []
 if target == "aws":
-    awsinsttypes      = myvars[awsinstlabel]
-    capacityType      = awsinsttypes[awscaptypelabel]
-    if capacityType == "OnDemand":
-        instanceTypes = awsinsttypes["OnDemand"]
-    elif capacityType == "Spot":
-        instanceTypes = awsinsttypes["Spot"]
-    else:
-        sys.exit("{awscaptypelabel} must be in {capacitytypes}")
-    assert len(instanceTypes) > 0
+    instanceLibrary   = myvars["AwsInstanceTypes"]
     smallInstanceType = myvars["AwsSmallInstanceType"]
     dbInstanceType    = myvars["AwsDbInstanceType"]
 elif target == "az":
-    instanceTypes     = myvars["AzureVmTypes"]
-    assert len(instanceTypes) == 1
+    instanceLibrary   = myvars["AzureVmTypes"]
     smallInstanceType = myvars["AzureSmallVmType"]
     dbInstanceType    = myvars["AzureDbVmType"]
 elif target == "gcp":
-    instanceTypes     = myvars["GcpMachineTypes"]
-    assert len(instanceTypes) == 1
+    instanceLibrary   = myvars["GcpMachineTypes"]
     smallInstanceType = myvars["GcpSmallMachineType"]
     dbInstanceType    = myvars["GcpDbMachineType"]
 else:
     sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
             "{c}".format(t = target, tl = targetlabel, m = myvarsf,
                 c = ", ".join(clouds)))
+
+assert capacityType in ("OnDemand", "Spot")
+instanceTypes = instanceLibrary[capacityType]
+assert len(instanceTypes) > 0
+assert capacityType == "Spot" or len(instanceTypes) == 1
 
 # Terraform files are in a directory named for target
 tfdir = where(target)
@@ -756,7 +752,7 @@ def waitUntilNodesReady(minNodes: int) -> float:
     assert numer <= denom, f"{numer}, {denom}"
     return float(numer) / float(denom)
 
-def getPodStatus(namespace: str = None) -> tuple:
+def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:
     numer = 0
     denom = 0
     namesp = f" --namespace {namespace}" if namespace else ""
@@ -765,7 +761,8 @@ def getPodStatus(namespace: str = None) -> tuple:
         pods = json.loads(r.stdout)["items"]
         for pod in pods:
             # We've asked for a specific namespace, but check it
-            ns = pod["metadata"]["namespace"]
+            metadata = pod["metadata"]
+            ns = metadata["namespace"]
             assert ns == namespace
 
             # See how many containers are in the spec
@@ -781,15 +778,13 @@ def getPodStatus(namespace: str = None) -> tuple:
             for cstatus in cstatuses:
                 if cstatus["ready"] == True:
                     numer += 1
+    if mincontainers:
+        denom = min(mincontainers, denom)
     assert numer <= denom, f"{numer}, {denom}"
-    return numer, denom
-
-def waitUntilPodsReady(mincontainers: int, namespace: str = None) -> float:
-    numer, denom = getPodStatus(namespace)
-    denom = max(denom, mincontainers)
     return float(numer) / float(denom)
 
-def getDeploymentStatus(namespace) -> tuple:
+def waitUntilDeploymentsAvail(namespace: str = None,
+        minreplicas: int = 0) -> float:
     numer = 0
     denom = 0
     namesp = f" --namespace {namespace}" if namespace else ""
@@ -797,18 +792,18 @@ def getDeploymentStatus(namespace) -> tuple:
     if r.returncode == 0:
         deps = json.loads(r.stdout)['items']
         for dep in deps:
-            repready = dep["status"]["readyReplicas"]
             reptotal = dep["spec"]["replicas"]
+            repready = 0
+            if "status" in dep:
+                status = dep["status"]
+                if "readyReplicas" in status:
+                    repready = dep["status"]["readyReplicas"]
             assert repready <= reptotal
             numer += repready
             denom += reptotal
+    if minreplicas:
+        denom = min(minreplicas, denom)
     assert numer <= denom, f"{numer}, {denom}"
-    return numer, denom
-
-def waitUntilDeploymentsAvail(minreplicas: int, namespace: str = None) \
-        -> float:
-    numer, denom = getDeploymentStatus(namespace)
-    denom = max(denom, minreplicas)
     return float(numer) / float(denom)
 
 def getStarburstUrl() -> str:
@@ -1103,6 +1098,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
     env = myvars | {
             "BastionLaunchScript": bastlaunchf,
             "BucketName":          bucket,
+            "CapacityType":        capacityType,
             "ClusterName":         clustname,
             "DownstreamSG":        downstreamSG,
             "DbInstanceType":      dbInstanceType,
@@ -1127,9 +1123,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
             "Zone":                zone
             }
     assert target in clouds
-    if target == "aws":
-        env["CapacityType"] = capacityType
-    elif target == "az":
+    if target == "az":
         env["ResourceGroup"] = resourcegrp
         env["StorageAccount"] = storageacct
     elif target == "gcp":
@@ -1160,7 +1154,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
 
     # Don't continue until all K8S system pods are ready
     announce("Waiting for K8S system pods to come online")
-    spinWait(lambda: waitUntilPodsReady(nodeCount*2, "kube-system"))
+    spinWait(lambda: waitUntilPodsReady("kube-system"))
     return tuns, env
 
 # Starburst pods sometimes get stuck in Terminating phase after a helm upgrade.
@@ -1221,19 +1215,13 @@ def startPortForwardToLBs(bastionIp: str,
 
     announce("Waiting for pods to be ready")
     expectedContainers = numberOfContainers(nodeCount)
-    spinWait(lambda: waitUntilPodsReady(expectedContainers, namespace))
-    ready, total = getPodStatus(namespace)
-    # check that 'numberOfContainers' function is returning correct number
-    assert expectedContainers == total, f"{expectedContainers} {total}"
+    spinWait(lambda: waitUntilPodsReady(namespace, expectedContainers))
 
     # coordinator, hive, ranger, 1 replica each = 3 replicas
     # and to that we need to add 1 replica for each worker
     announce("Waiting for deployments to be available")
     expectedReplicas = 2 + nodeCount
-    spinWait(lambda: waitUntilDeploymentsAvail(expectedReplicas, namespace))
-    ready, total = getDeploymentStatus(namespace)
-    # check that our math above is correct
-    assert expectedReplicas == total, f"{expectedReplicas} {total}"
+    spinWait(lambda: waitUntilDeploymentsAvail(namespace, expectedReplicas))
 
     # now the load balancers need to be running with their IPs assigned
     announce("Waiting for load-balancers to launch")

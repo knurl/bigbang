@@ -46,19 +46,25 @@ DisableBastionFw: False
 # Disable sources that run slowly with Starburst
 DisableSlowSources: True
 
-# node pool instance types - min 32 vCPU, all provided by Spot Instance Advisor
+# node pool capacity type and instance types
+CapacityType: Spot
 AwsInstanceTypes:
-  CapacityType: Spot
-  OnDemand:
-    - m5.4xlarge  # 16 vCPU / 64 GB
-  Spot: # all with 16 vCPU / 64 GB
+  Spot: # all with 16 vCPU / 64 GB, provided by Spot Instance Advisor
     - m5a.4xlarge
     - m5.4xlarge
     - m6i.4xlarge
     - m4.4xlarge
+  OnDemand:
+    - m5.4xlarge  # 16 vCPU / 64 GB
 AzureVmTypes:
+  Spot:
+    - Standard_D16_v5 
+  OnDemand:
     - Standard_D16_v5 
 GcpMachineTypes:
+  Spot:
+    - e2-standard-16
+  OnDemand:
     - e2-standard-16
 
 # smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM

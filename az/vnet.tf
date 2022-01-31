@@ -8,17 +8,39 @@ resource "azurerm_virtual_network" "vnet" {
 
 locals {
   # 00.1 - 127.254 = 32766; 128.1 - 191.254 = 16382; 192.1 - 255.254 = 16382
-  subnets           = cidrsubnets(var.my_cidr, 1, 2, 2)
-  starburst_address = cidrhost(azurerm_subnet.private_sub.address_prefixes[0], 103)
-  ranger_address    = cidrhost(azurerm_subnet.private_sub.address_prefixes[0], 104)
+  subnets = cidrsubnets(var.my_cidr, 3, 3, 3, 3, 3)
+
+  bastion_ip = cidrhost(azurerm_subnet.private_sub_servers.address_prefixes[0], 101)
+  ldap_ip    = cidrhost(azurerm_subnet.private_sub_servers.address_prefixes[0], 102)
+
+  starburst_ip = cidrhost(azurerm_subnet.private_sub_aks_regular.address_prefixes[0], 103)
+  ranger_ip    = cidrhost(azurerm_subnet.private_sub_aks_regular.address_prefixes[0], 104)
 }
 
-resource "azurerm_subnet" "private_sub" {
+resource "azurerm_subnet" "private_sub_servers" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
 
-  name                                           = "private_sub"
+  name                                           = "prv_aks_srv"
   address_prefixes                               = [local.subnets[0]]
+  enforce_private_link_endpoint_network_policies = true
+}
+
+resource "azurerm_subnet" "private_sub_aks_regular" {
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+
+  name                                           = "prv_aks_reg"
+  address_prefixes                               = [local.subnets[1]]
+  enforce_private_link_endpoint_network_policies = true
+}
+
+resource "azurerm_subnet" "private_sub_aks_spot" {
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+
+  name                                           = "prv_aks_spot"
+  address_prefixes                               = [local.subnets[2]]
   enforce_private_link_endpoint_network_policies = true
 }
 
@@ -27,7 +49,7 @@ resource "azurerm_subnet" "db_sub" {
   virtual_network_name = azurerm_virtual_network.vnet.name
 
   name                                           = "db_sub"
-  address_prefixes                               = [local.subnets[1]]
+  address_prefixes                               = [local.subnets[3]]
   service_endpoints                              = ["Microsoft.Sql"]
   enforce_private_link_endpoint_network_policies = true
 }
@@ -37,7 +59,7 @@ resource "azurerm_subnet" "obj_sub" {
   virtual_network_name = azurerm_virtual_network.vnet.name
 
   name                                           = "obj_sub"
-  address_prefixes                               = [local.subnets[2]]
+  address_prefixes                               = [local.subnets[4]]
   service_endpoints                              = ["Microsoft.Storage"]
   enforce_private_link_endpoint_network_policies = true
 }

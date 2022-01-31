@@ -11,10 +11,10 @@ resource "aws_security_group" "rds_sg" {
   # Any protocol or port, as long as it comes from one of the worker nodes in
   # our Kubernetes cluster, where we'll be running Starburst.
   ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [module.eks.node_security_group_id]
   }
 
   tags = merge(var.tags, { Name = "rds_sg" })

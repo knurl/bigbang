@@ -5,9 +5,9 @@ resource "azurerm_network_interface" "ldaps_nic" {
 
   ip_configuration {
     name                          = "primary"
-    subnet_id                     = azurerm_subnet.private_sub.id
+    subnet_id                     = azurerm_subnet.private_sub_servers.id
     private_ip_address_allocation = "Static"
-    private_ip_address            = cidrhost(azurerm_subnet.private_sub.address_prefixes[0], 102)
+    private_ip_address            = local.ldap_ip
   }
 
   tags = var.tags

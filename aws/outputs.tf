@@ -35,5 +35,5 @@ output "redshift_endpoint" {
 }
 
 output "object_address" {
-  value = aws_s3_bucket.s3_bucket.bucket_regional_domain_name
+  value = replace(module.vpc_endpoints.endpoints["s3"].dns_entry.0.dns_name, "*", aws_s3_bucket.s3_bucket.bucket)
 }

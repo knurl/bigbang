@@ -60,6 +60,7 @@ expose:
 coordinator:
   additionalProperties: |
     starburst.data-product.enabled=true
+    starburst.access-control.enabled=true
     data-product.starburst-user=starburst_service
     data-product.starburst-password=test
     {% if RequireCoordTls %}
@@ -126,6 +127,15 @@ worker:
     limits:
       memory: {{worker_mem}}
       cpu: {{worker_cpu}}
+  {% if Target == 'az' %}
+  # Make sure to prioritise failure-tolerant pods to the spot instances, such
+  # as the workers, and Hive (while it is set up with an external database).
+  tolerations:
+  - key: "kubernetes.azure.com/scalesetpriority"
+    operator: "Equal"
+    value: "spot"
+    effect: "NoSchedule"
+  {% endif %}
 
 {% if not AuthNLdap %}
 # If we're not going to be using LDAP, then automatically switch over to using

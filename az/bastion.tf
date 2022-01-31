@@ -12,9 +12,9 @@ resource "azurerm_network_interface" "bastion_nic" {
 
   ip_configuration {
     name                          = "primary"
-    subnet_id                     = azurerm_subnet.private_sub.id
+    subnet_id                     = azurerm_subnet.private_sub_servers.id
     private_ip_address_allocation = "Static"
-    private_ip_address            = cidrhost(azurerm_subnet.private_sub.address_prefixes[0], 101)
+    private_ip_address            = local.bastion_ip
     public_ip_address_id          = azurerm_public_ip.bastion_pip.id
   }
 

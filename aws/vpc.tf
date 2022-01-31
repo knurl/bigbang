@@ -40,15 +40,66 @@ module "vpc" {
   tags = var.tags
 }
 
+resource "aws_security_group" "vpc_endpoint_sg" {
+  name                   = "vpc_endpoint_sg"
+  vpc_id                 = module.vpc.vpc_id
+  revoke_rules_on_delete = true
+
+  # Any protocol or port, as long as it comes from one of the worker nodes in
+  # our Kubernetes cluster, where we'll be running Starburst.
+  ingress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [module.eks.node_security_group_id]
+  }
+}
+
+data "aws_iam_policy_document" "vpc_endpoint_policy_doc" {
+  statement {
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    actions = ["s3:*"]
+
+    effect = "Allow"
+
+    resources = [
+      aws_s3_bucket.s3_bucket.arn,
+      "${aws_s3_bucket.s3_bucket.arn}/*",
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:PrincipalArn"
+      values   = ["${module.eks.eks_managed_node_groups["ng"].iam_role_arn}"]
+    }
+  }
+}
+
+module "vpc_endpoints" {
+  source = "terraform-aws-modules/vpc/aws//modules/vpc-endpoints"
+
+  vpc_id             = module.vpc.vpc_id
+  security_group_ids = [aws_security_group.vpc_endpoint_sg.id]
+
+  endpoints = {
+    s3 = {
+      service    = "s3"
+      tags       = var.tags
+      subnet_ids = module.vpc.private_subnets
+      policy     = data.aws_iam_policy_document.vpc_endpoint_policy_doc.json
+    }
+  }
+}
+
 locals {
   bastion_ip   = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
   ldap_ip      = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 102)
   starburst_ip = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 103)
   ranger_ip    = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 104)
-  pubpriv_cidrs = concat(
-    module.vpc.private_subnets_cidr_blocks,
-    module.vpc.public_subnets_cidr_blocks
-  )
 }
 
 resource "aws_key_pair" "key_pair" {
