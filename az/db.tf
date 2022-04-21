@@ -144,6 +144,14 @@ resource "azurerm_postgresql_database" "hmsdb_db" {
   collation           = var.azure_postgres_collation
 }
 
+resource "azurerm_postgresql_database" "cachesrv_db" {
+  name                = var.db_name_cachesrv
+  resource_group_name = azurerm_resource_group.rg.name
+  server_name         = azurerm_postgresql_server.postgres.name
+  charset             = var.postgres_charset
+  collation           = var.azure_postgres_collation
+}
+
 resource "azurerm_postgresql_database" "postgres_db" {
   name                = var.db_name
   resource_group_name = azurerm_resource_group.rg.name

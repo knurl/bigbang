@@ -25,7 +25,7 @@ Zone: eu-west-2 # AWS - London, UK, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 368.0.0
+ChartVersion: 375.0.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 3
@@ -72,13 +72,13 @@ AwsSmallInstanceType: m5.large
 AzureSmallVmType: Standard_B2ms
 GcpSmallMachineType: e2-standard-2
 
-# DB instance types
-AwsDbInstanceType: db.m5.4xlarge
-AzureDbVmType: GP_Gen5_32
-GcpDbMachineType: db-custom-32-122880
+# DB instance types - 4 vCPU, 16 GB
+AwsDbInstanceType: db.m5.xlarge
+AzureDbVmType: GP_Gen5_4
+GcpDbMachineType: db-custom-4-15360
 
 # Do we want to use the Salesforce connector?
-SalesforceEnabled: True
+SalesforceEnabled: False
 
 #
 # Helm repo information

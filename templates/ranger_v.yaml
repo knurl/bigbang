@@ -91,4 +91,5 @@ affinity:
               operator: In
               values:
                 - starburst-hive
+                - starburst-cache-service
         topologyKey: "kubernetes.io/hostname"

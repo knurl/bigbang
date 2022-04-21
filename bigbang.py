@@ -1,19 +1,20 @@
 #!python
 
 from run import run, runShell, runTry, runStdout, runCollect, retryRun
-from capcalc import json2str, planWorkerSize
-import os, hashlib, argparse, sys, pdb, textwrap, requests, json, yaml, re
+from capcalc import planWorkerSize, numberOfReplicas, numberOfContainers
+import os, hashlib, argparse, sys, pdb, textwrap, requests, json, re
 import subprocess, ipaddress, glob, threading, time, random, string, io
+import yaml # type: ignore
 import atexit, psutil # type: ignore
 from subprocess import CalledProcessError
 from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict, Set
 from urllib.parse import urlparse
 from abc import ABC, abstractmethod
 from google.cloud import bigquery, storage # type: ignore
-import google.api_core.exceptions
+import google.api_core.exceptions # type: ignore
 import jinja2
 from jinja2.meta import find_undeclared_variables
-from termcolor import cprint, colored
+from termcolor import cprint, colored # type: ignore
 from shutil import get_terminal_size
 
 # Do this just to get rid of the warning when we try to read from the
@@ -52,8 +53,10 @@ synapseslcat  = "synapse_sl"
 trinouser     = "starburst_service"
 trinopass     = "test"
 dbschema      = "s"
-dbhms		  = "hms" # Hive metastore persistent database
+cacheschema   = "cache"
 dbevtlog      = "evtlog" # event logger PostgreSQL database
+dbhms		  = "hms" # Hive metastore persistent database
+dbcachesrv    = "cachesrv" # cache service persistent database
 dbuser        = "starburstuser"
 dbpwd         = "a029fjg!>dugBiO8"
 namespace     = "starburst"
@@ -151,6 +154,7 @@ p.add_argument('command',
         help="""Command to issue for demo services.
            start/stop/restart: Start/stop/restart the demo environment.
            status: Show whether the environment is running or not.""")
+
 p.add_argument('-p', '--progmeter-test', action="store_true",
         help=argparse.SUPPRESS)
 
@@ -203,17 +207,15 @@ try:
     email        = myvars["Email"]
 
     # Target
-    if ns.target == None:
-        target = myvars[targetlabel]
-    else:
+    target = myvars[targetlabel]
+    if ns.target != None:
         target = ns.target
         myvars[targetlabel] = target
     assert target == myvars[targetlabel]
 
     # Zone
-    if ns.zone == None:
-        zone = myvars["Zone"]
-    else:
+    zone = myvars["Zone"]
+    if ns.zone != None:
         zone = ns.zone
         myvars["Zone"] = zone
     assert zone == myvars["Zone"]
@@ -472,7 +474,7 @@ resourcegrp = shortname + "rg"
 templates = {}
 releases = {}
 charts = {}
-modules = ["hive", "ranger", "enterprise"]
+modules = ["hive", "ranger", "enterprise", "cache-service"]
 for module in modules:
     templates[module] = f"{module}_v.yaml"
     releases[module] = f"{module}-{shortname}"
@@ -480,9 +482,10 @@ for module in modules:
 
 # Portfinder service
 
-services = ["starburst", "ranger"]
+services = ["starburst", "ranger", "cache-service"]
 svcports    = {
         "ranger": {"local": 6080, "remote": 6080},
+        "cache-service": {"local": 8180, "remote": 8180},
         "apiserv": {"local": 2153, "remote": 443}
         }
 if tlsenabled():
@@ -649,8 +652,8 @@ def getOutputVars() -> dict:
         assert u.port == None or u.port == 443
         env["k8s_api_server"] = u.hostname
 
-    for db in ["mysql", "postgres", "hmsdb", "evtlog", "synapse_sl",
-            "synapse_pool", "redshift"]:
+    for db in ["mysql", "postgres", "evtlog", "hmsdb", "cachesrv",
+            "synapse_sl", "synapse_pool", "redshift"]:
         env[db + "_user"] = dbuser
         # Azure does some funky stuff with usernames for databases: It
         # interposes a gateway in front of the database that forwards
@@ -737,6 +740,13 @@ def getSshPublicKey() -> str:
     except IOError as e:
         sys.exit(f"Unable to read your public RSA key {rsaPub}")
 
+def divideOrZero(x: int, y: int) -> float:
+    assert x <= y, f"{x}, {y}"
+    if y == 0:
+        return 0.0
+    else:
+        return float(x) / float(y)
+
 def waitUntilNodesReady(minNodes: int) -> float:
     numer = 0
     denom = minNodes
@@ -749,8 +759,7 @@ def waitUntilNodesReady(minNodes: int) -> float:
             if cols[1] == "Ready":
                 # We've found a node that's ready. Count it.
                 numer += 1
-    assert numer <= denom, f"{numer}, {denom}"
-    return float(numer) / float(denom)
+    return divideOrZero(numer, denom)
 
 def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:
     numer = 0
@@ -766,8 +775,8 @@ def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:
             assert ns == namespace
 
             # See how many containers are in the spec
-            containers = pod["spec"]["containers"]
-            denom += len(containers)
+            conts = pod["spec"]["containers"]
+            denom += len(conts)
 
             # Now see how many are actually running
             try:
@@ -780,8 +789,7 @@ def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:
                     numer += 1
     if mincontainers:
         denom = min(mincontainers, denom)
-    assert numer <= denom, f"{numer}, {denom}"
-    return float(numer) / float(denom)
+    return divideOrZero(numer, denom)
 
 def waitUntilDeploymentsAvail(namespace: str = None,
         minreplicas: int = 0) -> float:
@@ -803,8 +811,7 @@ def waitUntilDeploymentsAvail(namespace: str = None,
             denom += reptotal
     if minreplicas:
         denom = min(minreplicas, denom)
-    assert numer <= denom, f"{numer}, {denom}"
-    return float(numer) / float(denom)
+    return divideOrZero(numer, denom)
 
 def getStarburstUrl() -> str:
     scheme = "http"
@@ -822,14 +829,19 @@ def loadBalancerResponding(service: str) -> bool:
 
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
-    if service == "starburst":
-        url = getStarburstUrl() + "/ui/login.html"
-    elif service == "ranger":
-        port = getLclPort("ranger")
-        url = f"http://{localhost}:{port}/login.jsp"
-
     try:
-        r = requests.get(url, verify = None)
+        if service == "starburst":
+            url = getStarburstUrl() + "/ui/login.html"
+            r = requests.get(url, verify = None)
+        elif service == "ranger":
+            port = getLclPort("ranger")
+            url = f"http://{localhost}:{port}/login.jsp"
+            r = requests.get(url)
+        elif service == "cache-service":
+            port = getLclPort("cache-service")
+            url = f"http://{localhost}:{port}/v1/status"
+            r = requests.head(url)
+
         return r.status_code == 200
     except requests.exceptions.ConnectionError as e:
         pass
@@ -916,8 +928,7 @@ def waitUntilLoadBalancersUp(services: list, namespace: str = None,
 
         # Found one service load balancer running
         numer += 1
-    assert numer <= denom
-    return float(numer) / float(denom)
+    return divideOrZero(numer, denom)
 
 def waitUntilApiServerResponding() -> float:
     # It is assumed this function will only be called once the ssh tunnels
@@ -1008,6 +1019,7 @@ class Tunnel:
                 rAddr, k = rPort, b = bastionIp)
         print(self.command)
         self.p = subprocess.Popen(self.command.split())
+        global announce
         announce("Created tunnel " + str(self))
 
     def __del__(self):
@@ -1079,20 +1091,6 @@ def establishBastionTunnel(env: dict) -> list[Tunnel]:
 
     return tuns
 
-# This function should be compared to planWorkerSize(), which also has an
-# implicit count of the number of containers.
-def numberOfContainers(numNodes: int) -> int:
-    numContainers = 0
-    # We start with the assumption that we have at least one node for the
-    # coordinator, and one for each worker.
-    assert numNodes >= 2
-    numContainers += 1 # hive has 1 (hive)
-    numContainers += 3 # ranger has 3 (usync, db, admin)
-    numContainers += 1 # coordinator has 1
-    # Now count all workers. Each worker has one container.
-    numContainers += numNodes - 1 # number of workers (deducting 1 for coord)
-    return numContainers
-
 def ensureClusterIsStarted(skipClusterStart: bool) -> \
         tuple[list[Tunnel], dict]:
     env = myvars | {
@@ -1103,6 +1101,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
             "DownstreamSG":        downstreamSG,
             "DbInstanceType":      dbInstanceType,
             "DBName":              dbschema,
+            "DBNameCacheSrv":      dbcachesrv,
             "DBNameEventLogger":   dbevtlog,
 			"DBNameHms":		   dbhms,
             "DBPassword":          dbpwd,
@@ -1220,7 +1219,7 @@ def startPortForwardToLBs(bastionIp: str,
     # coordinator, hive, ranger, 1 replica each = 3 replicas
     # and to that we need to add 1 replica for each worker
     announce("Waiting for deployments to be available")
-    expectedReplicas = 2 + nodeCount
+    expectedReplicas = numberOfReplicas(nodeCount)
     spinWait(lambda: waitUntilDeploymentsAvail(namespace, expectedReplicas))
 
     # now the load balancers need to be running with their IPs assigned
@@ -1491,7 +1490,8 @@ def preloadTpchTableSizes(scaleSets: set[str]) -> None:
 
 def createSchemas(dstCatalogs: list, dstSchema: str, hiveTarget: str) -> None:
     cg = CommandGroup()
-    announce("creating schemas in {}".format(", ".join(dstCatalogs)))
+    announce("creating schema {s} in {c}".format(s = dstSchema,
+        c = ", ".join(dstCatalogs)))
     for dstCatalog in dstCatalogs:
         clause = ""
         if dstCatalog in lakecats:
@@ -1667,6 +1667,9 @@ def loadDatabases(hive_location: str) -> None:
     partition = tpchbucket["partition"]
     numbuckets = tpchbucket["nbuckets"]
 
+    # First, create a schema to hold our cached views
+    createSchemas([hivecat], cacheschema, hive_location)
+
     # First copy tpch large scale set to hive...
     copySchemaTables(tpchcat, tpchbigschema, [hivecat], hive_location,
             partition, numbuckets)
@@ -1820,9 +1823,11 @@ def helmWhichChartInstalled(module: str) -> Optional[str]:
 def helmInstallRelease(module: str, env: dict = {}) -> None:
     env |= myvars |\
             { "BucketName":         bucket,
+              "CacheSchema":        cacheschema,
               "DBName":             dbschema,
-              "DBNameHms":          dbhms,
               "DBNameEventLogger":  dbevtlog,
+              "DBNameHms":          dbhms,
+              "DBNameCacheSrv":     dbcachesrv,
               "DBPassword":         dbpwd,
               "HiveCat":            hivecat,
               "IngressName":        ingressname,
@@ -1840,6 +1845,9 @@ def helmInstallRelease(module: str, env: dict = {}) -> None:
     if authnldap:
         env["LdapUri"] = "ldaps://{h}:{p}".format(h = ldapfqdn, p =
                 getRmtPort("ldaps"))
+
+    if sfdcenabled:
+        env["SfdcCat"] = sfdccat
 
     if upstreamSG or ingresslb:
         env["StarburstHost"] = starburstfqdn
@@ -2033,11 +2041,11 @@ def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
         env |= creds.toDict()
     helmInstallAll(env)
     tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
-    preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
     if dropTables:
         dropSchemaTables(getCatalogs(), dbschema)
         eraseBucketContents(env)
     if not dontLoad:
+        preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
         loadDatabases(getObjectStoreUrl(env))
 
     return tuns, announceReady(env["bastion_address"])

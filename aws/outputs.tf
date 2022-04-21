@@ -22,6 +22,10 @@ output "hmsdb_address" {
   value = aws_db_instance.hmsdb.address
 }
 
+output "cachesrv_address" {
+  value = aws_db_instance.cachesrvdb.address
+}
+
 output "postgres_address" {
   value = aws_db_instance.postgres.address
 }

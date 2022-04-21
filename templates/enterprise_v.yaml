@@ -59,14 +59,15 @@ expose:
 
 coordinator:
   additionalProperties: |
+    #    starburst.access-control.enabled=true
+    #    starburst.access-control.authorized-users=carol
     starburst.data-product.enabled=true
-    starburst.access-control.enabled=true
     data-product.starburst-user=starburst_service
     data-product.starburst-password=test
     {% if RequireCoordTls %}
-    data-product.starburst-jdbc-url=jdbc:trino://coordinator.example.com:8443?SSL=true
+    data-product.starburst-jdbc-url=jdbc:trino://coordinator:8443?SSL=true
     {% else %}
-    data-product.starburst-jdbc-url=jdbc:trino://coordinator.example.com:8080
+    data-product.starburst-jdbc-url=jdbc:trino://coordinator:8080
     {% endif %}
     {% if IngressLoadBalancer %}
     # These two have to be here because (i) we need to accept headers from
@@ -158,7 +159,7 @@ catalogs:
   {{ HiveCat }}: |
     connector.name=hive
     hive.metastore.uri=thrift://hive:9083
-    hive.security=allow-all
+    #    hive.security=starburst
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
@@ -166,11 +167,16 @@ catalogs:
     hive.gcs.json-key-file-path=secretRef:{{gcskey}}:{{gcskeybf}}
     hive.gcs.use-access-token=false
     {% endif %}
-  sfdc: |
+  {% if SalesforceEnabled %}
+  {{ SfdcCat }} : |
     connector.name=salesforce
     salesforce.user={{SalesforceUser}}
     salesforce.password={{SalesforcePassword}}
     salesforce.security-token={{SalesforceSecurityToken}}
+    salesforce.driver-logging.enabled=true
+    redirection.config-source=SERVICE
+    cache-service.uri=http://cache-service:8180
+  {% endif %}
   {% if Target == "aws" %}
   delta: |
     connector.name=delta-lake
@@ -184,7 +190,6 @@ catalogs:
     connection-url=jdbc:redshift://{{redshift_endpoint}}/{{DBName}}
     connection-user={{redshift_user}}
     connection-password={{DBPassword}}
-    allow-drop-table=true
   {% endif %}
   {% elif Target == "az" %}
   {% if not DisableSlowSources %}
@@ -193,13 +198,11 @@ catalogs:
     connection-url=jdbc:sqlserver://{{synapse_sl_address}}:1433;database=master
     connection-user={{synapse_sl_user}}
     connection-password={{DBPassword}}
-    allow-drop-table=true
   synapse_pool: |
     connector.name=synapse
     connection-url=jdbc:sqlserver://{{synapse_pool_address}}:1433;database={{DBName}}
     connection-user={{synapse_pool_user}}
     connection-password={{DBPassword}}
-    allow-drop-table=true
   {% endif %}
   {% elif Target == "gcp" %}
   bq: |
@@ -211,13 +214,11 @@ catalogs:
     connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/?serverTimezone=UTC
     connection-user={{mysql_user}}
     connection-password={{DBPassword}}
-    allow-drop-table=true
   postgresql: |
     connector.name=postgresql
     connection-url=jdbc:postgresql://{{postgres_address}}:{{postgres_port}}/{{DBName}}
     connection-user={{postgres_user}}
     connection-password={{DBPassword}}
-    allow-drop-table=true
   {% if UpstreamSG %}
   sg_az_adls: |
     connector.name=stargate

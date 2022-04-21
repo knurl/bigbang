@@ -95,6 +95,10 @@ variable "evtlog_server_name" {
   default = "evtlog-server-{{ShortName}}"
 }
 
+variable "cachesrv_server_name" {
+  default = "cachesrv-server-{{ShortName}}"
+}
+
 variable "hmsdb_server_name" {
   default = "hmsdb-server-{{ShortName}}"
 }
@@ -125,6 +129,10 @@ variable "db_name_evtlog" {
 
 variable "db_name_hms" {
   default = "{{DBNameHms}}"
+}
+
+variable "db_name_cachesrv" {
+  default = "{{DBNameCacheSrv}}"
 }
 
 variable "db_user" {

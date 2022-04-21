@@ -20,7 +20,7 @@ resource "aws_security_group" "rds_sg" {
   tags = merge(var.tags, { Name = "rds_sg" })
 }
 
-# for the event logger
+# Starburst internal - event logger
 resource "aws_db_instance" "evtlog" {
   identifier               = var.evtlog_server_name
   engine                   = "postgres"
@@ -37,7 +37,7 @@ resource "aws_db_instance" "evtlog" {
   tags                     = merge(var.tags, { Name = var.evtlog_server_name })
 }
 
-# for Hive
+# Starburst internal - Hive metastore
 resource "aws_db_instance" "hmsdb" {
   identifier               = var.hmsdb_server_name
   engine                   = "postgres"
@@ -52,6 +52,23 @@ resource "aws_db_instance" "hmsdb" {
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.hmsdb_server_name })
+}
+
+# Starburst internal - Cache service
+resource "aws_db_instance" "cachesrvdb" {
+  identifier               = var.cachesrv_server_name
+  engine                   = "postgres"
+  allocated_storage        = 20
+  instance_class           = var.db_instance_type
+  name                     = var.db_name_cachesrv
+  username                 = var.db_user
+  password                 = var.db_password
+  skip_final_snapshot      = true
+  delete_automated_backups = true
+  db_subnet_group_name     = module.vpc.database_subnet_group
+  vpc_security_group_ids   = [aws_security_group.rds_sg.id]
+  apply_immediately        = true
+  tags                     = merge(var.tags, { Name = var.cachesrv_server_name })
 }
 
 resource "aws_db_instance" "postgres" {

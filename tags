@@ -7,21 +7,27 @@
 ApiError	bigbang.py	/^class ApiError(Exception):$/;"	c
 AwsCreds	bigbang.py	/^class AwsCreds(Creds):$/;"	c
 CommandGroup	bigbang.py	/^class CommandGroup:$/;"	c
+ContAlloc	capcalc.py	/^    ContAlloc = namedtuple('ContAlloc', ['cname', 'cpu', 'mem'])$/;"	v	class:NodeResource
 Creds	bigbang.py	/^class Creds(ABC):$/;"	c
 KubeContextError	bigbang.py	/^class KubeContextError(Exception):$/;"	c
+NodeResource	capcalc.py	/^class NodeResource:$/;"	c
 Tunnel	bigbang.py	/^class Tunnel:$/;"	c
 __del__	bigbang.py	/^    def __del__(self):$/;"	m	class:Tunnel	file:
 __init__	bigbang.py	/^    def __init__(self):$/;"	m	class:AwsCreds
 __init__	bigbang.py	/^    def __init__(self):$/;"	m	class:CommandGroup
 __init__	bigbang.py	/^    def __init__(self, accesskey: str, secret: str):$/;"	m	class:Creds
 __init__	bigbang.py	/^    def __init__(self, shortname: str, bastionIp: ipaddress.IPv4Address,$/;"	m	class:Tunnel
+__init__	capcalc.py	/^    def __init__(self, cpuleft, memleft):$/;"	m	class:NodeResource
+__repr__	capcalc.py	/^    def __repr__(self):$/;"	m	class:NodeResource	file:
 __str__	bigbang.py	/^    def __str__(self):$/;"	m	class:Tunnel	file:
 accountSbCpu	capcalc.py	/^    def accountSbCpu(nn: str, cn: str, cpu: int):$/;"	f	function:getMinNodeResources
 accountSbMem	capcalc.py	/^    def accountSbMem(nn: str, cn: str, mem: int):$/;"	f	function:getMinNodeResources
 addBqCommand	bigbang.py	/^    def addBqCommand(self, tpchSchema: str, srcCatalog: str, srcSchema: str,$/;"	m	class:CommandGroup
+addPod	capcalc.py	/^    def addPod(self, podname, contname, cpu, mem):$/;"	m	class:NodeResource
 addSqlCommand	bigbang.py	/^    def addSqlCommand(self, cmd, callback = None) -> None:$/;"	m	class:CommandGroup
 addSqlTableCommand	bigbang.py	/^    def addSqlTableCommand(self, tpchSchema: str, srcTable: str,$/;"	m	class:CommandGroup
 allCommandsDone	bigbang.py	/^    def allCommandsDone(self) -> bool:$/;"	m	class:CommandGroup
+allocateResources	capcalc.py	/^def allocateResources(namespace: str, verbose: bool,$/;"	f
 announce	bigbang.py	/^def announce(s):$/;"	f
 announceBox	bigbang.py	/^def announceBox(s):$/;"	f
 announceLoud	bigbang.py	/^def announceLoud(lines: list) -> None:$/;"	f
@@ -44,6 +50,8 @@ bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 buildBastionLauncher	bigbang.py	/^def buildBastionLauncher() -> None:$/;"	f
 buildLdapLauncher	bigbang.py	/^def buildLdapLauncher(fqdn: str) -> None:$/;"	f
 c	bigbang.py	/^                c = ", ".join(clouds)))$/;"	v
+cacheschema	bigbang.py	/^cacheschema   = "cache"$/;"	v
+canFit	capcalc.py	/^    def canFit(self, cpu, mem):$/;"	m	class:NodeResource
 capacitytypes	bigbang.py	/^capacitytypes = {"Spot", "OnDemand"}$/;"	v
 captypelabel	bigbang.py	/^captypelabel = "CapacityType"$/;"	v
 cbs	bigbang.py	/^                    def cbs(tablesize):$/;"	f	function:preloadTpchTableSizes.make_cbs
@@ -65,6 +73,7 @@ dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AwsDbInstanceType"]$
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AzureDbVmType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["GcpDbMachineType"]$/;"	v
 dbInstanceType	bigbang.py	/^dbInstanceType = ""$/;"	v
+dbcachesrv	bigbang.py	/^dbcachesrv    = "cachesrv" # cache service persistent database$/;"	v
 dbevtlog	bigbang.py	/^dbevtlog      = "evtlog" # event logger PostgreSQL database$/;"	v
 dbhms	bigbang.py	/^dbhms		  = "hms" # Hive metastore persistent database$/;"	v
 dbports	bigbang.py	/^dbports       = { "mysql": 3306, "postgres": 5432 }$/;"	v
@@ -74,6 +83,7 @@ dbuser	bigbang.py	/^dbuser        = "starburstuser"$/;"	v
 ddict2tab	capcalc.py	/^    def ddict2tab():$/;"	f	function:getMinNodeResources
 deleteAllServices	bigbang.py	/^def deleteAllServices() -> dict[str, str]:$/;"	f
 deltacat	bigbang.py	/^deltacat = "delta"$/;"	v
+divideOrZero	bigbang.py	/^def divideOrZero(x: int, y: int) -> float:$/;"	f
 domain	bigbang.py	/^domain        = "az.starburstdata.net"$/;"	v
 dontLoadCat	bigbang.py	/^def dontLoadCat(cat: str) -> bool:$/;"	f
 downstreamSG	bigbang.py	/^        downstreamSG = True$/;"	v
@@ -176,14 +186,14 @@ loadDatabases	bigbang.py	/^def loadDatabases(hive_location: str) -> None:$/;"	f
 localhost	bigbang.py	/^localhost     = "localhost"$/;"	v
 localhostip	bigbang.py	/^localhostip   = "127.0.0.1"$/;"	v
 main	bigbang.py	/^def main() -> None:$/;"	f
-makeTable	capcalc.py	/^        def makeTable(d):$/;"	f	function:planWorkerSize
 makeTable	capcalc.py	/^        def makeTable(d, key):$/;"	f	function:getMinNodeResources.ddict2tab
+makeTable	capcalc.py	/^        def makeTable(nodeResources, getleaf):$/;"	f	function:planWorkerSize
 make_cbs	bigbang.py	/^                def make_cbs(b, scale, table):$/;"	f	function:preloadTpchTableSizes
-maxpodpnode	bigbang.py	/^maxpodpnode   = 16$/;"	v
+maxpodpnode	bigbang.py	/^maxpodpnode   = 32$/;"	v
 metavar	bigbang.py	/^        metavar=('bastionIP', 'starburstIP'),$/;"	v
 minNodes	bigbang.py	/^minNodes      = 3 # See getMinNodeResources(); allows rolling upgrades$/;"	v
 minbucketsize	bigbang.py	/^minbucketsize = 1 << 12$/;"	v
-modules	bigbang.py	/^modules = ["hive", "ranger", "enterprise"]$/;"	v
+modules	bigbang.py	/^modules = ["hive", "ranger", "enterprise", "cache-service"]$/;"	v
 myDir	bigbang.py	/^def myDir():$/;"	f
 mySubnetCidr	bigbang.py	/^mySubnetCidr = genmask(target, octet)$/;"	v
 myvars	bigbang.py	/^        myvars = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
@@ -194,7 +204,8 @@ nodecountlabel	bigbang.py	/^nodecountlabel = "NodeCount"$/;"	v
 normaliseCpu	capcalc.py	/^def normaliseCpu(cpu) -> int:$/;"	f
 normaliseMem	capcalc.py	/^def normaliseMem(mem) -> int:$/;"	f
 ns	bigbang.py	/^ns = p.parse_args()$/;"	v
-numberOfContainers	bigbang.py	/^def numberOfContainers(numNodes: int) -> int:$/;"	f
+numberOfContainers	capcalc.py	/^def numberOfContainers(numNodes: int) -> int:$/;"	f
+numberOfReplicas	capcalc.py	/^def numberOfReplicas(numNodes: int) -> int:$/;"	f
 octet	bigbang.py	/^octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256$/;"	v
 p	bigbang.py	/^p = argparse.ArgumentParser(description=$/;"	v
 parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,$/;"	f
@@ -213,6 +224,7 @@ region	bigbang.py	/^region = getRegionFromZone(zone)$/;"	v
 releases	bigbang.py	/^releases = {}$/;"	v
 removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
 replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
+replicasPerPod	capcalc.py	/^def replicasPerPod(podname: str, numNodes: int) -> int:$/;"	f
 repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
 repouser	bigbang.py	/^    repouser     = helmcreds["HelmRepoUser"]$/;"	v
 requireKey	bigbang.py	/^def requireKey(key: str, d: dict[str, Any]):$/;"	f
@@ -231,7 +243,7 @@ salesforcelabel	bigbang.py	/^salesforcelabel = "SalesforceEnabled"$/;"	v
 secretsbf	bigbang.py	/^secretsbf    = "secrets.yaml"$/;"	v
 secretsf	bigbang.py	/^secretsf     = where(secretsbf)$/;"	v
 sendSql	bigbang.py	/^def sendSql(command: str, verbose = False) -> list:$/;"	f
-services	bigbang.py	/^services = ["starburst", "ranger"]$/;"	v
+services	bigbang.py	/^services = ["starburst", "ranger", "cache-service"]$/;"	v
 setRoute53Cname	bigbang.py	/^def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str,$/;"	f
 sfdccat	bigbang.py	/^sfdccat       = "sfdc"$/;"	v
 sfdccreds	bigbang.py	/^            sfdccreds = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
@@ -253,6 +265,7 @@ svcports	bigbang.py	/^svcports    = {$/;"	v
 synapseslcat	bigbang.py	/^synapseslcat  = "synapse_sl"$/;"	v
 syscat	bigbang.py	/^syscat        = "system"$/;"	v
 targetlabel	bigbang.py	/^targetlabel = "Target"$/;"	v
+tblfmt	capcalc.py	/^tblfmt = "psql"$/;"	v
 templatedir	bigbang.py	/^templatedir   = where("templates")$/;"	v
 templates	bigbang.py	/^templates = {}$/;"	v
 tfdir	bigbang.py	/^tfdir = where(target)$/;"	v

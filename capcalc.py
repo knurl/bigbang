@@ -3,9 +3,11 @@
 from run import runCollect
 import os, sys, pdb, json, argparse
 from collections import namedtuple
-from tabulate import tabulate
+from tabulate import tabulate # type: ignore
+from dataclasses import dataclass
 
 kube = "kubectl"
+tblfmt = "psql"
 
 def json2str(jsondict: dict) -> str:
     return json.dumps(jsondict, indent=4, sort_keys=True)
@@ -65,7 +67,7 @@ def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
         return tabulate([(k, v["cpu"], v["mem"])
             for k, v in allocatable.items()],
             headers = ["NODE", "AVAIL CPU", "AVAIL MEM"],
-            tablefmt="fancy_grid")
+            tablefmt=tblfmt)
 
     if verbose:
         print("Raw allocatable")
@@ -128,7 +130,7 @@ def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
                     remaining = "n/a"
                 row += [used, remaining]
                 rows.append(row)
-            return tabulate(rows, headers = hdr, tablefmt = "fancy_grid")
+            return tabulate(rows, headers = hdr, tablefmt = tblfmt)
         print("Current Starburst CPU resource usage")
         print(makeTable(sbcpu, 'cpu'))
         print("Current Starburst memory resource usage")
@@ -140,6 +142,120 @@ def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
     print("All nodes have >= {c}m CPU and {m}Ki mem after K8S "
             "system pods".format(c = mincpu, m = minmem))
     return nodeCount, mincpu, minmem
+
+# map from pod name to container names
+contsForPod: dict[str, list[str]] = {
+        'coordinator': ['coordinator'],
+        'worker': ['worker'],
+        'hive': ['hive'],
+        'ranger': ['ranger-usync', 'ranger-admin', 'ranger-db'],
+        'cache-service': ['cache-service']
+        }
+
+# replicas per pod
+def replicasPerPod(podname: str, numNodes: int) -> int:
+    assert podname in contsForPod
+    if podname == 'worker':
+        return numNodes - 1
+    else:
+        return 1
+
+def numberOfReplicas(numNodes: int) -> int:
+    numReplicas = 0
+    for podname in contsForPod:
+        numReplicas += replicasPerPod(podname, numNodes)
+    return numReplicas
+
+# This function should be compared to planWorkerSize(), which also has an
+# implicit count of the number of containers.
+def numberOfContainers(numNodes: int) -> int:
+    # We start with the assumption that we have at least one node for the
+    # coordinator, and one for each worker.
+    assert numNodes >= 2
+    numContainers = 0
+    for podname, conts in contsForPod.items():
+        numContainers += len(conts) * replicasPerPod(podname, numNodes)
+    return numContainers
+
+class NodeResource:
+    cpuleft: int
+    memleft: int
+    ContAlloc = namedtuple('ContAlloc', ['cname', 'cpu', 'mem'])
+    pods: dict[str, list[ContAlloc]]
+
+    def __init__(self, cpuleft, memleft):
+        self.cpuleft = cpuleft
+        self.memleft = memleft
+        self.pods = {}
+
+    def __repr__(self):
+        return (f"{{cpuleft={self.cpuleft}, memleft={self.memleft} "
+                f"pods={self.pods}}}")
+
+    def canFit(self, cpu, mem):
+        return self.cpuleft >= cpu and self.memleft >= mem
+
+    def addPod(self, podname, contname, cpu, mem):
+        assert self.canFit(cpu, mem)
+        ca = self.ContAlloc(contname, cpu, mem)
+        if podname not in self.pods:
+            self.pods[podname] = [ca]
+        else:
+            self.pods[podname].append(ca)
+        self.cpuleft -= cpu
+        self.memleft -= mem
+
+def allocateResources(namespace: str, verbose: bool,
+        allocation: dict[str, float]) -> list[NodeResource]:
+    nodeCount, c, m = getMinNodeResources(namespace, verbose)
+
+    # Prepare a tracker of the amount of resource we have against all nodes
+    nodeResources: list[NodeResource] = []
+    for i in range(0, nodeCount):
+        nodeResources.append(NodeResource(c, m))
+
+    # These pods are never scheduled on same node
+    antiAffinity = {'hive', 'ranger', 'cache-service'}
+
+    for podname, fraction in allocation.items():
+        numReplicas = replicasPerPod(podname, nodeCount)
+
+        # For every replica for this pod...
+        for i in range(0, numReplicas):
+            # What are we allocating?
+            cpu = int(c * fraction)
+            mem = int(m * fraction)
+
+            # Allocate the replica on first available node
+            allocated = False
+            for nr in nodeResources:
+                # If this pod is already allocated to this node, skip
+                if podname in nr.pods:
+                    continue
+
+                # If this pod is in the anti-affinity set, then skip if we find
+                # any already-allocated pods in the same set
+                if podname in antiAffinity:
+                    if antiAffinity.intersection(nr.pods.keys()):
+                        continue
+
+                # If this node doesn't have sufficient resource, skip it
+                if not nr.canFit(cpu, mem):
+                    continue
+
+                # We're Ok to allocate. Allocate all containers in pod
+                cnames = contsForPod[podname]
+                contcpu = int(cpu / len(cnames))
+                contmem = int(mem / len(cnames))
+                for cname in cnames:
+                    nr.addPod(podname, cname, contcpu, contmem)
+                # We allocated
+                allocated = True
+                break
+            if not allocated:
+                sys.exit(f"Failed to allocate replica {i} of {podname}")
+
+    return nodeResources
 
 # planWorkerSize works out the minimum amount of CPU and memory on every node,
 # across the cluster (via a helper function), then apportions this resource out
@@ -154,69 +270,52 @@ def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
 # using pod anti-affinity rules.
 #
 def planWorkerSize(namespace: str, verbose: bool = False) -> dict:
-    nodeCount, c, m = getMinNodeResources(namespace, verbose)
-    cpu = {}
-    mem = {}
-
-    # 7/8 for coordinator and workers
-    cpu["worker"] = cpu["coordinator"] = (c >> 3) * 7
-    mem["worker"] = mem["coordinator"] = (m >> 3) * 7
-    print("Workers & coordinator get {c}m CPU and {m}Mi mem".format(c =
-        cpu["worker"], m = mem["worker"] >> 10))
-
-    # Hive - one container, gets 1/8
-    hivecpu = cpu["hive"] = c >> 3
-    hivemem = mem["hive"] = m >> 3
-    assert cpu["worker"] + hivecpu <= c
-    assert mem["worker"] + hivemem <= m
-    print("hive total resources: {c}m CPU and {m}Mi mem".format(c = hivecpu, m
-        = hivemem))
-    print("hive gets {c}m CPU and {m}Mi mem".format(c = cpu["hive"],
-        m = mem["hive"] >> 10))
-
-    # Ranger - admin gets 2/32, db and usync each get 1/32
-    cpu["ranger_usync"] = cpu["ranger_db"] = c >> 5
-    cpu["ranger_admin"] = c >> 4
-    mem["ranger_usync"] = mem["ranger_db"] = m >> 5
-    mem["ranger_admin"] = m >> 4
-    rangercpu = cpu["ranger_admin"] + cpu["ranger_db"] + cpu["ranger_usync"]
-    rangermem = mem["ranger_admin"] + mem["ranger_db"] + mem["ranger_usync"]
-    assert cpu["worker"] + rangercpu <= c
-    assert mem["worker"] + rangermem <= m
-    print("ranger total resources: {c}m CPU and {m}Mi mem".format(c =
-        rangercpu, m = rangermem))
-    print("ranger-usync and -db get {c}m CPU and {m}Mi mem".format(c =
-        cpu["ranger_usync"], m = mem["ranger_usync"] >> 10))
-    print("ranger-admin gets {c}m CPU and {m}Mi mem".format(c =
-        cpu["ranger_admin"], m = mem["ranger_admin"] >> 10))
-
-    # Convert format of our internal variables, ready to populate our templates
-    env = {f"{k}_cpu": f"{v}m" for k, v in cpu.items()}
-    env |= {f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in
-        mem.items()}
+    nodeResources: list[NodeResource] = allocateResources(namespace, verbose, {
+        'coordinator': 3 / 4,
+        'worker': 3 / 4,
+        'hive': 1 / 4,
+        'ranger': 1 / 4,
+        'cache-service': 1 / 4
+        })
 
     if verbose:
         # Attempt a possible scheduling of containers
-        def makeTable(d):
-            cs = d.keys()
-            hdr = ["NODE"] + list(cs) + ["TOTAL"]
-            # Coordinator - row 1
+        def makeTable(nodeResources, getleaf):
+            cnames = [cn for contlist in contsForPod.values()
+                    for cn in contlist]
+            hdr = ["NODE"] + cnames + ["TOTAL"]
+            nodenum = 1
             rows = []
-            rows.append([1] + [d[c] if c in ("coordinator", "hive") else 0 for
-                c in cs])
-            rows.append([2] + [d[c] if c in ("worker", "ranger_admin",
-                "ranger_db", "ranger_usync") else 0 for c in cs])
-            while len(rows) < nodeCount:
-                rows.append([len(rows) + 1] + [d[c] if c == "worker" else 0 for
-                    c in cs])
-            for r in rows:
-                r.append(sum(r[1:]))
-            return tabulate(rows, headers = hdr, tablefmt = "fancy_grid")
+            for nr in nodeResources:
+                row = [nodenum]
+                for cname in cnames:
+                    amount = 0
+                    for contallocs in nr.pods.values():
+                        for ca in contallocs:
+                            if ca.cname == cname:
+                                amount = getleaf(ca)
+                    row.append(amount)
+                row.append(sum(row[1:])) # Add the TOTAL column
+                rows.append(row)
+            return tabulate(rows, headers = hdr, tablefmt = tblfmt)
 
         print("Possible distribution of CPU")
-        print(makeTable(cpu))
+        print(makeTable(nodeResources, lambda x : x.cpu))
         print("Possible distribution of Memory")
-        print(makeTable(mem))
+        print(makeTable(nodeResources, lambda x : x.mem))
 
-    env["workerCount"] = str(nodeCount - 1)
+    cpu = {}
+    mem = {}
+    for nr in nodeResources:
+        for contallocs in nr.pods.values():
+            for ca in contallocs:
+                cname = ca.cname.replace('-','_') # we're using in template
+                cpu[cname] = ca.cpu
+                mem[cname] = ca.mem
+
+    # Convert format of our internal variables, ready to populate our templates
+    env = {f"{k}_cpu": f"{v}m" for k, v in cpu.items()}
+    env |= {f"{k}_mem": "{m}Mi".format(m = v >> 10) for k, v in mem.items()}
+    env["workerCount"] = str(len(nodeResources) - 1)
+
     return env

@@ -4,14 +4,6 @@ registryCredentials:
   username: {{HelmRepoUser}}
   password: {{HelmRepoPassword}}
 
-database:
-  type: external
-  external:
-    jdbcUrl: jdbc:postgresql://{{hmsdb_address}}:{{postgres_port}}/{{DBNameHms}}
-    driver: org.postgresql.Driver
-    user: {{hmsdb_user}}
-    password: {{DBPassword}}
-
 resources:
   requests:
     memory: {{hive_mem}}
@@ -39,9 +31,17 @@ objectStorage:
     cloudKeyFileSecret: {{gcskey}}
   {% endif %}
 
+# External database, so tolerant to spot instances
+database:
+  type: external
+  external:
+    jdbcUrl: jdbc:postgresql://{{hmsdb_address}}:{{postgres_port}}/{{DBNameHms}}
+    driver: org.postgresql.Driver
+    user: {{hmsdb_user}}
+    password: {{DBPassword}}
+
 {% if Target == 'az' %}
-# Make sure to prioritise failure-tolerant pods to the spot instances, such as
-# the workers, and Hive (while it is set up with an external database).
+# Make sure to prioritise failure-tolerant pods to the spot instances
 tolerations:
 - key: "kubernetes.azure.com/scalesetpriority"
   operator: "Equal"
@@ -61,4 +61,5 @@ affinity:
               operator: In
               values:
                 - starburst-ranger
+                - starburst-cache-service
         topologyKey: "kubernetes.io/hostname"

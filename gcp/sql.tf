@@ -32,7 +32,7 @@ resource "google_sql_database_instance" "sql_postgres" {
 
     ip_configuration {
       ipv4_enabled    = false
-      private_network = resource.google_compute_network.vpc.id
+      private_network = google_compute_network.vpc.id
     }
 
     user_labels = var.tags
@@ -59,7 +59,7 @@ resource "google_sql_database_instance" "sql_mysql" {
 
     ip_configuration {
       ipv4_enabled    = false
-      private_network = resource.google_compute_network.vpc.id
+      private_network = google_compute_network.vpc.id
     }
 
     user_labels = var.tags
@@ -101,6 +101,15 @@ resource "google_sql_database" "db_evtlog" {
 
 resource "google_sql_database" "db_hms" {
   name       = var.db_name_hms
+  project    = data.google_project.project.project_id
+  instance   = google_sql_database_instance.sql_postgres.name
+  charset    = var.postgres_charset
+  collation  = var.postgres_collation
+  depends_on = [google_sql_user.user_postgres]
+}
+
+resource "google_sql_database" "db_cachesrv" {
+  name       = var.db_name_cachesrv
   project    = data.google_project.project.project_id
   instance   = google_sql_database_instance.sql_postgres.name
   charset    = var.postgres_charset
