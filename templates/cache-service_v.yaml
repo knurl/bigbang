@@ -1,0 +1,194 @@
+registryCredentials:
+  enabled: true
+  registry: {{HelmRegistry}}
+  username: {{HelmRepoUser}}
+  password: {{HelmRepoPassword}}
+
+config:
+  # Please find available configs here: https://docs.starburst.io/latest/admin/cache-service.html#configuration-properties
+  # Note that the values for service-database.* should not be changed (i.e. copy them to your values)
+  config.properties: |
+    service-database.user=${ENV:SERVICE_DATABASE_USER}
+    service-database.password=${ENV:SERVICE_DATABASE_PASSWORD}
+    service-database.jdbc-url=${ENV:SERVICE_DATABASE_JDBC_URL}
+    starburst.user=starburst_service
+    starburst.password=
+    refresh-initial-delay=0m
+    refresh-interval=8h
+    {% if RequireCoordTls %}
+    starburst.jdbc-url=jdbc:trino://coordinator:8443?SSL=true
+    {% else %}
+    starburst.jdbc-url=jdbc:trino://coordinator:8080
+    {% endif %}
+  {% if SalesforceEnabled %}
+    type-mapping=FILE
+    type-mapping.file=etc/type-mapping.json
+    rules.file=etc/rules.json
+    rules.refresh-period=1m
+  type-mapping.json: |
+    {
+      "rules": {
+        "{{HiveCat}}": {
+          "timestamp(0)":     "timestamp(3)",
+          "timestamp(1)":     "timestamp(3)",
+          "timestamp(2)":     "timestamp(3)",
+          "varchar(131072)":  "varchar"
+        }
+      }
+    }
+  rules.json: |
+    {
+      "defaultGracePeriod": "15m",
+      "defaultMaxImportDuration": "5m",
+      "defaultCacheCatalog": "{{HiveCat}}",
+      "defaultCacheSchema": "{{CacheSchema}}",
+      "defaultUnpartitionedImportConfig": {
+          "usePreferredWritePartitioning": false,
+          "preferredWritePartitioningMinNumberOfPartitions": 1,
+          "scaleWriters": false,
+          "writerMinSize": "100MB",
+          "writerCount": "4"
+      },
+      "rules": [
+        {
+          "refreshInterval": "8h",
+          "catalogName": "{{SfdcCat}}",
+          "schemaName": "salesforce",
+          "tableName": "account",
+          "columns": [
+            "id",
+            "isdeleted",
+            "masterrecordid",
+            "name",
+            "type",
+            "recordtypeid",
+            "parentid",
+            "ownerid",
+            "parent_id__c",
+            "regional_sales_manager__c",
+            "regional_vice_president__c"
+          ]
+        },
+        {
+          "refreshInterval": "8h",
+          "catalogName": "{{SfdcCat}}",
+          "schemaName": "salesforce",
+          "tableName": "opportunity",
+          "columns": [
+            "id",
+            "isdeleted",
+            "accountid",
+            "recordtypeid",
+            "name",
+            "description",
+            "stagename",
+            "amount",
+            "probability",
+            "expectedrevenue",
+            "closedate",
+            "type",
+            "nextstep",
+            "leadsource",
+            "isclosed",
+            "iswon",
+            "forecastcategory",
+            "forecastcategoryname",
+            "ownerid",
+            "createddate",
+            "createdbyid",
+            "lastmodifieddate",
+            "lastmodifiedbyid",
+            "systemmodstamp",
+            "fiscalquarter",
+            "fiscalyear",
+            "fiscal",
+            "contactid",
+            "acv__c",
+            "competitors__c",
+            "technical_opportunity_owner__c",
+            "arr__c",
+            "pipeline_status__c",
+            "owner_id__c",
+            "csp_marketplace_deal__c",
+            "opportunity_owner_s_manager_id__c",
+            "technical_opportunity_owner_s_manager_id__c",
+            "regional_sales_manager__c",
+            "regional_vice_president__c",
+            "regional_sa_manager__c",
+            "owner__c",
+            "pov__c",
+            "rvp_forecast__c",
+            "rsm_forecast__c",
+            "acv_forecast__c",
+            "trt_region__c",
+            "why_now__c",
+            "why_anything__c",
+            "why_starburst__c",
+            "tech_validation_complete_month__c",
+            "mutual_close_plan_agreed__c",
+            "mutual_close_plan_agreement_date__c",
+            "product_delivery_blockers__c",
+            "champion_strength__c",
+            "tech_advocate_strength__c",
+            "partner_advocate_strength__c",
+            "tech_advocate_name__c"
+          ]
+        },
+        {
+          "refreshInterval": "8h",
+          "catalogName": "{{SfdcCat}}",
+          "schemaName": "salesforce",
+          "tableName": "pov__c"
+        }
+      ]
+    }
+  {% endif %}
+
+resources:
+  requests:
+    memory: {{cache_service_mem}}
+    cpu: {{cache_service_cpu}}
+  limits:
+    memory: {{cache_service_mem}}
+    cpu: {{cache_service_cpu}}
+
+expose:
+  type: loadBalancer
+  loadBalancer:
+    annotations:
+      {% if Target == "aws" %}
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+      {% elif Target == "az" %}
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+      {% elif Target == "gcp" %}
+      networking.gke.io/load-balancer-type: "Internal"
+      {% endif %}
+
+# External database, so tolerant to spot instances
+database:
+  type: external
+  external:
+    jdbcUrl: jdbc:postgresql://{{cachesrv_address}}:{{postgres_port}}/{{DBNameCacheSrv}}
+    user: {{cachesrv_user}}
+    password: {{DBPassword}}
+
+{% if Target == 'az' %}
+# Make sure to prioritise failure-tolerant pods to the spot instances
+tolerations:
+- key: "kubernetes.azure.com/scalesetpriority"
+  operator: "Equal"
+  value: "spot"
+  effect: "NoSchedule"
+{% endif %}
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - starburst-hive
+                - starburst-ranger
+        topologyKey: "kubernetes.io/hostname"
