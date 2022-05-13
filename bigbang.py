@@ -1833,6 +1833,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> None:
               "IngressName":        ingressname,
               "KeystorePass":       keystorepass,
               "UpstreamSG":         upstreamSG,
+              "StarburstHost":      starburstfqdn,
               "StorageAccount":     storageacct,
               "TrinoUser":          trinouser,
               "TrinoPass":          trinopass,
@@ -1848,9 +1849,6 @@ def helmInstallRelease(module: str, env: dict = {}) -> None:
 
     if sfdcenabled:
         env["SfdcCat"] = sfdccat
-
-    if upstreamSG or ingresslb:
-        env["StarburstHost"] = starburstfqdn
 
     if upstreamSG:
         env["BastionAzPort"] = getLclPortSG("starburst", "az")
@@ -2041,11 +2039,15 @@ def svcStart(creds: Optional[Creds] = None, skipClusterStart: bool = False,
         env |= creds.toDict()
     helmInstallAll(env)
     tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
+
+    # needed to drop tables or load databases
+    preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
+
     if dropTables:
         dropSchemaTables(getCatalogs(), dbschema)
         eraseBucketContents(env)
+
     if not dontLoad:
-        preloadTpchTableSizes({tpchsmlschema, tpchbigschema})
         loadDatabases(getObjectStoreUrl(env))
 
     return tuns, announceReady(env["bastion_address"])

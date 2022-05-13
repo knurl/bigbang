@@ -26,7 +26,7 @@ resource "aws_db_instance" "evtlog" {
   engine                   = "postgres"
   allocated_storage        = 20
   instance_class           = var.db_instance_type
-  name                     = var.db_name_evtlog
+  db_name                  = var.db_name_evtlog
   username                 = var.db_user
   password                 = var.db_password
   skip_final_snapshot      = true
@@ -43,7 +43,7 @@ resource "aws_db_instance" "hmsdb" {
   engine                   = "postgres"
   allocated_storage        = 20
   instance_class           = var.db_instance_type
-  name                     = var.db_name_hms
+  db_name                  = var.db_name_hms
   username                 = var.db_user
   password                 = var.db_password
   skip_final_snapshot      = true
@@ -60,7 +60,7 @@ resource "aws_db_instance" "cachesrvdb" {
   engine                   = "postgres"
   allocated_storage        = 20
   instance_class           = var.db_instance_type
-  name                     = var.db_name_cachesrv
+  db_name                  = var.db_name_cachesrv
   username                 = var.db_user
   password                 = var.db_password
   skip_final_snapshot      = true

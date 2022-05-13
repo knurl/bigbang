@@ -59,15 +59,15 @@ expose:
 
 coordinator:
   additionalProperties: |
-    #    starburst.access-control.enabled=true
+    starburst.access-control.enabled=false
     #    starburst.access-control.authorized-users=carol
     starburst.data-product.enabled=true
     data-product.starburst-user=starburst_service
     data-product.starburst-password=test
     {% if RequireCoordTls %}
-    data-product.starburst-jdbc-url=jdbc:trino://coordinator:8443?SSL=true
+    data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true
     {% else %}
-    data-product.starburst-jdbc-url=jdbc:trino://coordinator:8080
+    data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8080
     {% endif %}
     {% if IngressLoadBalancer %}
     # These two have to be here because (i) we need to accept headers from
@@ -159,7 +159,7 @@ catalogs:
   {{ HiveCat }}: |
     connector.name=hive
     hive.metastore.uri=thrift://hive:9083
-    #    hive.security=starburst
+    hive.security=allow-all
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
