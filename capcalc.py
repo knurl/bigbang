@@ -9,7 +9,7 @@ from dataclasses import dataclass
 kube = "kubectl"
 tblfmt = "psql"
 
-def json2str(jsondict: dict) -> str:
+def json2str(jsondict):
     return json.dumps(jsondict, indent=4, sort_keys=True)
 
 # Normalise CPU to 1000ths of a CPU ("mCPU")
@@ -36,9 +36,18 @@ def normaliseMem(mem) -> int:
     mem <<= normalise[unit]
     return mem
 
+def nodeIsTainted(node: dict) -> bool:
+    spec = node.get('spec')
+    if not spec:
+        return True
+    if 'taints' in spec:
+        # We can't use this node as it's tainted.
+        return True
+    return False
+
 def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
-    nodes = json.loads(runCollect(f"{kube} get nodes -o "
-        "json".split()))["items"]
+    nodes = [n for n in json.loads(runCollect(f"{kube} get nodes -o "
+        "json".split()))["items"] if not nodeIsTainted(n)]
     pods = json.loads(runCollect(f"{kube} get pods -A -o "
         "json".split()))["items"]
     def dumpNodesAndPods() -> None:
@@ -139,8 +148,6 @@ def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
     mincpu = min([x["cpu"] for x in allocatable.values()])
     minmem = min([x["mem"] for x in allocatable.values()])
     assert mincpu > 0 and minmem > 0
-    print("All nodes have >= {c}m CPU and {m}Ki mem after K8S "
-            "system pods".format(c = mincpu, m = minmem))
     return nodeCount, mincpu, minmem
 
 # map from pod name to container names
@@ -148,9 +155,35 @@ contsForPod: dict[str, list[str]] = {
         'coordinator': ['coordinator'],
         'worker': ['worker'],
         'hive': ['hive'],
-        'ranger': ['ranger-usync', 'ranger-admin', 'ranger-db'],
         'cache-service': ['cache-service']
         }
+
+class InsufficientResource(Exception):
+    pass
+
+# measured in milli-vCPU ("m")
+minCpuPerPod: dict[str, int] = {
+        'coordinator': 2000,
+        'worker': 2000,
+        'hive': 300,
+        'cache-service': 300
+        }
+
+# measured in Ki
+minMemPerPod: dict[str, int] = {
+        'coordinator': 1<<21, # 2 GB
+        'worker': 1<<21, # 2 GB
+        'hive': 1<<19, # 0.5 GB
+        'cache-service': 1<<19 # 0.5 GB
+        }
+
+# Inputs in milli-vCPU and Ki
+def podHasSufficientResource(podname: str, podcpu: int, podmem: int) -> bool:
+    enuf = podcpu >= minCpuPerPod[podname] and podmem >= minMemPerPod[podname]
+    if not enuf:
+        print("Pod {p} requires {cpu}m and {mem}Ki".format(p = podname, cpu =
+            minCpuPerPod[podname], mem = minMemPerPod[podname]))
+    return enuf
 
 # replicas per pod
 def replicasPerPod(podname: str, numNodes: int) -> int:
@@ -195,7 +228,7 @@ class NodeResource:
     def canFit(self, cpu, mem):
         return self.cpuleft >= cpu and self.memleft >= mem
 
-    def addPod(self, podname, contname, cpu, mem):
+    def addCont(self, podname, contname, cpu, mem):
         assert self.canFit(cpu, mem)
         ca = self.ContAlloc(contname, cpu, mem)
         if podname not in self.pods:
@@ -205,17 +238,15 @@ class NodeResource:
         self.cpuleft -= cpu
         self.memleft -= mem
 
-def allocateResources(namespace: str, verbose: bool,
-        allocation: dict[str, float]) -> list[NodeResource]:
-    nodeCount, c, m = getMinNodeResources(namespace, verbose)
-
+def allocateResources(nodeCount: int, mincpu: int, minmem: int, namespace: str,
+        verbose: bool, allocation: dict[str, float]) -> list[NodeResource]:
     # Prepare a tracker of the amount of resource we have against all nodes
     nodeResources: list[NodeResource] = []
     for i in range(0, nodeCount):
-        nodeResources.append(NodeResource(c, m))
+        nodeResources.append(NodeResource(mincpu, minmem))
 
     # These pods are never scheduled on same node
-    antiAffinity = {'hive', 'ranger', 'cache-service'}
+    antiAffinity = {'hive', 'cache-service'}
 
     for podname, fraction in allocation.items():
         numReplicas = replicasPerPod(podname, nodeCount)
@@ -223,8 +254,12 @@ def allocateResources(namespace: str, verbose: bool,
         # For every replica for this pod...
         for i in range(0, numReplicas):
             # What are we allocating?
-            cpu = int(c * fraction)
-            mem = int(m * fraction)
+            podcpu = int(mincpu * fraction)
+            podmem = int(minmem * fraction)
+
+            if not podHasSufficientResource(podname, podcpu, podmem):
+                raise InsufficientResource(f"{podcpu}m and {podmem}Ki would "
+                        f"be too low for {podname}")
 
             # Allocate the replica on first available node
             allocated = False
@@ -240,15 +275,16 @@ def allocateResources(namespace: str, verbose: bool,
                         continue
 
                 # If this node doesn't have sufficient resource, skip it
-                if not nr.canFit(cpu, mem):
+                if not nr.canFit(podcpu, podmem):
                     continue
 
-                # We're Ok to allocate. Allocate all containers in pod
+                # We're Ok to allocate. Allocate all containers in pod by
+                # dividing up resource evenly across the containers
                 cnames = contsForPod[podname]
-                contcpu = int(cpu / len(cnames))
-                contmem = int(mem / len(cnames))
+                contcpu = int(podcpu / len(cnames))
+                contmem = int(podmem / len(cnames))
                 for cname in cnames:
-                    nr.addPod(podname, cname, contcpu, contmem)
+                    nr.addCont(podname, cname, contcpu, contmem)
                 # We allocated
                 allocated = True
                 break
@@ -264,19 +300,39 @@ def allocateResources(namespace: str, verbose: bool,
 # Strategy: Each worker or coordinator gets 7/8 of the resource on each node
 # (after resources for K8S system pods are removed). We put the coordinator and
 # workers all on different nodes, which means every node has a remaining 1/8
-# capacity. We reserve this for Ranger, Hive, and we also leave 1/8 so that we
-# can do rolling upgrades ot Ranger or Hive (by requiring that nodeCount > 2).
-# We guarantee that Ranger and Hive will be scheduled to different nodes by
-# using pod anti-affinity rules.
+# capacity. We reserve this for the Hive HMS and for the cache service, and we
+# also leave 1/8 so that we can do rolling upgrades of either of these (by
+# requiring that nodeCount > 2). We guarantee that the cache service and Hive
+# will be scheduled to different nodes by using pod anti-affinity rules.
 #
 def planWorkerSize(namespace: str, verbose: bool = False) -> dict:
-    nodeResources: list[NodeResource] = allocateResources(namespace, verbose, {
-        'coordinator': 3 / 4,
-        'worker': 3 / 4,
-        'hive': 1 / 4,
-        'ranger': 1 / 4,
-        'cache-service': 1 / 4
-        })
+    nodeCount, mincpu, minmem = getMinNodeResources(namespace, verbose)
+    print(f"All {nodeCount} nodes have >= {mincpu}m CPU and {minmem}Ki mem "
+            "after K8S system pods")
+    x = 64 # divide into slices of 32 to start
+    nodeResources: list[NodeResource] = []
+    while not nodeResources:
+        bigchunk = (x - 1) / x
+        smallchunk = 1 / x
+
+        # Condition for terminating loop
+        if bigchunk <= smallchunk:
+            sys.exit("Failed utterly to allocate resources. Exiting!")
+
+        print(f"Attempting to allocate worker with {x-1}/{x} "
+                "of total resource")
+        try:
+            allocation = {
+                    'coordinator': bigchunk,
+                    'worker': bigchunk,
+                    'hive': smallchunk,
+                    'cache-service': smallchunk
+                    }
+            nodeResources = allocateResources(nodeCount, mincpu, minmem,
+                    namespace, verbose, allocation)
+        except InsufficientResource as e:
+            print(e)
+            x >>= 1
 
     if verbose:
         # Attempt a possible scheduling of containers

@@ -60,6 +60,7 @@ resource "azurerm_mysql_server" "mysql" {
   name                = var.mysql_server_name
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
+  count               = var.mysql_enabled ? 1 : 0
 
   administrator_login          = var.db_user
   administrator_login_password = var.db_password
@@ -108,6 +109,7 @@ resource "azurerm_private_endpoint" "pe_mysql" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   subnet_id           = azurerm_subnet.db_sub.id
+  count               = var.mysql_enabled ? 1 : 0
 
   private_service_connection {
     name                           = "${var.mysql_server_name}-psc"
@@ -146,14 +148,17 @@ resource "azurerm_postgresql_database" "hmsdb_db" {
 
 resource "azurerm_postgresql_database" "cachesrv_db" {
   name                = var.db_name_cachesrv
+  count               = var.cache_service_enabled ? 1 : 0
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_postgresql_server.postgres.name
   charset             = var.postgres_charset
   collation           = var.azure_postgres_collation
 }
 
+
 resource "azurerm_postgresql_database" "postgres_db" {
   name                = var.db_name
+  count               = var.postgres_enabled ? 1 : 0
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_postgresql_server.postgres.name
   charset             = var.postgres_charset
@@ -162,6 +167,7 @@ resource "azurerm_postgresql_database" "postgres_db" {
 
 resource "azurerm_mysql_database" "mysql_db" {
   name                = var.db_name
+  count               = var.mysql_enabled ? 1 : 0
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_mysql_server.mysql.name
   charset             = var.mysql_charset

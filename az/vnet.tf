@@ -14,7 +14,6 @@ locals {
   ldap_ip    = cidrhost(azurerm_subnet.private_sub_servers.address_prefixes[0], 102)
 
   starburst_ip = cidrhost(azurerm_subnet.private_sub_aks_regular.address_prefixes[0], 103)
-  ranger_ip    = cidrhost(azurerm_subnet.private_sub_aks_regular.address_prefixes[0], 104)
 }
 
 resource "azurerm_subnet" "private_sub_servers" {

@@ -2,7 +2,7 @@ module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
   cluster_version = "1.22"
-  version         = "18.20.4"
+  version         = "18.21.0"
 
   # Where to place the EKS cluster and workers.
   vpc_id     = module.vpc.vpc_id
@@ -35,7 +35,7 @@ module "eks" {
       max_size     = var.node_count
       desired_size = var.node_count
 
-      instance_types = var.instance_types
+      instance_types = distinct([for az, details in data.aws_ec2_instance_type_offering.avail_az_instance_map : details.instance_type])
       capacity_type  = var.capacity_type == "Spot" ? "SPOT" : "ON_DEMAND"
 
       security_group_rules = {

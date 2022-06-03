@@ -1,10 +1,11 @@
+# FIXME Change sizing back to previous project name
 variable "tags" {
   default = {
     cloud       = "{{Target}}"
     environment = "demo"
     org         = "sales"
     team        = "sa"
-    project     = "experiment"
+    project     = "sizing"
     user        = "{{UserName}}"
     info        = "{{Zone}}"
   }
@@ -95,6 +96,10 @@ variable "evtlog_server_name" {
   default = "evtlog-server-{{ShortName}}"
 }
 
+variable "cache_service_enabled" {
+  default = "{{CacheServiceEnabled}}" == "True" ? "true" : "false"
+}
+
 variable "cachesrv_server_name" {
   default = "cachesrv-server-{{ShortName}}"
 }
@@ -111,12 +116,36 @@ variable "postgresql_version" {
   default = "11"
 }
 
+variable "postgres_charset" {
+  default = "UTF8"
+}
+
+variable "postgres_collation" {
+  default = "en_US.UTF8"
+}
+
+variable "postgres_enabled" {
+  default = "{{PostgreSqlEnabled}}" == "True" ? true : false
+}
+
 variable "mysql_server_name" {
   default = "mysql-server-{{ShortName}}"
 }
 
 variable "mysql_version" {
   default = "8.0"
+}
+
+variable "mysql_charset" {
+  default = "utf8mb4"
+}
+
+variable "mysql_collation" {
+  default = "utf8mb4_0900_ai_ci"
+}
+
+variable "mysql_enabled" {
+  default = "{{MySqlEnabled}}" == "True" ? true : false
 }
 
 variable "db_name" {
@@ -141,22 +170,6 @@ variable "db_user" {
 
 variable "db_password" {
   default = "{{DBPassword}}"
-}
-
-variable "postgres_charset" {
-  default = "UTF8"
-}
-
-variable "postgres_collation" {
-  default = "en_US.UTF8"
-}
-
-variable "mysql_charset" {
-  default = "utf8mb4"
-}
-
-variable "mysql_collation" {
-  default = "utf8mb4_0900_ai_ci"
 }
 
 variable "bucket_name" {

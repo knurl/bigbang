@@ -57,14 +57,18 @@ expose:
       {% endif %}
   {% endif %}
 
+# Shared secret for internal communication.
+sharedSecret: secretRef:{{sharedsec}}:{{sharedsecbf}}
+
 coordinator:
   additionalProperties: |
+    scheduler.http-client.max-requests-queued-per-destination=16384
     starburst.access-control.enabled=false
     #    starburst.access-control.authorized-users=carol
     starburst.data-product.enabled=true
     data-product.starburst-user=starburst_service
-    data-product.starburst-password=test
     {% if RequireCoordTls %}
+    data-product.starburst-password=test
     data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true
     {% else %}
     data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8080
@@ -93,15 +97,12 @@ coordinator:
     insights.authorized-users=.*
   etcFiles:
     properties:
-      access-control.properties: |
-        access-control.name=ranger
-        ranger.authentication-type=BASIC
-        ranger.username=starburst_service
-        ranger.password=RangerPassword1
-        ranger.service-name=starburst-enterprise
-        ranger.policy-rest-url=http://ranger:6080
-        ranger.policy-refresh-interval=10s
-  {% if AuthNLdap %}
+      {% if PerformanceTesting %}
+      resource-groups.properties: |
+        resource-groups.configuration-manager=file
+        resource-groups.config-file=etc/resource-groups.json
+      {% endif %}
+      {% if AuthNLdap %}
       password-authenticator.properties: |
         password-authenticator.name=ldap
         ldap.url={{LdapUri}}
@@ -110,7 +111,26 @@ coordinator:
         ldap.group-auth-pattern=(&(objectClass=inetOrgPerson)(uid=${USER}))
         ldap.user-base-dn=ou=People,dc=az,dc=starburstdata,dc=net
         ldap.user-bind-pattern=uid=${USER},ou=People,dc=az,dc=starburstdata,dc=net
-  {% endif %}
+      {% endif %}
+    {% if PerformanceTesting %}
+    other:
+      resource-groups.json: |
+        {
+          "rootGroups": [
+            {
+              "name": "global",
+              "maxQueued": 1000,
+              "hardConcurrencyLimit": 180,
+              "softMemoryLimit": "90%"
+            }
+          ],
+          "selectors": [
+            {
+              "group": "global"
+            }
+          ]
+        }
+    {% endif %}
   resources:
     requests:
       memory: {{coordinator_mem}}
@@ -138,10 +158,11 @@ worker:
     effect: "NoSchedule"
   {% endif %}
 
-{% if not AuthNLdap %}
-# If we're not going to be using LDAP, then automatically switch over to using
-# a password database ("file"). Note that just adding userDatabase here
-# automatically enables the password authenticator.
+{% if TlsEnabled and not AuthNLdap %}
+# If we're not going to be using LDAP, but we still need to enable TLS and
+# authenticate users, then automatically switch over to using a password
+# database ("file"). Note that just adding userDatabase here automatically
+# enables the password authenticator.
 userDatabase:
   enabled: true
   users:
@@ -174,9 +195,20 @@ catalogs:
     salesforce.password={{SalesforcePassword}}
     salesforce.security-token={{SalesforceSecurityToken}}
     salesforce.driver-logging.enabled=true
+    {% if CacheServiceEnabled %}
     redirection.config-source=SERVICE
     cache-service.uri=http://cache-service:8180
+    {% endif %}
   {% endif %}
+  evtlog: |
+    connector.name=postgresql
+    connection-url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
+    connection-user={{evtlog_user}}
+    connection-password={{DBPassword}}
+  tpcds: |
+    connector.name=tpcds
+  tpch: |
+    connector.name=tpch
   {% if Target == "aws" %}
   delta: |
     connector.name=delta-lake
@@ -209,16 +241,20 @@ catalogs:
     connector.name=bigquery
     bigquery.project-id={{ GcpProjectId | string }}
   {% endif %}
+  {% if MySqlEnabled %}
   mysql: |
     connector.name=mysql
     connection-url=jdbc:mysql://{{mysql_address}}:{{mysql_port}}/?serverTimezone=UTC
     connection-user={{mysql_user}}
     connection-password={{DBPassword}}
+  {% endif %}
+  {% if PostgreSqlEnabled %}
   postgresql: |
     connector.name=postgresql
     connection-url=jdbc:postgresql://{{postgres_address}}:{{postgres_port}}/{{DBName}}
     connection-user={{postgres_user}}
     connection-password={{DBPassword}}
+  {% endif %}
   {% if UpstreamSG %}
   sg_az_adls: |
     connector.name=stargate
@@ -226,18 +262,22 @@ catalogs:
     connection-user={{TrinoUser}}
     connection-password={{TrinoPass}}
     ssl.enabled=true
+  {% if MySqlEnabled %}
   sg_az_mysql: |
     connector.name=stargate
     connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/mysql
     connection-user={{TrinoUser}}
     connection-password={{TrinoPass}}
     ssl.enabled=true
+  {% endif %}
+  {% if PostgreSqlEnabled %}
   sg_az_postgresql: |
     connector.name=stargate
     connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/postgresql
     connection-user={{TrinoUser}}
     connection-password={{TrinoPass}}
     ssl.enabled=true
+  {% endif %}
   sg_az_synapse: |
     connector.name=stargate
     connection-url=jdbc:trino://{{StarburstHost}}:{{BastionAzPort}}/synapse
@@ -250,18 +290,22 @@ catalogs:
     connection-user={{TrinoUser}}
     connection-password={{TrinoPass}}
     ssl.enabled=true
+  {% if MySqlEnabled %}
   sg_gcp_mysql: |
     connector.name=stargate
     connection-url=jdbc:trino://{{StarburstHost}}:{{BastionGcpPort}}/mysql
     connection-user={{TrinoUser}}
     connection-password={{TrinoPass}}
     ssl.enabled=true
+  {% endif %}
+  {% if PostgreSqlEnabled %}
   sg_gcp_postgresql: |
     connector.name=stargate
     connection-url=jdbc:trino://{{StarburstHost}}:{{BastionGcpPort}}/postgresql
     connection-user={{TrinoUser}}
     connection-password={{TrinoPass}}
     ssl.enabled=true
+  {% endif %}
   sg_gcp_bq: |
     connector.name=stargate
     connection-url=jdbc:trino://{{StarburstHost}}:{{BastionGcpPort}}/bq

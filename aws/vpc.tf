@@ -1,13 +1,12 @@
-data "aws_availability_zones" "available" {}
-
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "3.10.0"
+  version = "3.14.0"
 
   name = var.network_name
   cidr = var.my_cidr
 
-  azs              = data.aws_availability_zones.available.names
+  azs = keys(data.aws_ec2_instance_type_offering.avail_az_instance_map)
+
   private_subnets  = [for k in ["prv_a", "prv_b", "prv_c"] : module.subnet_addrs.network_cidr_blocks[k]]
   database_subnets = [for k in ["db_a", "db_b", "db_c"] : module.subnet_addrs.network_cidr_blocks[k]]
   public_subnets   = [for k in ["pub_a", "pub_b", "pub_c"] : module.subnet_addrs.network_cidr_blocks[k]]
@@ -99,7 +98,6 @@ locals {
   bastion_ip   = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
   ldap_ip      = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 102)
   starburst_ip = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 103)
-  ranger_ip    = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 104)
 }
 
 resource "aws_key_pair" "key_pair" {

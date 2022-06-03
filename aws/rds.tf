@@ -24,7 +24,7 @@ resource "aws_security_group" "rds_sg" {
 resource "aws_db_instance" "evtlog" {
   identifier               = var.evtlog_server_name
   engine                   = "postgres"
-  allocated_storage        = 20
+  allocated_storage        = 200
   instance_class           = var.db_instance_type
   db_name                  = var.db_name_evtlog
   username                 = var.db_user
@@ -57,6 +57,7 @@ resource "aws_db_instance" "hmsdb" {
 # Starburst internal - Cache service
 resource "aws_db_instance" "cachesrvdb" {
   identifier               = var.cachesrv_server_name
+  count                    = var.cache_service_enabled ? 1 : 0
   engine                   = "postgres"
   allocated_storage        = 20
   instance_class           = var.db_instance_type
@@ -75,9 +76,10 @@ resource "aws_db_instance" "postgres" {
   identifier               = var.postgres_server_name
   engine                   = "postgres"
   engine_version           = var.postgresql_version
+  count                    = var.postgres_enabled ? 1 : 0
   allocated_storage        = 20
   instance_class           = var.db_instance_type
-  name                     = var.db_name
+  db_name                  = var.db_name
   username                 = var.db_user
   password                 = var.db_password
   skip_final_snapshot      = true
@@ -92,9 +94,10 @@ resource "aws_db_instance" "mysql" {
   identifier               = var.mysql_server_name
   engine                   = "mysql"
   engine_version           = var.mysql_version
+  count                    = var.mysql_enabled ? 1 : 0
   allocated_storage        = 20
   instance_class           = var.db_instance_type
-  name                     = var.db_name
+  db_name                  = var.db_name
   username                 = var.db_user
   password                 = var.db_password
   skip_final_snapshot      = true

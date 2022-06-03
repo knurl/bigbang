@@ -14,10 +14,6 @@ output "starburst_address" {
   value = local.starburst_ip
 }
 
-output "ranger_address" {
-  value = local.ranger_ip
-}
-
 output "evtlog_address" {
   value = azurerm_postgresql_server.postgres.fqdn
 }
@@ -35,7 +31,7 @@ output "postgres_address" {
 }
 
 output "mysql_address" {
-  value = azurerm_mysql_server.mysql.fqdn
+  value = length(azurerm_mysql_server.mysql) > 0 ? azurerm_mysql_server.mysql[0].fqdn : null
 }
 
 output "object_address" {

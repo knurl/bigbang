@@ -12,13 +12,13 @@ config:
     service-database.password=${ENV:SERVICE_DATABASE_PASSWORD}
     service-database.jdbc-url=${ENV:SERVICE_DATABASE_JDBC_URL}
     starburst.user=starburst_service
-    starburst.password=
-    refresh-initial-delay=0m
-    refresh-interval=8h
-    {% if RequireCoordTls %}
-    starburst.jdbc-url=jdbc:trino://coordinator:8443?SSL=true
+    starburst.password=test
+    refresh-initial-delay=5s
+    refresh-interval=20m
+    {% if TlsEnabled %}
+    starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true
     {% else %}
-    starburst.jdbc-url=jdbc:trino://coordinator:8080
+    starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8080
     {% endif %}
   {% if SalesforceEnabled %}
     type-mapping=FILE
@@ -91,6 +91,7 @@ config:
             "leadsource",
             "isclosed",
             "iswon",
+            "lost_stage__c",
             "forecastcategory",
             "forecastcategoryname",
             "ownerid",
@@ -190,5 +191,4 @@ affinity:
               operator: In
               values:
                 - starburst-hive
-                - starburst-ranger
         topologyKey: "kubernetes.io/hostname"

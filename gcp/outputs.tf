@@ -18,10 +18,6 @@ output "starburst_address_name" {
   value = google_compute_address.starburst_static_ip.name
 }
 
-output "ranger_address" {
-  value = google_compute_address.ranger_static_ip.address
-}
-
 output "evtlog_address" {
   value = google_sql_database_instance.sql_postgres.private_ip_address
 }
@@ -39,7 +35,7 @@ output "postgres_address" {
 }
 
 output "mysql_address" {
-  value = google_sql_database_instance.sql_mysql.private_ip_address
+  value = length(google_sql_database_instance.sql_mysql) > 0 ? google_sql_database_instance.sql_mysql[0].private_ip_address : null
 }
 
 output "object_address" {

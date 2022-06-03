@@ -1,7 +1,11 @@
-mypy:
-	mypy ./bigbang.py ./run.py ./capcalc.py
+PYFILES = $(wildcard *.py)
 
-./tags: ./bigbang.py ./run.py ./capcalc.py
+ALL: mypy ./tags
+
+mypy: $(PYFILES)
+	mypy $^
+
+./tags: $(PYFILES)
 	/usr/local/bin/ctags --languages=python --python-kinds=-i -f $@ $^
 
 clean:

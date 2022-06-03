@@ -14,7 +14,8 @@ Target: aws
 # XXX Choose something appropriate for the cloud you've selected above.
 # This value can be overridden with -z flag on commandline
 #
-Zone: eu-west-2 # AWS - London, UK, EU
+Zone: eu-west-1 # AWS - Dublin, Ireland, EU
+#Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: eu-west-3 # AWS - Paris, France, EU
 #Zone: uksouth # Azure - London, UK, EU
@@ -25,7 +26,7 @@ Zone: eu-west-2 # AWS - London, UK, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 375.0.0
+ChartVersion: 382.0.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 3
@@ -45,6 +46,12 @@ DisableBastionFw: False
 
 # Disable sources that run slowly with Starburst
 DisableSlowSources: True
+
+# Do we want to use the Salesforce connector?
+SalesforceEnabled: True
+
+# Set up for performance testing
+PerformanceTesting: False
 
 # node pool capacity type and instance types
 CapacityType: Spot
@@ -67,6 +74,14 @@ GcpMachineTypes:
   OnDemand:
     - e2-standard-16
 
+# performance testing nodes (always AWS, Spot)
+# AWS Spot Instance Advisor for 32 vCPUs, 64 GB
+AwsPerfInstanceTypes:
+  - c5a.8xlarge
+  - c6a.8xlarge
+  - c6i.8xlarge
+  - c5ad.8xlarge
+
 # smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM
 AwsSmallInstanceType: m5.large
 AzureSmallVmType: Standard_B2ms
@@ -77,8 +92,13 @@ AwsDbInstanceType: db.m5.xlarge
 AzureDbVmType: GP_Gen5_4
 GcpDbMachineType: db-custom-4-15360
 
-# Do we want to use the Salesforce connector?
-SalesforceEnabled: False
+# Cache Service enable.
+CacheServiceEnabled: True
+
+# MySQL and PostgreSQL enable/disable. These databases are the instances used
+# for demoing Starburst functionality, not for internal use (e.g. HMS).
+MySqlEnabled: False
+PostgreSqlEnabled: False
 
 #
 # Helm repo information

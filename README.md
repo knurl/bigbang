@@ -50,8 +50,7 @@ run bigbang.py -h to see how to use it.
 For the Starburst UI, you will log in with the user _starburst_service_. If you
 enable LDAP, then in addition to _starburst_service_, you will also have
 _alice_, _bob_, and _carol_, all with password _test_. All users have the
-password _test_. For Ranger, the username is _starburst_service_ and the
-password is _RangerPassword1_.
+password _test_.
 
 ## How to install it
 

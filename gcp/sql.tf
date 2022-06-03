@@ -43,6 +43,7 @@ resource "google_sql_database_instance" "sql_mysql" {
   name    = "${var.mysql_server_name}-${random_id.db_name_suffix.hex}"
   region  = var.region
   project = data.google_project.project.project_id
+  count   = var.mysql_enabled ? 1 : 0
 
   database_version = join("_", concat(["MYSQL"], split(".", var.mysql_version)))
   # depends_on is required here per the docs
@@ -81,6 +82,7 @@ resource "google_sql_user" "user_postgres" {
 resource "google_sql_user" "user_mysql" {
   project    = data.google_project.project.project_id
   instance   = google_sql_database_instance.sql_mysql.name
+  count      = var.mysql_enabled ? 1 : 0
   name       = var.db_user
   password   = var.db_password
   depends_on = [google_sql_database_instance.sql_mysql]
@@ -110,6 +112,7 @@ resource "google_sql_database" "db_hms" {
 
 resource "google_sql_database" "db_cachesrv" {
   name       = var.db_name_cachesrv
+  count      = var.cache_service_enabled ? 1 : 0
   project    = data.google_project.project.project_id
   instance   = google_sql_database_instance.sql_postgres.name
   charset    = var.postgres_charset
@@ -119,6 +122,7 @@ resource "google_sql_database" "db_cachesrv" {
 
 resource "google_sql_database" "db_postgres" {
   name       = var.db_name
+  count      = var.postgres_enabled ? 1 : 0
   project    = data.google_project.project.project_id
   instance   = google_sql_database_instance.sql_postgres.name
   charset    = var.postgres_charset
@@ -128,6 +132,7 @@ resource "google_sql_database" "db_postgres" {
 
 resource "google_sql_database" "db_mysql" {
   name       = var.db_name
+  count      = var.mysql_enabled ? 1 : 0
   project    = data.google_project.project.project_id
   instance   = google_sql_database_instance.sql_mysql.name
   charset    = var.mysql_charset

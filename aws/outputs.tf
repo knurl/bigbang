@@ -23,19 +23,19 @@ output "hmsdb_address" {
 }
 
 output "cachesrv_address" {
-  value = aws_db_instance.cachesrvdb.address
+  value = length(aws_db_instance.cachesrvdb) > 0 ? aws_db_instance.cachesrvdb[0].address : null
 }
 
 output "postgres_address" {
-  value = aws_db_instance.postgres.address
+  value = length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].address : null
 }
 
 output "mysql_address" {
-  value = aws_db_instance.mysql.address
+  value = length(aws_db_instance.mysql) > 0 ? aws_db_instance.mysql[0].address : null
 }
 
 output "redshift_endpoint" {
-  value = aws_redshift_cluster.redshift.*.endpoint
+  value = length(aws_redshift_cluster.redshift) > 0 ? aws_redshift_cluster.redshift[0].endpoint : null
 }
 
 output "object_address" {
