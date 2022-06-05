@@ -17,3 +17,9 @@ data "aws_ec2_instance_type_offering" "avail_az_instance_map" {
 
   preferred_instance_types = var.instance_types
 }
+
+locals {
+  azs               = keys(data.aws_ec2_instance_type_offering.avail_az_instance_map)
+  eks_azs           = [local.azs[0], local.azs[1]]
+  eks_instance_type = data.aws_ec2_instance_type_offering.avail_az_instance_map[local.azs[0]].instance_type
+}

@@ -5,12 +5,11 @@ module "vpc" {
   name = var.network_name
   cidr = var.my_cidr
 
-  azs = keys(data.aws_ec2_instance_type_offering.avail_az_instance_map)
-
-  private_subnets  = [for k in ["prv_a", "prv_b", "prv_c"] : module.subnet_addrs.network_cidr_blocks[k]]
-  database_subnets = [for k in ["db_a", "db_b", "db_c"] : module.subnet_addrs.network_cidr_blocks[k]]
-  public_subnets   = [for k in ["pub_a", "pub_b", "pub_c"] : module.subnet_addrs.network_cidr_blocks[k]]
-  redshift_subnets = [for k in ["red_a", "red_b", "red_c"] : module.subnet_addrs.network_cidr_blocks[k]]
+  azs              = local.eks_azs
+  private_subnets  = [for k in ["prv_a", "prv_b"] : module.subnet_addrs.network_cidr_blocks[k]]
+  database_subnets = [for k in ["db_a", "db_b"] : module.subnet_addrs.network_cidr_blocks[k]]
+  public_subnets   = [for k in ["pub_a", "pub_b"] : module.subnet_addrs.network_cidr_blocks[k]]
+  redshift_subnets = [for k in ["red_a", "red_b"] : module.subnet_addrs.network_cidr_blocks[k]]
 
   create_database_subnet_group = true
   database_subnet_group_name   = "${var.network_name}-sg-db"

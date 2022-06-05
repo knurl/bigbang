@@ -8,12 +8,6 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  /*
-   * We want a cluster with a private api server endpoint. That comes with
-   * compromises. We can't use manage_aws_auth, because that will try to apply
-   * the aws-auth config by connecting to the endpoint, which will fail.
-   * Everything in this section is required for the private endpoint.
-   */
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = false
 
@@ -35,8 +29,11 @@ module "eks" {
       max_size     = var.node_count
       desired_size = var.node_count
 
-      instance_types = distinct([for az, details in data.aws_ec2_instance_type_offering.avail_az_instance_map : details.instance_type])
+      instance_types = [local.eks_instance_type]
       capacity_type  = var.capacity_type == "Spot" ? "SPOT" : "ON_DEMAND"
+
+      # Use only the first AZ to avoid transfer costs between AZs
+      subnet_ids = [module.vpc.private_subnets[0]]
 
       security_group_rules = {
         /* By default, eks module does not allow node-to-node communication.
