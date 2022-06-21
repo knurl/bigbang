@@ -1,0 +1,824 @@
+Name:         cache-service-568f4fd87d-jgf8w
+Namespace:    starburst
+Priority:     0
+Node:         ip-10-68-139-2.eu-west-1.compute.internal/10.68.139.2
+Start Time:   Thu, 19 May 2022 22:06:59 +0100
+Labels:       app=starburst-cache-service
+              helm-chart=starburst-cache-service-380.0.0
+              helm-release=cache-service-rob068
+              managed-by=Helm
+              pod-template-hash=568f4fd87d
+              role=cache-service
+Annotations:  kubernetes.io/psp: eks.privileged
+Status:       Running
+IP:           10.68.153.26
+IPs:
+  IP:           10.68.153.26
+Controlled By:  ReplicaSet/cache-service-568f4fd87d
+Containers:
+  cache-service:
+    Container ID:   docker://18420c03f0c6922a349827c82e198d94b652e63650373b1b4e5a011cda59ae97
+    Image:          harbor.starburstdata.net/starburstdata/starburst-cache-service:380-e.0
+    Image ID:       docker-pullable://harbor.starburstdata.net/starburstdata/starburst-cache-service@sha256:6076a0fc3b3cdb111f9c497d58779d7099f2a3e8650681adb2f055931f185bfb
+    Port:           8180/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Thu, 19 May 2022 22:13:31 +0100
+    Last State:     Terminated
+      Reason:       Error
+      Exit Code:    1
+      Started:      Thu, 19 May 2022 22:11:03 +0100
+      Finished:     Thu, 19 May 2022 22:13:11 +0100
+    Ready:          True
+    Restart Count:  2
+    Limits:
+      cpu:     492m
+      memory:  946Mi
+    Requests:
+      cpu:      492m
+      memory:   946Mi
+    Liveness:   tcp-socket :8180 delay=300s timeout=1s period=10s #success=1 #failure=3
+    Readiness:  tcp-socket :8180 delay=10s timeout=1s period=10s #success=1 #failure=10
+    Environment:
+      SERVICE_DATABASE_JDBC_URL:  jdbc:postgresql://cachesrv-server-rob068.cn8himtsq3xp.eu-west-1.rds.amazonaws.com:5432/cachesrv
+      SERVICE_DATABASE_USER:      starburstuser
+      SERVICE_DATABASE_PASSWORD:  <set to the key 'databasePassword' in secret 'cache-service-database-password'>  Optional: false
+    Mounts:
+      /usr/lib/starburst-cache-service/etc from config-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-fnrdg (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  config-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      cache-service-configuration
+    Optional:  false
+  kube-api-access-fnrdg:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Guaranteed
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason   Age                From     Message
+  ----     ------   ----               ----     -------
+  Warning  BackOff  60m (x3 over 60m)  kubelet  Back-off restarting failed container
+  Normal   Created  60m (x3 over 66m)  kubelet  Created container cache-service
+  Normal   Started  60m (x3 over 66m)  kubelet  Started container cache-service
+  Normal   Pulled   60m (x2 over 62m)  kubelet  Container image "harbor.starburstdata.net/starburstdata/starburst-cache-service:380-e.0" already present on machine
+
+
+Name:         coordinator-84f6646fd6-wbqsc
+Namespace:    starburst
+Priority:     0
+Node:         ip-10-68-45-108.eu-west-1.compute.internal/10.68.45.108
+Start Time:   Thu, 19 May 2022 22:07:01 +0100
+Labels:       app=starburst-enterprise
+              helm-chart=starburst-enterprise-380.0.0
+              helm-release=enterprise-rob068
+              managed-by=Helm
+              pod-template-hash=84f6646fd6
+              role=coordinator
+Annotations:  checksum/coordinator-values: 8163b059a83ef891febba35eec7a2a67c608109d4dffd67cc933e9a232009af1
+              checksum/pullsecret: 90722675464f1f940c05898e52c46ab7c871e03cb93003d7c2901cff1a346044
+              kubernetes.io/psp: eks.privileged
+Status:       Running
+IP:           10.68.2.208
+IPs:
+  IP:           10.68.2.208
+Controlled By:  ReplicaSet/coordinator-84f6646fd6
+Init Containers:
+  starburst-enterprise-init:
+    Container ID:  docker://2ce32269c680fd72411c9c98adcd45bb94e670cee0093a80e2b2cc128f82d08b
+    Image:         harbor.starburstdata.net/starburstdata/starburst-enterprise-init:380.0.0
+    Image ID:      docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise-init@sha256:fd0fa6431b384ed23a1303e1e46a2c8ec149bcde3ca7ed1afc3e540cfd2f01d0
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      starburst-conf-cli
+      generate
+      --values-yaml
+      /work-dir/values.yaml
+      --config-type
+      COORDINATOR
+      --starburst-config-dir
+      /etc/starburst
+      --ip
+      $(POD_IP)
+      --k8s-namespace
+      $(POD_NAMESPACE)
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Thu, 19 May 2022 22:07:02 +0100
+      Finished:     Thu, 19 May 2022 22:07:02 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:     31032m
+      memory:  59610Mi
+    Environment:
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-n88mk (ro)
+      /work-dir from starburst-config (rw)
+Containers:
+  coordinator:
+    Container ID:  docker://d7213f2f3507f057bc50224f14b74afeeb7f63c5f66861c35f1967cd15d58cf2
+    Image:         harbor.starburstdata.net/starburstdata/starburst-enterprise:380-e.0
+    Image ID:      docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise@sha256:1f32cb24548792557415c3630992327e535aa2e1444ee75c35fedf0718c9572b
+    Ports:         8080/TCP, 8443/TCP
+    Host Ports:    0/TCP, 0/TCP
+    State:         Running
+      Started:     Thu, 19 May 2022 22:14:10 +0100
+    Last State:    Terminated
+      Reason:      Error
+      Message:       "com.starburstdata.presto.insights.usage.UsageMetricsDao"
+UsageMetricsManager:                                 "com.starburstdata.presto.usagemetrics.UsageMetricsManager"
+UsageMetricsResource:                                "com.starburstdata.presto.insights.UsageMetricsResource"
+UsageMetricsStore:                                   "com.starburstdata.presto.insights.usage.UsageMetricsStore"
+UsageMetricsTracker:                                 "com.starburstdata.presto.usagemetrics.UsageMetricsTracker"
+UsageModule:                                         "com.starburstdata.presto.usagemetrics.UsageModule"
+UserPermissionResource:                              "com.starburstdata.presto.dataproduct.accesscontrol.UserPermissionResource"
+WebUiAuthSettingsResource:                           "com.starburstdata.presto.insights.settings.WebUiAuthSettingsResource"
+WebUiAuthenticationResource:                         "com.starburstdata.presto.server.security.webui.WebUiAuthenticationResource"
+WebUiAuthenticatorModule:                            "com.starburstdata.presto.server.security.webui.WebUiAuthenticatorModule"
+WorksheetDao:                                        "com.starburstdata.presto.insights.worksheet.WorksheetDao"
+========================
+End of classname legend:
+========================
+
+  at com.google.inject.internal.Errors.throwCreationExceptionIfErrorsExist(Errors.java:576)
+  at com.google.inject.internal.InternalInjectorCreator.injectDynamically(InternalInjectorCreator.java:190)
+  at com.google.inject.internal.InternalInjectorCreator.build(InternalInjectorCreator.java:113)
+  at com.google.inject.Guice.createInjector(Guice.java:87)
+  at io.airlift.bootstrap.Bootstrap.initialize(Bootstrap.java:270)
+  at io.trino.server.Server.doStart(Server.java:120)
+  at io.trino.server.Server.lambda$start$0(Server.java:80)
+  at io.trino.$gen.Trino_380_e_0____20220519_210703_1.run(Unknown Source)
+  at io.trino.server.Server.start(Server.java:80)
+  at com.starburstdata.presto.StarburstTrinoServer.main(StarburstTrinoServer.java:46)
+
+
+
+      Exit Code:    1
+      Started:      Thu, 19 May 2022 22:07:03 +0100
+      Finished:     Thu, 19 May 2022 22:14:10 +0100
+    Ready:          True
+    Restart Count:  1
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:      31032m
+      memory:   59610Mi
+    Liveness:   http-get http://:8080/v1/info delay=0s timeout=5s period=60s #success=1 #failure=3
+    Readiness:  http-get http://:8080/v1/readiness delay=0s timeout=5s period=10s #success=1 #failure=3
+    Startup:    http-get http://:8080/v1/readiness delay=0s timeout=1s period=10s #success=1 #failure=40
+    Environment:
+      POD_ID:          (v1:metadata.uid)
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /etc/starburst/telemetry from prometheus-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-n88mk (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  starburst-config:
+    Type:                Projected (a volume that contains injected data from multiple sources)
+    SecretName:          values-yaml-secret
+    SecretOptionalName:  <nil>
+    SecretName:          license
+    SecretOptionalName:  <nil>
+  starburst-config-updated:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  prometheus-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      starburst-coordinator-p8s
+    Optional:  false
+  kube-api-access-n88mk:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Guaranteed
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
+
+
+Name:         hive-7d499d4f64-nh8kc
+Namespace:    starburst
+Priority:     0
+Node:         ip-10-68-40-121.eu-west-1.compute.internal/10.68.40.121
+Start Time:   Thu, 19 May 2022 22:06:47 +0100
+Labels:       app=starburst-hive
+              helm-chart=starburst-hive-380.0.0
+              helm-release=hive-rob068
+              managed-by=Helm
+              pod-template-hash=7d499d4f64
+              role=hive
+Annotations:  checksum/init-file: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+              checksum/registry-secret: f974417fea0f77549e1d60f791dc41c905eed9f44842426e99ddb70a8bbdc03d
+              kubernetes.io/psp: eks.privileged
+Status:       Running
+IP:           10.68.39.190
+IPs:
+  IP:           10.68.39.190
+Controlled By:  ReplicaSet/hive-7d499d4f64
+Containers:
+  hive:
+    Container ID:  docker://df7332872acbb5486ede58ba4b9bb28e0cb681ff56190d3265a2325e331dce32
+    Image:         harbor.starburstdata.net/starburstdata/hive:3.1.2-e.11
+    Image ID:      docker-pullable://harbor.starburstdata.net/starburstdata/hive@sha256:7ba11198bac02dd770c9fa6855079f3a5840d32a207d04442c2f64a4c154d010
+    Port:          9083/TCP
+    Host Port:     0/TCP
+    State:         Running
+      Started:     Thu, 19 May 2022 22:12:37 +0100
+    Last State:    Terminated
+      Reason:      Error
+      Message:     19T21:12:32,979  INFO [main] metastore.HiveMetaStore: Starting hive metastore on port 9083
+2022-05-19T21:12:33,494  INFO [main] metastore.HiveMetaStore: 0: Opening raw store with implementation class:org.apache.hadoop.hive.metastore.ObjectStore
+2022-05-19T21:12:33,682  WARN [main] metastore.ObjectStore: datanucleus.autoStartMechanismMode is set to unsupported value null . Setting it to value: ignored
+2022-05-19T21:12:33,687  INFO [main] metastore.ObjectStore: ObjectStore, initialize called
+2022-05-19T21:12:33,687  INFO [main] conf.MetastoreConf: Unable to find config file hivemetastore-site.xml
+2022-05-19T21:12:33,687  INFO [main] conf.MetastoreConf: Found configuration file null
+2022-05-19T21:12:33,688  INFO [main] conf.MetastoreConf: Unable to find config file metastore-site.xml
+2022-05-19T21:12:33,688  INFO [main] conf.MetastoreConf: Found configuration file null
+2022-05-19T21:12:34,800  INFO [main] hikari.HikariDataSource: HikariPool-1 - Starting...
+2022-05-19T21:12:35,699  INFO [main] hikari.HikariDataSource: HikariPool-1 - Start completed.
+2022-05-19T21:12:35,882  INFO [main] hikari.HikariDataSource: HikariPool-2 - Starting...
+2022-05-19T21:12:35,990  INFO [main] hikari.HikariDataSource: HikariPool-2 - Start completed.
+2022-05-19T21:12:36,581  INFO [main] metastore.ObjectStore: Setting MetaStore object pin classes with hive.metastore.cache.pinobjtypes="Table,StorageDescriptor,SerDeInfo,Partition,Database,Type,FieldSchema,Order"
+2022-05-19T21:12:36,985  INFO [main] metastore.MetaStoreDirectSql: Using direct SQL, underlying DB is POSTGRES
+2022-05-19T21:12:36,985  INFO [main] metastore.ObjectStore: Initialized ObjectStore
+2022-05-19T21:12:37,478  INFO [shutdown-hook-0] metastore.HiveMetaStore: Shutting down hive metastore.
+2022-05-19T21:12:37,488  INFO [shutdown-hook-0] metastore.HiveMetaStore: SHUTDOWN_MSG: 
+/************************************************************
+SHUTDOWN_MSG: Shutting down HiveMetaStore at hive-7d499d4f64-nh8kc/10.68.39.190
+************************************************************/
+
+      Exit Code:    143
+      Started:      Thu, 19 May 2022 22:10:17 +0100
+      Finished:     Thu, 19 May 2022 22:12:37 +0100
+    Ready:          True
+    Restart Count:  2
+    Limits:
+      cpu:     492m
+      memory:  946Mi
+    Requests:
+      cpu:     492m
+      memory:  946Mi
+    Liveness:  tcp-socket :9083 delay=120s timeout=1s period=10s #success=1 #failure=3
+    Environment:
+      HIVE_METASTORE_JDBC_URL:          jdbc:postgresql://hmsdb-server-rob068.cn8himtsq3xp.eu-west-1.rds.amazonaws.com:5432/hms
+      HIVE_METASTORE_DRIVER:            org.postgresql.Driver
+      HIVE_METASTORE_USER:              starburstuser
+      HIVE_METASTORE_PASSWORD:          <set to the key 'databasePassword' in secret 'hive-database-password'>  Optional: false
+      HIVE_METASTORE_WAREHOUSE_DIR:     
+      REGION:                           eu-west-1
+      S3_ENDPOINT:                      s3.eu-west-1.amazonaws.com
+      S3_ACCESS_KEY:                    
+      S3_SECRET_KEY:                    <set to the key 'awsS3.secretKey' in secret 'hive-object-storage-secret'>  Optional: false
+      S3_PATH_STYLE_ACCESS:             false
+      GOOGLE_CLOUD_KEY_FILE_PATH:       /gcs-keyfile/key.json
+      AZURE_ABFS_OAUTH:                 
+      AZURE_ABFS_OAUTH_TOKEN_PROVIDER:  
+      AZURE_ABFS_STORAGE_ACCOUNT:       
+      AZURE_ABFS_ACCESS_KEY:            <set to the key 'azure.abfs.accessKey.accessKey' in secret 'hive-object-storage-secret'>  Optional: false
+      AZURE_ABFS_OAUTH_CLIENT_ID:       
+      AZURE_ABFS_OAUTH_SECRET:          <set to the key 'azure.abfs.oauth.secret' in secret 'hive-object-storage-secret'>  Optional: false
+      AZURE_ABFS_OAUTH_ENDPOINT:        
+      AZURE_WASB_STORAGE_ACCOUNT:       
+      AZURE_WASB_ACCESS_KEY:            <set to the key 'azure.wasb.accessKey' in secret 'hive-object-storage-secret'>  Optional: false
+      AZURE_ADL_CLIENT_ID:              
+      AZURE_ADL_CREDENTIAL:             <set to the key 'adl.oauth2.credential' in secret 'hive-object-storage-secret'>  Optional: false
+      AZURE_ADL_REFRESH_URL:            
+      HIVE_METASTORE_HEAPSIZE_IN_KB:    823398
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-vzk7l (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  kube-api-access-vzk7l:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Guaranteed
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
+
+
+Name:         worker-7fb5cb9759-74m58
+Namespace:    starburst
+Priority:     0
+Node:         ip-10-68-90-197.eu-west-1.compute.internal/10.68.90.197
+Start Time:   Thu, 19 May 2022 22:07:04 +0100
+Labels:       app=starburst-enterprise
+              helm-chart=starburst-enterprise-380.0.0
+              helm-release=enterprise-rob068
+              managed-by=Helm
+              pod-template-hash=7fb5cb9759
+              role=worker
+Annotations:  checksum/pullsecret: 90722675464f1f940c05898e52c46ab7c871e03cb93003d7c2901cff1a346044
+              checksum/worker-values: 02e178029ac5c5498e5095b36ed338c7d7792325e40738d82e4d7cc2c21db0c0
+              kubernetes.io/psp: eks.privileged
+Status:       Running
+IP:           10.68.117.154
+IPs:
+  IP:           10.68.117.154
+Controlled By:  ReplicaSet/worker-7fb5cb9759
+Init Containers:
+  starburst-enterprise-init:
+    Container ID:  docker://3eac819adc8130613c774481636aa3401976de9823c6f8e720652134408dce16
+    Image:         harbor.starburstdata.net/starburstdata/starburst-enterprise-init:380.0.0
+    Image ID:      docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise-init@sha256:fd0fa6431b384ed23a1303e1e46a2c8ec149bcde3ca7ed1afc3e540cfd2f01d0
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      starburst-conf-cli
+      generate
+      --values-yaml
+      /work-dir/values.yaml
+      --config-type
+      WORKER
+      --starburst-config-dir
+      /etc/starburst
+      --ip
+      $(POD_IP)
+      --k8s-namespace
+      $(POD_NAMESPACE)
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Thu, 19 May 2022 22:07:05 +0100
+      Finished:     Thu, 19 May 2022 22:07:06 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:     31032m
+      memory:  59610Mi
+    Environment:
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-2pmzp (ro)
+      /work-dir from starburst-config (rw)
+Containers:
+  worker:
+    Container ID:   docker://a7b38847c84fe7065b44c5a9e5409ccedbf240b637dd684e9efb775c03b36bcc
+    Image:          harbor.starburstdata.net/starburstdata/starburst-enterprise:380-e.0
+    Image ID:       docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise@sha256:1f32cb24548792557415c3630992327e535aa2e1444ee75c35fedf0718c9572b
+    Ports:          8080/TCP, 8443/TCP
+    Host Ports:     0/TCP, 0/TCP
+    State:          Running
+      Started:      Thu, 19 May 2022 22:07:06 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:      31032m
+      memory:   59610Mi
+    Liveness:   http-get http://:8080/v1/info delay=0s timeout=5s period=60s #success=1 #failure=3
+    Readiness:  http-get http://:8080/v1/readiness delay=0s timeout=5s period=10s #success=1 #failure=3
+    Startup:    http-get http://:8080/v1/readiness delay=0s timeout=1s period=10s #success=1 #failure=40
+    Environment:
+      POD_ID:          (v1:metadata.uid)
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /etc/starburst/telemetry from prometheus-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-2pmzp (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  starburst-config:
+    Type:                Projected (a volume that contains injected data from multiple sources)
+    SecretName:          values-yaml-secret
+    SecretOptionalName:  <nil>
+    SecretName:          license
+    SecretOptionalName:  <nil>
+  starburst-config-updated:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  prometheus-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      starburst-worker-p8s
+    Optional:  false
+  kube-api-access-2pmzp:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Guaranteed
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
+
+
+Name:         worker-7fb5cb9759-9f585
+Namespace:    starburst
+Priority:     0
+Node:         ip-10-68-155-63.eu-west-1.compute.internal/10.68.155.63
+Start Time:   Thu, 19 May 2022 22:07:04 +0100
+Labels:       app=starburst-enterprise
+              helm-chart=starburst-enterprise-380.0.0
+              helm-release=enterprise-rob068
+              managed-by=Helm
+              pod-template-hash=7fb5cb9759
+              role=worker
+Annotations:  checksum/pullsecret: 90722675464f1f940c05898e52c46ab7c871e03cb93003d7c2901cff1a346044
+              checksum/worker-values: 02e178029ac5c5498e5095b36ed338c7d7792325e40738d82e4d7cc2c21db0c0
+              kubernetes.io/psp: eks.privileged
+Status:       Running
+IP:           10.68.168.88
+IPs:
+  IP:           10.68.168.88
+Controlled By:  ReplicaSet/worker-7fb5cb9759
+Init Containers:
+  starburst-enterprise-init:
+    Container ID:  docker://56d9146309fc4a3177862de0de435e493948cb90c6f05ad50847f77e2ee1f6e1
+    Image:         harbor.starburstdata.net/starburstdata/starburst-enterprise-init:380.0.0
+    Image ID:      docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise-init@sha256:fd0fa6431b384ed23a1303e1e46a2c8ec149bcde3ca7ed1afc3e540cfd2f01d0
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      starburst-conf-cli
+      generate
+      --values-yaml
+      /work-dir/values.yaml
+      --config-type
+      WORKER
+      --starburst-config-dir
+      /etc/starburst
+      --ip
+      $(POD_IP)
+      --k8s-namespace
+      $(POD_NAMESPACE)
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Thu, 19 May 2022 22:07:05 +0100
+      Finished:     Thu, 19 May 2022 22:07:06 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:     31032m
+      memory:  59610Mi
+    Environment:
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-f75wf (ro)
+      /work-dir from starburst-config (rw)
+Containers:
+  worker:
+    Container ID:   docker://e5bea12b224eef6f0faad0532920a8c7404147637f846aa7a1efc7d10bc02901
+    Image:          harbor.starburstdata.net/starburstdata/starburst-enterprise:380-e.0
+    Image ID:       docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise@sha256:1f32cb24548792557415c3630992327e535aa2e1444ee75c35fedf0718c9572b
+    Ports:          8080/TCP, 8443/TCP
+    Host Ports:     0/TCP, 0/TCP
+    State:          Running
+      Started:      Thu, 19 May 2022 22:07:06 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:      31032m
+      memory:   59610Mi
+    Liveness:   http-get http://:8080/v1/info delay=0s timeout=5s period=60s #success=1 #failure=3
+    Readiness:  http-get http://:8080/v1/readiness delay=0s timeout=5s period=10s #success=1 #failure=3
+    Startup:    http-get http://:8080/v1/readiness delay=0s timeout=1s period=10s #success=1 #failure=40
+    Environment:
+      POD_ID:          (v1:metadata.uid)
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /etc/starburst/telemetry from prometheus-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-f75wf (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  starburst-config:
+    Type:                Projected (a volume that contains injected data from multiple sources)
+    SecretName:          values-yaml-secret
+    SecretOptionalName:  <nil>
+    SecretName:          license
+    SecretOptionalName:  <nil>
+  starburst-config-updated:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  prometheus-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      starburst-worker-p8s
+    Optional:  false
+  kube-api-access-f75wf:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Guaranteed
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
+
+
+Name:         worker-7fb5cb9759-9xwd2
+Namespace:    starburst
+Priority:     0
+Node:         ip-10-68-139-2.eu-west-1.compute.internal/10.68.139.2
+Start Time:   Thu, 19 May 2022 22:07:05 +0100
+Labels:       app=starburst-enterprise
+              helm-chart=starburst-enterprise-380.0.0
+              helm-release=enterprise-rob068
+              managed-by=Helm
+              pod-template-hash=7fb5cb9759
+              role=worker
+Annotations:  checksum/pullsecret: 90722675464f1f940c05898e52c46ab7c871e03cb93003d7c2901cff1a346044
+              checksum/worker-values: 02e178029ac5c5498e5095b36ed338c7d7792325e40738d82e4d7cc2c21db0c0
+              kubernetes.io/psp: eks.privileged
+Status:       Running
+IP:           10.68.179.101
+IPs:
+  IP:           10.68.179.101
+Controlled By:  ReplicaSet/worker-7fb5cb9759
+Init Containers:
+  starburst-enterprise-init:
+    Container ID:  docker://5de96149ef289c11017f209c9d54ab1f44cd57c8221db79b012439b9437c4f71
+    Image:         harbor.starburstdata.net/starburstdata/starburst-enterprise-init:380.0.0
+    Image ID:      docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise-init@sha256:fd0fa6431b384ed23a1303e1e46a2c8ec149bcde3ca7ed1afc3e540cfd2f01d0
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      starburst-conf-cli
+      generate
+      --values-yaml
+      /work-dir/values.yaml
+      --config-type
+      WORKER
+      --starburst-config-dir
+      /etc/starburst
+      --ip
+      $(POD_IP)
+      --k8s-namespace
+      $(POD_NAMESPACE)
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Thu, 19 May 2022 22:07:06 +0100
+      Finished:     Thu, 19 May 2022 22:07:06 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:     31032m
+      memory:  59610Mi
+    Environment:
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-99mfl (ro)
+      /work-dir from starburst-config (rw)
+Containers:
+  worker:
+    Container ID:   docker://f0016be9d46f0221667b7e453e47299ee27190750e9b0c0454628192945eb4a8
+    Image:          harbor.starburstdata.net/starburstdata/starburst-enterprise:380-e.0
+    Image ID:       docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise@sha256:1f32cb24548792557415c3630992327e535aa2e1444ee75c35fedf0718c9572b
+    Ports:          8080/TCP, 8443/TCP
+    Host Ports:     0/TCP, 0/TCP
+    State:          Running
+      Started:      Thu, 19 May 2022 22:07:07 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:      31032m
+      memory:   59610Mi
+    Liveness:   http-get http://:8080/v1/info delay=0s timeout=5s period=60s #success=1 #failure=3
+    Readiness:  http-get http://:8080/v1/readiness delay=0s timeout=5s period=10s #success=1 #failure=3
+    Startup:    http-get http://:8080/v1/readiness delay=0s timeout=1s period=10s #success=1 #failure=40
+    Environment:
+      POD_ID:          (v1:metadata.uid)
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /etc/starburst/telemetry from prometheus-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-99mfl (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  starburst-config:
+    Type:                Projected (a volume that contains injected data from multiple sources)
+    SecretName:          values-yaml-secret
+    SecretOptionalName:  <nil>
+    SecretName:          license
+    SecretOptionalName:  <nil>
+  starburst-config-updated:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  prometheus-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      starburst-worker-p8s
+    Optional:  false
+  kube-api-access-99mfl:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Guaranteed
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
+
+
+Name:         worker-7fb5cb9759-k59zz
+Namespace:    starburst
+Priority:     0
+Node:         ip-10-68-40-121.eu-west-1.compute.internal/10.68.40.121
+Start Time:   Thu, 19 May 2022 22:07:04 +0100
+Labels:       app=starburst-enterprise
+              helm-chart=starburst-enterprise-380.0.0
+              helm-release=enterprise-rob068
+              managed-by=Helm
+              pod-template-hash=7fb5cb9759
+              role=worker
+Annotations:  checksum/pullsecret: 90722675464f1f940c05898e52c46ab7c871e03cb93003d7c2901cff1a346044
+              checksum/worker-values: 02e178029ac5c5498e5095b36ed338c7d7792325e40738d82e4d7cc2c21db0c0
+              kubernetes.io/psp: eks.privileged
+Status:       Running
+IP:           10.68.23.143
+IPs:
+  IP:           10.68.23.143
+Controlled By:  ReplicaSet/worker-7fb5cb9759
+Init Containers:
+  starburst-enterprise-init:
+    Container ID:  docker://175ec177f01d03734c276dabb88ed927ebe689b0eba12462e35521237d05c50e
+    Image:         harbor.starburstdata.net/starburstdata/starburst-enterprise-init:380.0.0
+    Image ID:      docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise-init@sha256:fd0fa6431b384ed23a1303e1e46a2c8ec149bcde3ca7ed1afc3e540cfd2f01d0
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      starburst-conf-cli
+      generate
+      --values-yaml
+      /work-dir/values.yaml
+      --config-type
+      WORKER
+      --starburst-config-dir
+      /etc/starburst
+      --ip
+      $(POD_IP)
+      --k8s-namespace
+      $(POD_NAMESPACE)
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Thu, 19 May 2022 22:07:11 +0100
+      Finished:     Thu, 19 May 2022 22:07:11 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:     31032m
+      memory:  59610Mi
+    Environment:
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-v8xsm (ro)
+      /work-dir from starburst-config (rw)
+Containers:
+  worker:
+    Container ID:   docker://69d292b03d968c7c73094a43e97b8efc40206b8258a3c1d7e25a7d9cb9393f07
+    Image:          harbor.starburstdata.net/starburstdata/starburst-enterprise:380-e.0
+    Image ID:       docker-pullable://harbor.starburstdata.net/starburstdata/starburst-enterprise@sha256:1f32cb24548792557415c3630992327e535aa2e1444ee75c35fedf0718c9572b
+    Ports:          8080/TCP, 8443/TCP
+    Host Ports:     0/TCP, 0/TCP
+    State:          Running
+      Started:      Thu, 19 May 2022 22:07:12 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     31032m
+      memory:  59610Mi
+    Requests:
+      cpu:      31032m
+      memory:   59610Mi
+    Liveness:   http-get http://:8080/v1/info delay=0s timeout=5s period=60s #success=1 #failure=3
+    Readiness:  http-get http://:8080/v1/readiness delay=0s timeout=5s period=10s #success=1 #failure=3
+    Startup:    http-get http://:8080/v1/readiness delay=0s timeout=1s period=10s #success=1 #failure=40
+    Environment:
+      POD_ID:          (v1:metadata.uid)
+      POD_IP:          (v1:status.podIP)
+      POD_NAMESPACE:  starburst (v1:metadata.namespace)
+    Mounts:
+      /etc/starburst from starburst-config-updated (rw)
+      /etc/starburst/telemetry from prometheus-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-v8xsm (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  starburst-config:
+    Type:                Projected (a volume that contains injected data from multiple sources)
+    SecretName:          values-yaml-secret
+    SecretOptionalName:  <nil>
+    SecretName:          license
+    SecretOptionalName:  <nil>
+  starburst-config-updated:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  prometheus-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      starburst-worker-p8s
+    Optional:  false
+  kube-api-access-v8xsm:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Guaranteed
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>

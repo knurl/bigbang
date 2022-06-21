@@ -1,0 +1,70 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+Counter	loadgen.py	/^class Counter:$/;"	c
+ScalingError	summarise.py	/^class ScalingError(Exception):$/;"	c
+ScalingError	test_battery.py	/^class ScalingError(Exception):$/;"	c
+__init__	loadgen.py	/^    def __init__(self):$/;"	m	class:Counter
+average_latency	summarise.py	/^def average_latency(filename):$/;"	f
+average_latency	test_battery.py	/^def average_latency(filename):$/;"	f
+avg	summarise.py	/^                        avg = round(average_latency(existing))$/;"	v
+avg	summarise.py	/^                avg = 'NULL'$/;"	v
+avg	test_battery.py	/^                avg = round(average_latency(existing))$/;"	v
+build_logfile_dict	summarise.py	/^def build_logfile_dict():$/;"	f
+build_logfile_dict	test_battery.py	/^def build_logfile_dict():$/;"	f
+cluster_is_stable	test_battery.py	/^def cluster_is_stable(nodes):$/;"	f
+cmd	test_battery.py	/^    cmd = tests_to_run.pop(0)$/;"	v
+concur_l	summarise.py	/^concur_l = 'Concurrency'$/;"	v
+csv_writer	summarise.py	/^        csv_writer = csv.DictWriter(outf, fieldnames=headers, delimiter=',')$/;"	v
+dec	loadgen.py	/^    def dec(self):$/;"	m	class:Counter
+existing	summarise.py	/^                    existing = get_best_existing_logfile(logfile_dict, prefix, t)$/;"	v
+existing	test_battery.py	/^            existing = get_best_existing_logfile(logfile_dict, prefix, t)$/;"	v
+filename	test_battery.py	/^        filename = prefix + '_' + uniq + '.csv'$/;"	v
+filename_re	summarise.py	/^        re.compile(r'(tpcds_u\\d\\d?\\d?_sf\\d\\d?\\d?_\\d\\d?)_[\\da-zA-Z]{6}\\.csv')$/;"	v
+filename_re	test_battery.py	/^        re.compile(r'(tpcds_u\\d\\d?\\d?_sf\\d\\d?\\d?_\\d\\d?)_[\\da-zA-Z]{6}\\.csv')$/;"	v
+getCount	loadgen.py	/^    def getCount(self):$/;"	m	class:Counter
+get_best_existing_logfile	summarise.py	/^def get_best_existing_logfile(logfile_dict, prefix, numthreads):$/;"	f
+get_best_existing_logfile	test_battery.py	/^def get_best_existing_logfile(logfile_dict, prefix, numthreads):$/;"	f
+get_nodes	test_battery.py	/^def get_nodes():$/;"	f
+get_unready_pods	test_battery.py	/^def get_unready_pods():$/;"	f
+headers	summarise.py	/^        headers = [concur_l] + sizes_str$/;"	v
+inc	loadgen.py	/^    def inc(self):$/;"	m	class:Counter
+last	loadgen.py	/^        last = now$/;"	v
+last	loadgen.py	/^last = time.time()$/;"	v
+lock	loadgen.py	/^lock = threading.Lock()$/;"	v
+logfile_completed	summarise.py	/^def logfile_completed(filename, numthreads):$/;"	f
+logfile_completed	test_battery.py	/^def logfile_completed(filename, numthreads):$/;"	f
+logfile_dict	summarise.py	/^logfile_dict = build_logfile_dict()$/;"	v
+logfile_dict	test_battery.py	/^logfile_dict = build_logfile_dict()$/;"	v
+newconnectionpause	loadgen.py	/^newconnectionpause = 0.1$/;"	v
+newquerypause	loadgen.py	/^newquerypause = 0.0$/;"	v
+nodes	test_battery.py	/^                nodes = get_nodes()$/;"	v
+now	test_battery.py	/^            now = time.time()$/;"	v
+now	test_battery.py	/^        now = time.time()$/;"	v
+nq	loadgen.py	/^nq = Counter()$/;"	v
+numloops	summarise.py	/^numloops=1$/;"	v
+numloops	test_battery.py	/^numloops = 1$/;"	v
+numthreadcount	summarise.py	/^numthreadcount = 8$/;"	v
+nworkers	test_battery.py	/^nworkers = 16$/;"	v
+polly	test_battery.py	/^        polly = select.poll()$/;"	v
+preexec_fn	test_battery.py	/^            preexec_fn=os.setsid) as p:$/;"	v
+prefix	summarise.py	/^                prefix = f'tpcds_u{t}_{s}_{nworkers}'$/;"	v
+prefix	test_battery.py	/^        prefix = f'tpcds_u{t}_{s}_{nworkers}'$/;"	v
+queries	loadgen.py	/^queries = [ "select max(nationkey) from s3.s.nation",$/;"	v
+reportingpause	loadgen.py	/^reportingpause = 1.0$/;"	v
+row	summarise.py	/^            row = {concur_l: t}$/;"	v
+runme	loadgen.py	/^def runme():$/;"	f
+s	summarise.py	/^                s = f'sf{size}'$/;"	v
+sizes	summarise.py	/^sizes = (1, 10, 100, 200, 400)$/;"	v
+sizes_str	summarise.py	/^sizes_str = list(map(str, sizes))$/;"	v
+t	loadgen.py	/^        t = threading.Thread(target = runme)$/;"	v
+tests_to_run	summarise.py	/^tests_to_run = []$/;"	v
+tests_to_run	test_battery.py	/^tests_to_run = []$/;"	v
+threadpoolsize	loadgen.py	/^threadpoolsize = 200$/;"	v
+threads	loadgen.py	/^threads = []$/;"	v
+threads	summarise.py	/^threads = list(map(lambda x: 2**x, range(numthreadcount)))$/;"	v
+uniq	test_battery.py	/^        uniq = out.randomString(6)$/;"	v
+wait_until_cluster_stable	test_battery.py	/^def wait_until_cluster_stable():$/;"	f
