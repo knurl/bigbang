@@ -21,3 +21,4 @@ gcp/key.json
 commit
 ldaplaunch.sh
 *.csv
+*.log

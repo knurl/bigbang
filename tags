@@ -138,7 +138,6 @@ getUser	bigbang.py	/^def getUser(user: str, uid: int, gid: int, dcs: str) -> str
 get_cat_name	tpc.py	/^    def get_cat_name(self) -> str:$/;"	m	class:TpcCatInfo
 get_table_names	tpc.py	/^    def get_table_names(self) -> Set[str]:$/;"	m	class:TpcCatInfo
 get_table_size	tpc.py	/^    def get_table_size(self, scale_set: str, table_name: str) -> int:$/;"	m	class:TpcCatInfo
-get_tpc_schema	bigbang.py	/^def get_tpc_schema(tpctype: str, catalog: str) -> str:$/;"	f
 helm	bigbang.py	/^def helm(cmd: str) -> None:$/;"	f
 helmCreateNamespace	bigbang.py	/^def helmCreateNamespace() -> None:$/;"	f
 helmDeleteNamespace	bigbang.py	/^def helmDeleteNamespace() -> None:$/;"	f
@@ -251,7 +250,6 @@ rsa	bigbang.py	/^rsa            = os.path.expanduser("~\/.ssh\/id_rsa")$/;"	v
 rsaPub	bigbang.py	/^rsaPub         = os.path.expanduser("~\/.ssh\/id_rsa.pub")$/;"	v
 run	run.py	/^def run(args, check = True, verbose = True) -> subprocess.CompletedProcess:$/;"	f
 runCollect	run.py	/^def runCollect(args) -> str:$/;"	f
-runFork	run.py	/^def runFork(args):$/;"	f
 runShell	run.py	/^def runShell(cmd: str) -> int:$/;"	f
 runStdout	run.py	/^def runStdout(args):$/;"	f
 runTry	run.py	/^def runTry(args) -> subprocess.CompletedProcess:$/;"	f
@@ -295,9 +293,10 @@ tmpdir	bigbang.py	/^tmpdir         = "\/tmp"$/;"	v
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
 toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds
 tpccats	tpc.py	/^tpccats  = {tpchcat, tpcdscat}$/;"	v
-tpcdsbigschema	bigbang.py	/^tpcdsbigschema = tpc.scale_sets.largest()$/;"	v
+tpcds_queries	tpc.py	/^tpcds_queries = { 'q01.sql', 'q02.sql', 'q03.sql', 'q04.sql', 'q05.sql',$/;"	v
+tpcdsbigschema	bigbang.py	/^tpcdsbigschema = tpc.scale_sets.smallest()$/;"	v
 tpcdscat	tpc.py	/^tpcdscat = "tpcds"$/;"	v
-tpcdssmlschema	bigbang.py	/^tpcdssmlschema = tpc.scale_sets.smallest()$/;"	v
+tpcdssmlschema	bigbang.py	/^tpcdssmlschema = tpcdsbigschema$/;"	v
 tpchbigschema	bigbang.py	/^tpchbigschema  = tpc.scale_sets.smallest()$/;"	v
 tpchcat	tpc.py	/^tpchcat  = "tpch"$/;"	v
 tpchsmlschema	bigbang.py	/^tpchsmlschema  = tpchbigschema$/;"	v

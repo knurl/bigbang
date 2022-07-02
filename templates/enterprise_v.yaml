@@ -200,7 +200,7 @@ catalogs:
     cache-service.uri=http://cache-service:8180
     {% endif %}
   {% endif %}
-  evtlog: |
+  {{ EvtLogCat }}: |
     connector.name=postgresql
     connection-url=jdbc:postgresql://{{evtlog_address}}:{{postgres_port}}/{{DBNameEventLogger}}
     connection-user={{evtlog_user}}

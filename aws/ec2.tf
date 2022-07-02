@@ -1,6 +1,11 @@
-data "aws_availability_zones" "available" {}
+data "aws_availability_zones" "available" {
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+}
 
-data "aws_ec2_instance_type_offering" "avail_az_instance_map" {
+data "aws_ec2_instance_type_offerings" "avail_az_instance_map" {
   for_each = toset(data.aws_availability_zones.available.names)
 
   filter {
@@ -10,16 +15,16 @@ data "aws_ec2_instance_type_offering" "avail_az_instance_map" {
 
   filter {
     name   = "location"
-    values = [each.value]
+    values = ["${each.key}"]
   }
 
   location_type = "availability-zone"
-
-  preferred_instance_types = var.instance_types
 }
 
 locals {
-  azs               = keys(data.aws_ec2_instance_type_offering.avail_az_instance_map)
+  az_map            = { for az, details in data.aws_ec2_instance_type_offerings.avail_az_instance_map : az => details.instance_types if length(details.instance_types) != 0 }
+  azs               = keys(local.az_map)
   eks_azs           = [local.azs[0], local.azs[1]]
-  eks_instance_type = data.aws_ec2_instance_type_offering.avail_az_instance_map[local.azs[0]].instance_type
+  nodegroup_az      = local.azs[0]
+  eks_instance_type = local.az_map[local.nodegroup_az][0]
 }

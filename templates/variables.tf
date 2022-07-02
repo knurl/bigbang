@@ -8,6 +8,7 @@ variable "tags" {
     project     = "sizing"
     user        = "{{UserName}}"
     info        = "{{Zone}}"
+    lifecycle   = "PERSISTENT"
   }
 }
 

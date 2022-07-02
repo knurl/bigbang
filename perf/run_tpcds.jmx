@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.4.3">
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.5">
   <hashTree>
     <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Test Plan" enabled="true">
       <stringProp name="TestPlan.comments"></stringProp>
@@ -100,7 +100,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q01.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q01.sql */ EXPLAIN ANALYZE WITH
    customer_total_return AS (
     SELECT
       &quot;sr_customer_sk&quot; &quot;ctr_customer_sk&quot;
@@ -143,7 +143,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q02.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q02.sql */ EXPLAIN ANALYZE WITH
    wscs AS (
     SELECT
       &quot;sold_date_sk&quot;
@@ -237,7 +237,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q03.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query"> EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q03.sql */ EXPLAIN ANALYZE SELECT
    &quot;dt&quot;.&quot;d_year&quot;
  , &quot;${prefix}item&quot;.&quot;i_brand_id&quot; &quot;brand_id&quot;
  , &quot;${prefix}item&quot;.&quot;i_brand&quot; &quot;brand&quot;
@@ -267,7 +267,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q04.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query"> EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q04.sql */ EXPLAIN ANALYZE WITH
    year_total AS (
     SELECT
       &quot;c_customer_id&quot; &quot;customer_id&quot;
@@ -374,7 +374,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q05.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q05.sql */ EXPLAIN ANALYZE WITH
    ssr AS (
     SELECT
       &quot;s_store_id&quot;
@@ -532,7 +532,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q06.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q06.sql */ EXPLAIN ANALYZE SELECT
    &quot;a&quot;.&quot;ca_state&quot; &quot;STATE&quot;
  , &quot;count&quot;(*) &quot;cnt&quot;
  FROM
@@ -576,7 +576,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q07.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q07.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;avg&quot;(&quot;ss_quantity&quot;) &quot;agg1&quot;
  , &quot;avg&quot;(&quot;ss_list_price&quot;) &quot;agg2&quot;
@@ -615,7 +615,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q08.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q08.sql */ EXPLAIN ANALYZE SELECT
    &quot;s_store_name&quot;
  , &quot;sum&quot;(&quot;ss_net_profit&quot;)
  FROM
@@ -1070,7 +1070,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q09.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q09.sql */ EXPLAIN ANALYZE SELECT
    (CASE WHEN ((
        SELECT &quot;count&quot;(*)
        FROM
@@ -1168,7 +1168,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q10.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q10.sql */ EXPLAIN ANALYZE SELECT
    &quot;cd_gender&quot;
  , &quot;cd_marital_status&quot;
  , &quot;cd_education_status&quot;
@@ -1237,7 +1237,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q11.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q11.sql */ EXPLAIN ANALYZE WITH
    year_total AS (
     SELECT
       &quot;c_customer_id&quot; &quot;customer_id&quot;
@@ -1318,7 +1318,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q12.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q12.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;i_category&quot;
@@ -1351,7 +1351,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q13.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q13.sql */ EXPLAIN ANALYZE SELECT
    &quot;avg&quot;(&quot;ss_quantity&quot;)
  , &quot;avg&quot;(&quot;ss_ext_sales_price&quot;)
  , &quot;avg&quot;(&quot;ss_ext_wholesale_cost&quot;)
@@ -1410,7 +1410,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q14_1.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q14_1.sql */ EXPLAIN ANALYZE WITH
    cross_items AS (
     SELECT &quot;i_item_sk&quot; &quot;ss_item_sk&quot;
     FROM
@@ -1589,7 +1589,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q14_2.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q14_2.sql */ EXPLAIN ANALYZE WITH
    cross_items AS (
     SELECT &quot;i_item_sk&quot; &quot;ss_item_sk&quot;
     FROM
@@ -1752,7 +1752,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q15.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q15.sql */ EXPLAIN ANALYZE SELECT
    &quot;ca_zip&quot;
  , &quot;sum&quot;(&quot;cs_sales_price&quot;)
  FROM
@@ -1785,7 +1785,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q16.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q16.sql */ EXPLAIN ANALYZE SELECT
    &quot;count&quot;(DISTINCT &quot;cs_order_number&quot;) &quot;order count&quot;
  , &quot;sum&quot;(&quot;cs_ext_ship_cost&quot;) &quot;total shipping cost&quot;
  , &quot;sum&quot;(&quot;cs_net_profit&quot;) &quot;total net profit&quot;
@@ -1829,7 +1829,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q17.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q17.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;s_state&quot;
@@ -1884,7 +1884,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q18.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q18.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;ca_country&quot;
  , &quot;ca_state&quot;
@@ -1932,7 +1932,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q19.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q19.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_brand_id&quot; &quot;brand_id&quot;
  , &quot;i_brand&quot; &quot;brand&quot;
  , &quot;i_manufact_id&quot;
@@ -1971,7 +1971,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q20.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q20.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;i_category&quot;
@@ -2004,7 +2004,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q21.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT *
+            <stringProp name="query">/* QUERY q21.sql */ EXPLAIN ANALYZE SELECT *
  FROM
    (
     SELECT
@@ -2041,7 +2041,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q22.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q22.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_product_name&quot;
  , &quot;i_brand&quot;
  , &quot;i_class&quot;
@@ -2071,7 +2071,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q23_1.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q23_1.sql */ EXPLAIN ANALYZE WITH
    frequent_ss_items AS (
     SELECT
       &quot;substr&quot;(&quot;i_item_desc&quot;, 1, 30) &quot;itemdesc&quot;
@@ -2173,7 +2173,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q23_2.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q23_2.sql */ EXPLAIN ANALYZE WITH
    frequent_ss_items AS (
     SELECT
       &quot;substr&quot;(&quot;i_item_desc&quot;, 1, 30) &quot;itemdesc&quot;
@@ -2291,7 +2291,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q24_1.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q24_1.sql */ EXPLAIN ANALYZE WITH
    ssales AS (
     SELECT
       &quot;c_last_name&quot;
@@ -2350,7 +2350,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q24_2.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q24_2.sql */ EXPLAIN ANALYZE WITH
    ssales AS (
     SELECT
       &quot;c_last_name&quot;
@@ -2409,7 +2409,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q25.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q25.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;s_store_id&quot;
@@ -2459,7 +2459,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q26.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q26.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;avg&quot;(&quot;cs_quantity&quot;) &quot;agg1&quot;
  , &quot;avg&quot;(&quot;cs_list_price&quot;) &quot;agg2&quot;
@@ -2498,7 +2498,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q27.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q27.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;s_state&quot;
  , GROUPING (&quot;s_state&quot;) &quot;g_state&quot;
@@ -2544,7 +2544,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q28.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT *
+            <stringProp name="query">/* QUERY q28.sql */ EXPLAIN ANALYZE SELECT *
  FROM
    (
     SELECT
@@ -2633,7 +2633,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q29.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q29.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;s_store_id&quot;
@@ -2682,7 +2682,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q30.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q30.sql */ EXPLAIN ANALYZE WITH
    customer_total_return AS (
     SELECT
       &quot;wr_returning_customer_sk&quot; &quot;ctr_customer_sk&quot;
@@ -2740,7 +2740,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q31.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q31.sql */ EXPLAIN ANALYZE WITH
    ss AS (
     SELECT
       &quot;ca_county&quot;
@@ -2817,7 +2817,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q32.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT &quot;sum&quot;(&quot;cs_ext_discount_amt&quot;) &quot;excess discount amount&quot;
+            <stringProp name="query">/* QUERY q32.sql */ EXPLAIN ANALYZE SELECT &quot;sum&quot;(&quot;cs_ext_discount_amt&quot;) &quot;excess discount amount&quot;
  FROM
    ${database}.${schema}.${prefix}catalog_sales
  , ${database}.${schema}.${prefix}item
@@ -2850,7 +2850,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q33.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q33.sql */ EXPLAIN ANALYZE WITH
    ss AS (
     SELECT
       &quot;i_manufact_id&quot;
@@ -2952,7 +2952,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q34.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q34.sql */ EXPLAIN ANALYZE SELECT
    &quot;c_last_name&quot;
  , &quot;c_first_name&quot;
  , &quot;c_salutation&quot;
@@ -3001,7 +3001,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q35.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q35.sql */ EXPLAIN ANALYZE SELECT
    &quot;ca_state&quot;
  , &quot;cd_gender&quot;
  , &quot;cd_marital_status&quot;
@@ -3073,7 +3073,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q36.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q36.sql */ EXPLAIN ANALYZE SELECT
    (&quot;sum&quot;(&quot;ss_net_profit&quot;) / &quot;sum&quot;(&quot;ss_ext_sales_price&quot;)) &quot;gross_margin&quot;
  , &quot;i_category&quot;
  , &quot;i_class&quot;
@@ -3114,7 +3114,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q37.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q37.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;i_current_price&quot;
@@ -3147,7 +3147,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q38.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT &quot;count&quot;(*)
+            <stringProp name="query">/* QUERY q38.sql */ EXPLAIN ANALYZE SELECT &quot;count&quot;(*)
  FROM
    (
     SELECT DISTINCT
@@ -3199,7 +3199,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q39_1.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q39_1.sql */ EXPLAIN ANALYZE WITH
    inv AS (
     SELECT
       &quot;w_warehouse_name&quot;
@@ -3264,7 +3264,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q39_2.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q39_2.sql */ EXPLAIN ANALYZE WITH
    inv AS (
     SELECT
       &quot;w_warehouse_name&quot;
@@ -3330,7 +3330,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q40.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q40.sql */ EXPLAIN ANALYZE SELECT
    &quot;w_state&quot;
  , &quot;i_item_id&quot;
  , &quot;sum&quot;((CASE WHEN (CAST(&quot;d_date&quot; AS DATE) &lt; CAST(&apos;2000-03-11&apos; AS DATE)) THEN (&quot;cs_sales_price&quot; - COALESCE(&quot;cr_refunded_cash&quot;, 0)) ELSE 0 END)) &quot;sales_before&quot;
@@ -3364,7 +3364,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q41.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT DISTINCT &quot;i_product_name&quot;
+            <stringProp name="query">/* QUERY q41.sql */ EXPLAIN ANALYZE SELECT DISTINCT &quot;i_product_name&quot;
  FROM
    ${database}.${schema}.${prefix}item i1
  WHERE (&quot;i_manufact_id&quot; BETWEEN 738 AND (738 + 40))
@@ -3447,7 +3447,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q42.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q42.sql */ EXPLAIN ANALYZE SELECT
    &quot;dt&quot;.&quot;d_year&quot;
  , &quot;${prefix}item&quot;.&quot;i_category_id&quot;
  , &quot;${prefix}item&quot;.&quot;i_category&quot;
@@ -3478,7 +3478,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q43.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q43.sql */ EXPLAIN ANALYZE SELECT
    &quot;s_store_name&quot;
  , &quot;s_store_id&quot;
  , &quot;sum&quot;((CASE WHEN (&quot;d_day_name&quot; = &apos;Sunday&apos;) THEN &quot;ss_sales_price&quot; ELSE null END)) &quot;sun_sales&quot;
@@ -3513,7 +3513,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q44.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q44.sql */ EXPLAIN ANALYZE SELECT
    &quot;asceding&quot;.&quot;rnk&quot;
  , &quot;i1&quot;.&quot;i_product_name&quot; &quot;best_performing&quot;
  , &quot;i2&quot;.&quot;i_product_name&quot; &quot;worst_performing&quot;
@@ -3595,7 +3595,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q45.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q45.sql */ EXPLAIN ANALYZE SELECT
    &quot;ca_zip&quot;
  , &quot;ca_city&quot;
  , &quot;sum&quot;(&quot;ws_sales_price&quot;)
@@ -3635,7 +3635,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q46.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q46.sql */ EXPLAIN ANALYZE SELECT
    &quot;c_last_name&quot;
  , &quot;c_first_name&quot;
  , &quot;ca_city&quot;
@@ -3689,7 +3689,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q47.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q47.sql */ EXPLAIN ANALYZE WITH
    v1 AS (
     SELECT
       &quot;i_category&quot;
@@ -3765,7 +3765,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q48.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT &quot;sum&quot;(&quot;ss_quantity&quot;)
+            <stringProp name="query">/* QUERY q48.sql */ EXPLAIN ANALYZE SELECT &quot;sum&quot;(&quot;ss_quantity&quot;)
  FROM
    ${database}.${schema}.${prefix}store_sales
  , ${database}.${schema}.${prefix}store
@@ -3813,7 +3813,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q49.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q49.sql */ EXPLAIN ANALYZE SELECT
    &apos;web&apos; &quot;channel&quot;
  , &quot;web&quot;.&quot;item&quot;
  , &quot;web&quot;.&quot;return_ratio&quot;
@@ -3940,7 +3940,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q50.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q50.sql */ EXPLAIN ANALYZE SELECT
    &quot;s_store_name&quot;
  , &quot;s_company_id&quot;
  , &quot;s_street_number&quot;
@@ -3990,7 +3990,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q51.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q51.sql */ EXPLAIN ANALYZE WITH
    web_v1 AS (
     SELECT
       &quot;ws_item_sk&quot; &quot;item_sk&quot;
@@ -4057,7 +4057,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q52.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q52.sql */ EXPLAIN ANALYZE SELECT
    &quot;dt&quot;.&quot;d_year&quot;
  , &quot;${prefix}item&quot;.&quot;i_brand_id&quot; &quot;brand_id&quot;
  , &quot;${prefix}item&quot;.&quot;i_brand&quot; &quot;brand&quot;
@@ -4088,7 +4088,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q53.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT *
+            <stringProp name="query">/* QUERY q53.sql */ EXPLAIN ANALYZE SELECT *
  FROM
    (
     SELECT
@@ -4129,7 +4129,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q54.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q54.sql */ EXPLAIN ANALYZE WITH
    my_customers AS (
     SELECT DISTINCT
       &quot;c_customer_sk&quot;
@@ -4218,7 +4218,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q55.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q55.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_brand_id&quot; &quot;brand_id&quot;
  , &quot;i_brand&quot; &quot;brand&quot;
  , &quot;sum&quot;(&quot;ss_ext_sales_price&quot;) &quot;ext_price&quot;
@@ -4248,7 +4248,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q56.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q56.sql */ EXPLAIN ANALYZE WITH
    ss AS (
     SELECT
       &quot;i_item_id&quot;
@@ -4350,7 +4350,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q57.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q57.sql */ EXPLAIN ANALYZE WITH
    v1 AS (
     SELECT
       &quot;i_category&quot;
@@ -4422,7 +4422,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q58.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q58.sql */ EXPLAIN ANALYZE WITH
    ss_items AS (
     SELECT
       &quot;i_item_id&quot; &quot;item_id&quot;
@@ -4529,7 +4529,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q59.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q59.sql */ EXPLAIN ANALYZE WITH
    wss AS (
     SELECT
       &quot;d_week_seq&quot;
@@ -4617,7 +4617,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q60.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q60.sql */ EXPLAIN ANALYZE WITH
    ss AS (
     SELECT
       &quot;i_item_id&quot;
@@ -4719,7 +4719,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q61.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q61.sql */ EXPLAIN ANALYZE SELECT
    &quot;promotions&quot;
  , &quot;total&quot;
  , ((CAST(&quot;promotions&quot; AS DECIMAL(15,4)) / CAST(&quot;total&quot; AS DECIMAL(15,4))) * 100)
@@ -4785,7 +4785,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q62.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q62.sql */ EXPLAIN ANALYZE SELECT
    &quot;substr&quot;(&quot;w_warehouse_name&quot;, 1, 20)
  , &quot;sm_type&quot;
  , &quot;web_name&quot;
@@ -4825,7 +4825,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q63.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT *
+            <stringProp name="query">/* QUERY q63.sql */ EXPLAIN ANALYZE SELECT *
  FROM
    (
     SELECT
@@ -4866,7 +4866,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q64.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q64.sql */ EXPLAIN ANALYZE WITH
    cs_ui AS (
     SELECT
       &quot;cs_item_sk&quot;
@@ -4990,7 +4990,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q65.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q65.sql */ EXPLAIN ANALYZE SELECT
    &quot;s_store_name&quot;
  , &quot;i_item_desc&quot;
  , &quot;sc&quot;.&quot;revenue&quot;
@@ -5051,7 +5051,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q66.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q66.sql */ EXPLAIN ANALYZE SELECT
    &quot;w_warehouse_name&quot;
  , &quot;w_warehouse_sq_ft&quot;
  , &quot;w_city&quot;
@@ -5211,7 +5211,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q67.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT *
+            <stringProp name="query">/* QUERY q67.sql */ EXPLAIN ANALYZE SELECT *
  FROM
    (
     SELECT
@@ -5266,7 +5266,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q68.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q68.sql */ EXPLAIN ANALYZE SELECT
    &quot;c_last_name&quot;
  , &quot;c_first_name&quot;
  , &quot;ca_city&quot;
@@ -5322,7 +5322,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q69.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q69.sql */ EXPLAIN ANALYZE SELECT
    &quot;cd_gender&quot;
  , &quot;cd_marital_status&quot;
  , &quot;cd_education_status&quot;
@@ -5385,7 +5385,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q70.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q70.sql */ EXPLAIN ANALYZE SELECT
    &quot;sum&quot;(&quot;ss_net_profit&quot;) &quot;total_sum&quot;
  , &quot;s_state&quot;
  , &quot;s_county&quot;
@@ -5433,7 +5433,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q71.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q71.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_brand_id&quot; &quot;brand_id&quot;
  , &quot;i_brand&quot; &quot;brand&quot;
  , &quot;t_hour&quot;
@@ -5498,7 +5498,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q72.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q72.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_desc&quot;
  , &quot;w_warehouse_name&quot;
  , &quot;d1&quot;.&quot;d_week_seq&quot;
@@ -5541,7 +5541,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q73.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q73.sql */ EXPLAIN ANALYZE SELECT
    &quot;c_last_name&quot;
  , &quot;c_first_name&quot;
  , &quot;c_salutation&quot;
@@ -5589,7 +5589,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q74.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q74.sql */ EXPLAIN ANALYZE WITH
    year_total AS (
     SELECT
       &quot;c_customer_id&quot; &quot;customer_id&quot;
@@ -5661,7 +5661,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q75.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q75.sql */ EXPLAIN ANALYZE WITH
    all_sales AS (
     SELECT
       &quot;d_year&quot;
@@ -5758,7 +5758,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q76.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q76.sql */ EXPLAIN ANALYZE SELECT
    &quot;channel&quot;
  , &quot;col_name&quot;
  , &quot;d_year&quot;
@@ -5828,7 +5828,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q77.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q77.sql */ EXPLAIN ANALYZE WITH
    ss AS (
     SELECT
       &quot;s_store_sk&quot;
@@ -5962,7 +5962,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q78.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q78.sql */ EXPLAIN ANALYZE WITH
    ws AS (
     SELECT
       &quot;d_year&quot; &quot;ws_sold_year&quot;
@@ -6049,7 +6049,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q79.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q79.sql */ EXPLAIN ANALYZE SELECT
    &quot;c_last_name&quot;
  , &quot;c_first_name&quot;
  , &quot;substr&quot;(&quot;s_city&quot;, 1, 30)
@@ -6097,7 +6097,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q80.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q80.sql */ EXPLAIN ANALYZE WITH
    ssr AS (
     SELECT
       &quot;s_store_id&quot; &quot;store_id&quot;
@@ -6217,7 +6217,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q81.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q81.sql */ EXPLAIN ANALYZE WITH
    customer_total_return AS (
     SELECT
       &quot;cr_returning_customer_sk&quot; &quot;ctr_customer_sk&quot;
@@ -6278,7 +6278,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q82.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q82.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;i_current_price&quot;
@@ -6311,7 +6311,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q83.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q83.sql */ EXPLAIN ANALYZE WITH
    sr_items AS (
     SELECT
       &quot;i_item_id&quot; &quot;item_id&quot;
@@ -6412,7 +6412,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q84.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q84.sql */ EXPLAIN ANALYZE SELECT
    &quot;c_customer_id&quot; &quot;customer_id&quot;
  , &quot;concat&quot;(&quot;concat&quot;(&quot;c_last_name&quot;, &apos;, &apos;), &quot;c_first_name&quot;) &quot;${database}.${schema}.${prefix}customername&quot;
  FROM
@@ -6446,7 +6446,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q85.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q85.sql */ EXPLAIN ANALYZE SELECT
    &quot;substr&quot;(&quot;r_reason_desc&quot;, 1, 20)
  , &quot;avg&quot;(&quot;ws_quantity&quot;)
  , &quot;avg&quot;(&quot;wr_refunded_cash&quot;)
@@ -6510,7 +6510,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q86.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q86.sql */ EXPLAIN ANALYZE SELECT
    &quot;sum&quot;(&quot;ws_net_paid&quot;) &quot;total_sum&quot;
  , &quot;i_category&quot;
  , &quot;i_class&quot;
@@ -6540,7 +6540,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q87.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT &quot;count&quot;(*)
+            <stringProp name="query">/* QUERY q87.sql */ EXPLAIN ANALYZE SELECT &quot;count&quot;(*)
  FROM
    (
  (
@@ -6594,7 +6594,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q88.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT *
+            <stringProp name="query">/* QUERY q88.sql */ EXPLAIN ANALYZE SELECT *
  FROM
    (
     SELECT &quot;count&quot;(*) &quot;h8_30_to_9&quot;
@@ -6770,7 +6770,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q89.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT *
+            <stringProp name="query">/* QUERY q89.sql */ EXPLAIN ANALYZE SELECT *
  FROM
    (
     SELECT
@@ -6814,7 +6814,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q90.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT (CAST(&quot;amc&quot; AS DECIMAL(15,4)) / CAST(&quot;pmc&quot; AS DECIMAL(15,4))) &quot;am_pm_ratio&quot;
+            <stringProp name="query">/* QUERY q90.sql */ EXPLAIN ANALYZE SELECT (CAST(&quot;amc&quot; AS DECIMAL(15,4)) / CAST(&quot;pmc&quot; AS DECIMAL(15,4))) &quot;am_pm_ratio&quot;
  FROM
    (
     SELECT &quot;count&quot;(*) &quot;amc&quot;
@@ -6860,7 +6860,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q91.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q91.sql */ EXPLAIN ANALYZE SELECT
    &quot;cc_call_center_id&quot; &quot;Call_Center&quot;
  , &quot;cc_name&quot; &quot;Call_Center_Name&quot;
  , &quot;cc_manager&quot; &quot;Manager&quot;
@@ -6903,7 +6903,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q92.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT &quot;sum&quot;(&quot;ws_ext_discount_amt&quot;) &quot;Excess Discount Amount&quot;
+            <stringProp name="query">/* QUERY q92.sql */ EXPLAIN ANALYZE SELECT &quot;sum&quot;(&quot;ws_ext_discount_amt&quot;) &quot;Excess Discount Amount&quot;
  FROM
    ${database}.${schema}.${prefix}web_sales
  , ${database}.${schema}.${prefix}item
@@ -6937,7 +6937,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q93.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q93.sql */ EXPLAIN ANALYZE SELECT
    &quot;ss_customer_sk&quot;
  , &quot;sum&quot;(&quot;act_sales&quot;) &quot;sumsales&quot;
  FROM
@@ -6972,7 +6972,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q94.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q94.sql */ EXPLAIN ANALYZE SELECT
    &quot;count&quot;(DISTINCT &quot;ws_order_number&quot;) &quot;order count&quot;
  , &quot;sum&quot;(&quot;ws_ext_ship_cost&quot;) &quot;total shipping cost&quot;
  , &quot;sum&quot;(&quot;ws_net_profit&quot;) &quot;total net profit&quot;
@@ -7016,7 +7016,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q95.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q95.sql */ EXPLAIN ANALYZE WITH
    ws_wh AS (
     SELECT
       &quot;ws1&quot;.&quot;ws_order_number&quot;
@@ -7071,7 +7071,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q96.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT &quot;count&quot;(*)
+            <stringProp name="query">/* QUERY q96.sql */ EXPLAIN ANALYZE SELECT &quot;count&quot;(*)
  FROM
    ${database}.${schema}.${prefix}store_sales
  , ${database}.${schema}.${prefix}household_demographics
@@ -7100,7 +7100,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q97.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE WITH
+            <stringProp name="query">/* QUERY q97.sql */ EXPLAIN ANALYZE WITH
    ssci AS (
     SELECT
       &quot;ss_customer_sk&quot; &quot;customer_sk&quot;
@@ -7149,7 +7149,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q98.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q98.sql */ EXPLAIN ANALYZE SELECT
    &quot;i_item_id&quot;
  , &quot;i_item_desc&quot;
  , &quot;i_category&quot;
@@ -7181,7 +7181,7 @@
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q99.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>
             <stringProp name="queryType">Select Statement</stringProp>
-            <stringProp name="query">EXPLAIN ANALYZE SELECT
+            <stringProp name="query">/* QUERY q99.sql */ EXPLAIN ANALYZE SELECT
    &quot;substr&quot;(&quot;w_warehouse_name&quot;, 1, 20)
  , &quot;sm_type&quot;
  , &quot;cc_name&quot;

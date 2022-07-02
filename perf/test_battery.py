@@ -9,7 +9,7 @@ import pyjq
 import csv
 from collections import Counter
 
-nworkers = 16
+nworkers = 8
 numloops = 1
 filename_re = \
         re.compile(r'(tpcds_u\d\d?\d?_sf\d\d?\d?_\d\d?)_[\da-zA-Z]{6}\.csv')
@@ -138,13 +138,12 @@ logfile_dict = build_logfile_dict()
 
 tests_to_run = []
 
-#FIXME
-#nodes = get_nodes() # Shouldn't change as long as we remain stable
-#if not cluster_is_stable(nodes):
-#    out.announceLoud(['Cluster lost stability', 'finding it again'])
-#    wait_until_cluster_stable()
-#    nodes = get_nodes()
-#    out.announce(f'Cluster restabilised at {nworkers} workers')
+nodes = get_nodes() # Shouldn't change as long as we remain stable
+if not cluster_is_stable(nodes):
+    out.announceLoud(['Cluster lost stability', 'finding it again'])
+    wait_until_cluster_stable()
+    nodes = get_nodes()
+    out.announce(f'Cluster restabilised at {nworkers} workers')
 
 for t in (1, 2, 4, 8, 16, 32, 64, 128):
     for s in ('sf1', 'sf10', 'sf100', 'sf200', 'sf400'):
@@ -172,8 +171,6 @@ if tests_to_run:
     print('Tests to run:\n{}'.format("\n".join(tests_to_run)))
 else:
     print('No tests to run!')
-
-sys.exit(0)
 
 while len(tests_to_run) > 0:
     cmd = tests_to_run.pop(0)

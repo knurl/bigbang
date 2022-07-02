@@ -144,4 +144,3 @@ class CommandGroup:
     def waitOnAllCopies(self) -> None:
         with self.cv:
             self.cv.wait_for(self.allCommandsDone)
-

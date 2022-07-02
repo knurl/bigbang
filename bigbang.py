@@ -55,6 +55,7 @@ trinopass      = "test"
 dbschema       = "s"
 cacheschema    = "cache"
 dbevtlog       = "evtlog" # event logger PostgreSQL database
+evtlogcat      = "evtlog" # catalog name for event logger
 dbhms          = "hms" # Hive metastore persistent database
 dbcachesrv     = "cachesrv" # cache service persistent database
 dbuser         = "starburstuser"
@@ -83,19 +84,8 @@ minbucketsize  = 1 << 12
 
 tpchbigschema  = tpc.scale_sets.smallest()
 tpchsmlschema  = tpchbigschema
-tpcdsbigschema = tpc.scale_sets.largest()
-tpcdssmlschema = tpc.scale_sets.smallest()
-
-def get_tpc_schema(tpctype: str, catalog: str) -> str:
-    if tpctype == "tpch":
-        if catalog == hivecat:
-            return tpchbigschema
-        return tpchsmlschema
-    else:
-        assert tpctype == "tpcds"
-        if catalog == hivecat:
-            return tpcdsbigschema
-        return tpcdssmlschema
+tpcdsbigschema = tpc.scale_sets.smallest()
+tpcdssmlschema = tpcdsbigschema
 
 #
 # Secrets
@@ -367,7 +357,7 @@ dbInstanceType = ""
 
 if target == "aws":
     if perftest:
-        instanceTypes = myvars["AwsPerfInstanceTypes"]
+        instanceTypes = myvars["AwsPerfInstanceTypes"][capacityType]
     else:
         instanceTypes = myvars["AwsInstanceTypes"][capacityType]
     smallInstanceType = myvars["AwsSmallInstanceType"]
@@ -1192,7 +1182,8 @@ def startPortForwardToLBs(bastionIp: str,
 def dontLoadCat(cat: str) -> bool:
     # FIXME For now, don't write tpcds data to Delta because of typing issues
     # FIXME For now, don't write to BigQuery
-    avoidcat = {tpc.tpchcat, tpc.tpcdscat, syscat, sfdccat, deltacat, bqcat}
+    avoidcat = {evtlogcat, tpc.tpchcat, tpc.tpcdscat, syscat, sfdccat,
+            deltacat, bqcat}
     # Synapse serverless pools are read-only
     if target == "az":
         avoidcat.add(synapseslcat)
@@ -1232,7 +1223,7 @@ def copySchemaTables(tpc_cat_info: tpc.TpcCatInfo, srcCatalog: str,
 
     cg = cmdgrp.CommandGroup(getStarburstHttpUrl(), tlsenabled(), trinouser,
             trinopass)
-    announce('creating {tpc} tables in {cat}: schemas {scm}'.format(tpc =
+    announce('creating {tpc} tables in {cat}; schemas: {scm}'.format(tpc =
         tpc_cat_info.get_cat_name(), cat = ", ".join(dstCatalogs), scm =
         ", ".join(srcSchemas)))
     for dstCatalog in dstCatalogs:
@@ -1366,7 +1357,8 @@ def loadDatabases(perftest: bool, tpcds_cat_info: tpc.TpcCatInfo, hive_location:
     # First copy tpcds large scale set to hive...
     scale_sets = {tpcdsbigschema}
     if perftest:
-        scale_sets = tpc.scale_sets.range(tpcdssmlschema, tpcdsbigschema)
+        scale_sets = tpc.scale_sets.range(tpc.scale_sets.smallest(),
+                tpc.scale_sets.largest())
 
     copySchemaTables(tpcds_cat_info, tpc.tpcdscat, scale_sets, [hivecat],
             hive_location)
@@ -1526,6 +1518,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> None:
               "DBNameHms":          dbhms,
               "DBNameCacheSrv":     dbcachesrv,
               "DBPassword":         dbpwd,
+              "EvtLogCat":          evtlogcat,
               "HiveCat":            hivecat,
               "IngressName":        ingressname,
               "KeystorePass":       keystorepass,
@@ -2122,6 +2115,37 @@ def checkEtcHosts() -> None:
             print(f"Unable to write to {hostsf}. Try yourself?")
     sys.exit(f"Script cannot continue without {starburstfqdn} in {hostsf}")
 
+def cleanOldTunnels() -> None:
+    # Check to see if anything looks suspiciously like an old ssh tunnel, and
+    # see if the user is happy to kill them.
+    announce('Looking for old tunnels to clean')
+    r = re.compile(r'ssh -N -L.+:.+:.+ ubuntu@')
+    def get_tunnel_procs():
+        nonlocal r
+        tunnels = []
+        for proc in psutil.process_iter(attrs=['pid', 'cmdline']):
+            if not proc.info['cmdline']:
+                continue
+            if r.match(" ".join(proc.info['cmdline'])):
+                tunnels.append(proc)
+        return tunnels
+
+    while True:
+        procs = get_tunnel_procs()
+        if not procs:
+            break
+
+        for proc in procs:
+            print(str(proc.info['pid']) + ' - ' +
+                    " ".join(proc.info['cmdline']))
+
+        yn = input('These look like old tunnels. Kill them? [Y/n] -> ')
+        if not yn or yn.lower()[0] == 'y':
+            for proc in procs:
+                proc.terminate()
+        else:
+            break
+    
 def main() -> None:
     if ns.progmeter_test:
         spinWaitTest()
@@ -2136,6 +2160,7 @@ def main() -> None:
     creds = getCreds()
     checkRSAKey()
     checkEtcHosts()
+    cleanOldTunnels()
     buildLdapLauncher(domain)
     buildBastionLauncher()
     if target == "gcp":
