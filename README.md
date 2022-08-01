@@ -146,8 +146,8 @@ to install the right version of python.
 
 ```
 brew install pyenv
-pyenv install 3.9.1
-pyenv global 3.9.1
+pyenv install 3.9.13
+pyenv global 3.9.13
 ```
 
 Then once you've got that installed, you should install the required python
@@ -164,3 +164,4 @@ a monospace font with a full representation of Plane 0, which includes the
 arrows (U+2500–U+257F) and box-drawing characters (U+2500–U+257F). I highly
 recommend [Iosevka](https://en.wikipedia.org/wiki/Iosevka), which renders
 beautifully.
+====

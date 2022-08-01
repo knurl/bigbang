@@ -19,7 +19,7 @@ resource "aws_route53_record" "ldap_a_record" {
   name    = "ldap"
   type    = "A"
   ttl     = "3600"
-  records = [aws_instance.ldaps.private_ip]
+  records = [local.ldap_ip]
 }
 
 resource "aws_route53_record" "bastion_a_record" {
@@ -27,5 +27,5 @@ resource "aws_route53_record" "bastion_a_record" {
   name    = "bastion"
   type    = "A"
   ttl     = "3600"
-  records = [aws_instance.bastion.private_ip]
+  records = [local.bastion_ip]
 }

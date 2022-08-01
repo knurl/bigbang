@@ -1,7 +1,7 @@
 #!python
 
-import prestodb, time, threading
-import time
+import prestodb # type: ignore
+import time, threading
 
 # Change this array to include the queries you want to rotate through
 queries = [ "select max(nationkey) from s3.s.nation",
@@ -53,7 +53,7 @@ def runme():
         nq.dec()
         time.sleep(newquerypause)
 
-threads = []
+threads: list[threading.Thread] = []
 last = time.time()
 while True:
     if len(threads) < threadpoolsize:

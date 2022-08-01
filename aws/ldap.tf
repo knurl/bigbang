@@ -44,4 +44,9 @@ resource "aws_instance" "ldaps" {
   vpc_security_group_ids = [aws_security_group.ldaps_sg.id]
   user_data              = file(var.ldaps_launch_script)
   tags                   = merge(var.tags, { Name = "${var.ldaps_name}" })
+
+  /* We have a dependency on our NAT gateway for outbound connectivity during
+   * our launch script, as well as DNS so that certificates can be validated.
+   */
+  depends_on = [module.vpc, aws_route53_record.ldap_a_record]
 }

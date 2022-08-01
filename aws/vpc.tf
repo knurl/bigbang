@@ -5,7 +5,7 @@ module "vpc" {
   name = var.network_name
   cidr = var.my_cidr
 
-  azs              = local.eks_azs
+  azs              = local.preferred_eks_azs
   private_subnets  = [for k in ["prv_a", "prv_b"] : module.subnet_addrs.network_cidr_blocks[k]]
   database_subnets = [for k in ["db_a", "db_b"] : module.subnet_addrs.network_cidr_blocks[k]]
   public_subnets   = [for k in ["pub_a", "pub_b"] : module.subnet_addrs.network_cidr_blocks[k]]
@@ -77,20 +77,19 @@ data "aws_iam_policy_document" "vpc_endpoint_policy_doc" {
   }
 }
 
-module "vpc_endpoints" {
-  source = "terraform-aws-modules/vpc/aws//modules/vpc-endpoints"
+data "aws_vpc_endpoint_service" "s3" {
+  service      = "s3"
+  service_type = "Gateway"
+}
 
-  vpc_id             = module.vpc.vpc_id
-  security_group_ids = [aws_security_group.vpc_endpoint_sg.id]
-
-  endpoints = {
-    s3 = {
-      service    = "s3"
-      tags       = var.tags
-      subnet_ids = module.vpc.private_subnets
-      policy     = data.aws_iam_policy_document.vpc_endpoint_policy_doc.json
-    }
-  }
+# Create a VPC endpoint
+resource "aws_vpc_endpoint" "ep" {
+  vpc_id            = module.vpc.vpc_id
+  service_name      = data.aws_vpc_endpoint_service.s3.service_name
+  route_table_ids   = module.vpc.private_route_table_ids
+  vpc_endpoint_type = data.aws_vpc_endpoint_service.s3.service_type
+  policy            = data.aws_iam_policy_document.vpc_endpoint_policy_doc.json
+  tags              = var.tags
 }
 
 locals {
@@ -104,4 +103,3 @@ resource "aws_key_pair" "key_pair" {
   public_key      = var.ssh_public_key
   tags            = var.tags
 }
-

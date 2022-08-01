@@ -305,12 +305,22 @@ def allocateResources(nodeCount: int, mincpu: int, minmem: int, namespace: str,
 # requiring that nodeCount > 2). We guarantee that the cache service and Hive
 # will be scheduled to different nodes by using pod anti-affinity rules.
 #
-def planWorkerSize(namespace: str, verbose: bool = False) -> dict:
+def planWorkerSize(namespace: str, cachesrv_enabled: bool, hms_enabled: bool,
+        verbose: bool = False) -> dict:
     nodeCount, mincpu, minmem = getMinNodeResources(namespace, verbose)
     print(f"All {nodeCount} nodes have >= {mincpu}m CPU and {minmem}Ki mem "
             "after K8S system pods")
-    x = 64 # divide into slices of 32 to start
     nodeResources: list[NodeResource] = []
+
+    if not (cachesrv_enabled or hms_enabled):
+        print(f"Attempting to allocate worker with 100% of total resource")
+        try:
+            nodeResources = allocateResources(nodeCount, mincpu, minmem,
+                    namespace, verbose, {'coordinator': 1.0, 'worker': 1.0})
+        except InsufficientResource as e:
+            print(e)
+
+    x = 64 # divide into slices of 32 to start
     while not nodeResources:
         bigchunk = (x - 1) / x
         smallchunk = 1 / x

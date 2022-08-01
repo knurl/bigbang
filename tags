@@ -5,10 +5,10 @@
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.8	//
 ApiError	sql.py	/^class ApiError(Exception):$/;"	c
-AwsCreds	bigbang.py	/^class AwsCreds(Creds):$/;"	c
+AwsCreds	creds.py	/^class AwsCreds(Creds):$/;"	c
 CommandGroup	cmdgrp.py	/^class CommandGroup:$/;"	c
 ContAlloc	capcalc.py	/^    ContAlloc = namedtuple('ContAlloc', ['cname', 'cpu', 'mem'])$/;"	v	class:NodeResource
-Creds	bigbang.py	/^class Creds(ABC):$/;"	c
+Creds	creds.py	/^class Creds(ABC):$/;"	c
 InsufficientResource	capcalc.py	/^class InsufficientResource(Exception):$/;"	c
 KubeContextError	bigbang.py	/^class KubeContextError(Exception):$/;"	c
 NodeResource	capcalc.py	/^class NodeResource:$/;"	c
@@ -16,11 +16,11 @@ ScaleSets	tpc.py	/^class ScaleSets:$/;"	c
 TpcCatInfo	tpc.py	/^class TpcCatInfo:$/;"	c
 Tunnel	bigbang.py	/^class Tunnel:$/;"	c
 __del__	bigbang.py	/^    def __del__(self):$/;"	m	class:Tunnel	file:
-__init__	bigbang.py	/^    def __init__(self):$/;"	m	class:AwsCreds
-__init__	bigbang.py	/^    def __init__(self, accesskey: str, secret: str):$/;"	m	class:Creds
 __init__	bigbang.py	/^    def __init__(self, shortname: str, bastionIp: ipaddress.IPv4Address,$/;"	m	class:Tunnel
 __init__	capcalc.py	/^    def __init__(self, cpuleft, memleft):$/;"	m	class:NodeResource
 __init__	cmdgrp.py	/^    def __init__(self, url: str, ssl: bool, user: str, pwd: str):$/;"	m	class:CommandGroup
+__init__	creds.py	/^    def __init__(self):$/;"	m	class:AwsCreds
+__init__	creds.py	/^    def __init__(self, accesskey: str, secret: str):$/;"	m	class:Creds
 __init__	tpc.py	/^    def __init__(self,$/;"	m	class:TpcCatInfo
 __repr__	capcalc.py	/^    def __repr__(self):$/;"	m	class:NodeResource	file:
 __str__	bigbang.py	/^    def __str__(self):$/;"	m	class:Tunnel	file:
@@ -42,14 +42,14 @@ announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
 appendToFile	bigbang.py	/^def appendToFile(filepath, contents) -> None:$/;"	f
 atscale	tpc.py	/^    def atscale(self, scale: int):$/;"	m	class:ScaleSets
 authnldaplabel	bigbang.py	/^authnldaplabel  = "AuthNLdap"$/;"	v
-awsconfig	bigbang.py	/^awsconfig      = os.path.expanduser("~\/.aws\/config")$/;"	v
-awscreds	bigbang.py	/^awscreds       = os.path.expanduser("~\/.aws\/credentials")$/;"	v
-awsdir	bigbang.py	/^awsdir         = os.path.expanduser("~\/.aws")$/;"	v
+awsconfig	creds.py	/^awsconfig      = os.path.expanduser("~\/.aws\/config")$/;"	v
+awscreds	creds.py	/^awscreds       = os.path.expanduser("~\/.aws\/credentials")$/;"	v
+awsdir	creds.py	/^awsdir         = os.path.expanduser("~\/.aws")$/;"	v
 azArchiveDirectories	bigbang.py	/^def azArchiveDirectories(accountName: str, accessKey: str, fsName: str) -> None:$/;"	f
 azaddrs	bigbang.py	/^    azaddrs = { "bastion": ns.azaddrs[0], "starburst": ns.azaddrs[1] }$/;"	v
 azaddrs	bigbang.py	/^azaddrs = None$/;"	v
 bastionfqdn	bigbang.py	/^bastionfqdn    = "bastion." + domain$/;"	v
-bastlaunchf	bigbang.py	/^bastlaunchf    = where("bastlaunch.sh")$/;"	v
+bastlaunchf	bigbang.py	/^bastlaunchf    = bbio.where("bastlaunch.sh")$/;"	v
 bqcat	bigbang.py	/^bqcat          = "bq" # for now, connector doesn't support INSERT or CTAS$/;"	v
 bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 buildBastionLauncher	bigbang.py	/^def buildBastionLauncher() -> None:$/;"	f
@@ -67,6 +67,7 @@ checkCopiedTable	cmdgrp.py	/^    def checkCopiedTable(self, dstCatalog: str, dst
 checkEtcHosts	bigbang.py	/^def checkEtcHosts() -> None:$/;"	f
 checkRSAKey	bigbang.py	/^def checkRSAKey() -> None:$/;"	f
 choices	bigbang.py	/^        choices = ["start", "stop", "restart", "status"],$/;"	v
+cleanOldTunnels	bigbang.py	/^def cleanOldTunnels() -> None:$/;"	f
 clouds	bigbang.py	/^clouds         = ("aws", "az", "gcp")$/;"	v
 clustname	bigbang.py	/^clustname = shortname + "cl"$/;"	v
 code	bigbang.py	/^code = username[:codelen]$/;"	v
@@ -103,17 +104,18 @@ ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(repo: str) -> None:$/;"
 eraseBucketContents	bigbang.py	/^def eraseBucketContents(env: dict) -> None:$/;"	f
 eraseLine	out.py	/^    def eraseLine(flush: bool = False):$/;"	f	function:spinWait
 establishBastionTunnel	bigbang.py	/^def establishBastionTunnel(env: dict) -> list[Tunnel]:$/;"	f
+evtlogcat	bigbang.py	/^evtlogcat      = "evtlog" # catalog name for event logger$/;"	v
 fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 gcpaccount	bigbang.py	/^gcpaccount = ""$/;"	v
 gcpaddrs	bigbang.py	/^    gcpaddrs = { "bastion": ns.gcpaddrs[0], "starburst": ns.gcpaddrs[1] }$/;"	v
 gcpaddrs	bigbang.py	/^gcpaddrs = None$/;"	v
 gcpproject	bigbang.py	/^gcpproject = ""$/;"	v
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
-getAccessKeyName	bigbang.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:AwsCreds
-getAccessKeyName	bigbang.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:Creds
+getAccessKeyName	creds.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:AwsCreds
+getAccessKeyName	creds.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:Creds
 getCatalogs	bigbang.py	/^def getCatalogs(avoid: list[str] = []) -> list[str]:$/;"	f
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f
-getCreds	bigbang.py	/^def getCreds() -> Optional[Creds]:$/;"	f
+getCreds	creds.py	/^def getCreds(target: str) -> Optional[Creds]:$/;"	f
 getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:$/;"	f
 getLclPort	bigbang.py	/^def getLclPort(service: str) -> int:$/;"	f
 getLclPortSG	bigbang.py	/^def getLclPortSG(service: str, target: str) -> int:$/;"	f
@@ -127,8 +129,8 @@ getOverlays	bigbang.py	/^def getOverlays() -> str:$/;"	f
 getRegionFromZone	bigbang.py	/^def getRegionFromZone(zone: str) -> str:$/;"	f
 getRmtPort	bigbang.py	/^def getRmtPort(service: str) -> int:$/;"	f
 getSchemasInCatalog	bigbang.py	/^def getSchemasInCatalog(catalog: str) -> list[str]:$/;"	f
-getSecretName	bigbang.py	/^    def getSecretName(self) -> str:$/;"	m	class:AwsCreds
-getSecretName	bigbang.py	/^    def getSecretName(self) -> str:$/;"	m	class:Creds
+getSecretName	creds.py	/^    def getSecretName(self) -> str:$/;"	m	class:AwsCreds
+getSecretName	creds.py	/^    def getSecretName(self) -> str:$/;"	m	class:Creds
 getSecrets	bigbang.py	/^def getSecrets() -> None:$/;"	f
 getSshPublicKey	bigbang.py	/^def getSshPublicKey() -> str:$/;"	f
 getStarburstHttpUrl	bigbang.py	/^def getStarburstHttpUrl() -> str:$/;"	f
@@ -138,6 +140,7 @@ getUser	bigbang.py	/^def getUser(user: str, uid: int, gid: int, dcs: str) -> str
 get_cat_name	tpc.py	/^    def get_cat_name(self) -> str:$/;"	m	class:TpcCatInfo
 get_table_names	tpc.py	/^    def get_table_names(self) -> Set[str]:$/;"	m	class:TpcCatInfo
 get_table_size	tpc.py	/^    def get_table_size(self, scale_set: str, table_name: str) -> int:$/;"	m	class:TpcCatInfo
+get_tunnel_procs	bigbang.py	/^    def get_tunnel_procs():$/;"	f	function:cleanOldTunnels
 helm	bigbang.py	/^def helm(cmd: str) -> None:$/;"	f
 helmCreateNamespace	bigbang.py	/^def helmCreateNamespace() -> None:$/;"	f
 helmDeleteNamespace	bigbang.py	/^def helmDeleteNamespace() -> None:$/;"	f
@@ -151,7 +154,7 @@ helmUninstallAll	bigbang.py	/^def helmUninstallAll():$/;"	f
 helmUninstallRelease	bigbang.py	/^def helmUninstallRelease(release: str) -> None:$/;"	f
 helmWhichChartInstalled	bigbang.py	/^def helmWhichChartInstalled(module: str) -> Optional[str]:$/;"	f
 helmcreds	bigbang.py	/^        helmcreds = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
-helmcredsf	bigbang.py	/^helmcredsf  = where("helm-creds.yaml")$/;"	v
+helmcredsf	bigbang.py	/^helmcredsf  = bbio.where("helm-creds.yaml")$/;"	v
 helmns	bigbang.py	/^helmns         = f"-n {namespace}"$/;"	v
 help	bigbang.py	/^        help="Disable bastion firewall—only protection will be ssh!")$/;"	v
 help	bigbang.py	/^        help="Don't load databases with tpc data.")$/;"	v
@@ -161,6 +164,7 @@ help	bigbang.py	/^        help="Force zone\/region to specified value.")$/;"	v
 help	bigbang.py	/^        help="Gather the downstream Azure bastion IP and starburst LB IP as a "$/;"	v
 help	bigbang.py	/^        help="Gather the downstream GCP bastion IP and starburst LB IP as a "$/;"	v
 help	bigbang.py	/^        help="Show how containers lay out in nodes.")$/;"	v
+help	bigbang.py	/^        help="Skip checking to see if cluster needs to be started.")$/;"	v
 help	bigbang.py	/^        help="Specify upstream bastion IP address, if this is a downstream "$/;"	v
 help	bigbang.py	/^        help="Summarise the ssh tunnels on exit.")$/;"	v
 help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
@@ -174,12 +178,12 @@ ingresslblabel	bigbang.py	/^ingresslblabel  = "IngressLoadBalancer"$/;"	v
 ingressname	bigbang.py	/^ingressname    = "sb-ingress"$/;"	v
 installSecrets	bigbang.py	/^def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:$/;"	f
 instanceTypes	bigbang.py	/^        instanceTypes = myvars["AwsInstanceTypes"][capacityType]$/;"	v
-instanceTypes	bigbang.py	/^        instanceTypes = myvars["AwsPerfInstanceTypes"]$/;"	v
+instanceTypes	bigbang.py	/^        instanceTypes = myvars["AwsPerfInstanceTypes"][capacityType]$/;"	v
 instanceTypes	bigbang.py	/^    instanceTypes     = myvars["AzureVmTypes"][capacityType]$/;"	v
 instanceTypes	bigbang.py	/^    instanceTypes     = myvars["GcpMachineTypes"][capacityType]$/;"	v
 invalidchars	bigbang.py	/^invalidchars = r'[^' + validchars + r']'$/;"	v
 isTerraformSettled	bigbang.py	/^def isTerraformSettled(tgtResource: str = None) -> bool:$/;"	f
-isTokenFresh	bigbang.py	/^    def isTokenFresh(self, awsAccess: str) -> bool:$/;"	m	class:AwsCreds
+isTokenFresh	creds.py	/^    def isTokenFresh(self, awsAccess: str) -> bool:$/;"	m	class:AwsCreds
 json2str	capcalc.py	/^def json2str(jsondict):$/;"	f
 keystorepass	bigbang.py	/^keystorepass   = "test123"$/;"	v
 killAllTerminatingPods	bigbang.py	/^def killAllTerminatingPods() -> None:$/;"	f
@@ -190,8 +194,8 @@ kubens	bigbang.py	/^kubens         = f"{kube} -n {namespace}"$/;"	v
 lakecats	bigbang.py	/^lakecats = { hivecat, deltacat }$/;"	v
 largest	tpc.py	/^    def largest(self) -> str:$/;"	m	class:ScaleSets
 ldapfqdn	bigbang.py	/^ldapfqdn       = "ldap." + domain$/;"	v
-ldaplaunchf	bigbang.py	/^ldaplaunchf    = where("ldaplaunch.sh")$/;"	v
-ldapsetupf	bigbang.py	/^ldapsetupf     = where("install-slapd.sh")$/;"	v
+ldaplaunchf	bigbang.py	/^ldaplaunchf    = bbio.where("ldaplaunch.sh")$/;"	v
+ldapsetupf	bigbang.py	/^ldapsetupf     = bbio.where("install-slapd.sh")$/;"	v
 loadBalancerResponding	bigbang.py	/^def loadBalancerResponding(service: str) -> bool:$/;"	f
 loadDatabases	bigbang.py	/^def loadDatabases(perftest: bool, tpcds_cat_info: tpc.TpcCatInfo, hive_location: str) -> None:$/;"	f
 localhost	bigbang.py	/^localhost      = "localhost"$/;"	v
@@ -204,13 +208,13 @@ maxpodpnode	bigbang.py	/^maxpodpnode    = 32$/;"	v
 metavar	bigbang.py	/^        metavar=('bastionIP', 'starburstIP'),$/;"	v
 minNodes	bigbang.py	/^minNodes       = 3 # See getMinNodeResources(); allows rolling upgrades$/;"	v
 minbucketsize	bigbang.py	/^minbucketsize  = 1 << 12$/;"	v
-modules	bigbang.py	/^modules = ['hive', 'enterprise']$/;"	v
-myDir	bigbang.py	/^def myDir():$/;"	f
+modules	bigbang.py	/^modules = ['enterprise']$/;"	v
+myDir	bbio.py	/^def myDir():$/;"	f
 mySubnetCidr	bigbang.py	/^mySubnetCidr = genmask(target, octet)$/;"	v
 mysqlenlabel	bigbang.py	/^mysqlenlabel    = 'MySqlEnabled'$/;"	v
 myvars	bigbang.py	/^        myvars = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
 myvarsbf	bigbang.py	/^myvarsbf        = "my-vars.yaml"$/;"	v
-myvarsf	bigbang.py	/^myvarsf         = where("my-vars.yaml")$/;"	v
+myvarsf	bigbang.py	/^myvarsf         = bbio.where("my-vars.yaml")$/;"	v
 namespace	bigbang.py	/^namespace      = "starburst"$/;"	v
 nodeIsTainted	capcalc.py	/^def nodeIsTainted(node: dict) -> bool:$/;"	f
 nodecountlabel	bigbang.py	/^nodecountlabel  = "NodeCount"$/;"	v
@@ -220,10 +224,11 @@ ns	bigbang.py	/^ns = p.parse_args()$/;"	v
 numberOfContainers	capcalc.py	/^def numberOfContainers(numNodes: int) -> int:$/;"	f
 numberOfReplicas	capcalc.py	/^def numberOfReplicas(numNodes: int) -> int:$/;"	f
 octet	bigbang.py	/^octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256$/;"	v
+okta_re	creds.py	/^okta_re = re.compile('^\\[(\\d)\\] Okta')$/;"	v
 p	bigbang.py	/^p = argparse.ArgumentParser(description=$/;"	v
 parameteriseTemplate	bigbang.py	/^def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,$/;"	f
 perftestlabel	bigbang.py	/^perftestlabel   = "PerformanceTesting"$/;"	v
-planWorkerSize	capcalc.py	/^def planWorkerSize(namespace: str, verbose: bool = False) -> dict:$/;"	f
+planWorkerSize	capcalc.py	/^def planWorkerSize(namespace: str, cachesrv_enabled: bool, hms_enabled: bool,$/;"	f
 podHasSufficientResource	capcalc.py	/^def podHasSufficientResource(podname: str, podcpu: int, podmem: int) -> bool:$/;"	f
 portoffset	bigbang.py	/^portoffset = { "aws": 0, "az": 1, "gcp": 2 }$/;"	v
 postgresenlabel	bigbang.py	/^postgresenlabel = 'PostgreSqlEnabled'$/;"	v
@@ -233,11 +238,14 @@ processSqlTableCommand	cmdgrp.py	/^    def processSqlTableCommand(self, srcTable
 randomString	out.py	/^def randomString(length: int) -> str:$/;"	f
 range	tpc.py	/^    def range(self, first: str, last: str) -> set[str]:$/;"	m	class:ScaleSets
 ratioDone	cmdgrp.py	/^    def ratioDone(self) -> float:$/;"	m	class:CommandGroup
-readableDir	bigbang.py	/^def readableDir(p):$/;"	f
-readableFile	bigbang.py	/^def readableFile(p):$/;"	f
+readableDir	bbio.py	/^def readableDir(p):$/;"	f
+readableFile	bbio.py	/^def readableFile(p):$/;"	f
 region	bigbang.py	/^region = getRegionFromZone(zone)$/;"	v
 releases	bigbang.py	/^releases = {}$/;"	v
 removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
+renew_creds_async	creds.py	/^def renew_creds_async():$/;"	f
+renew_creds_now	creds.py	/^def renew_creds_now() -> None:$/;"	f
+renew_creds_sync	creds.py	/^def renew_creds_sync() -> None:$/;"	f
 replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
 replicasPerPod	capcalc.py	/^def replicasPerPod(podname: str, numNodes: int) -> int:$/;"	f
 repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
@@ -257,13 +265,13 @@ s	bigbang.py	/^s = username + zone$/;"	v
 salesforcelabel	bigbang.py	/^salesforcelabel = "SalesforceEnabled"$/;"	v
 scale_sets	tpc.py	/^scale_sets = ScaleSets()$/;"	v
 secretsbf	bigbang.py	/^secretsbf    = "secrets.yaml"$/;"	v
-secretsf	bigbang.py	/^secretsf     = where(secretsbf)$/;"	v
+secretsf	bigbang.py	/^secretsf     = bbio.where(secretsbf)$/;"	v
 sendSql	sql.py	/^def sendSql(url: str, ssl: bool, user: str, pwd: str, command: str,$/;"	f
 services	bigbang.py	/^services = ['starburst']$/;"	v
 setRoute53Cname	bigbang.py	/^def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str,$/;"	f
 sfdccat	bigbang.py	/^sfdccat        = "sfdc"$/;"	v
 sfdccreds	bigbang.py	/^            sfdccreds = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
-sfdccredsf	bigbang.py	/^    sfdccredsf  = where("sfdc-creds.yaml")$/;"	v
+sfdccredsf	bigbang.py	/^    sfdccredsf  = bbio.where("sfdc-creds.yaml")$/;"	v
 shortname	bigbang.py	/^shortname = code + str(octet).zfill(3)$/;"	v
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AwsSmallInstanceType"]$/;"	v
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AzureSmallVmType"]$/;"	v
@@ -276,22 +284,22 @@ sqlstr	out.py	/^sqlstr = "Issued 🢩 "$/;"	v
 starburstfqdn	bigbang.py	/^starburstfqdn  = "starburst." + domain$/;"	v
 startPortForwardToLBs	bigbang.py	/^def startPortForwardToLBs(bastionIp: str,$/;"	f
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
-svcStart	bigbang.py	/^def svcStart(perftest: bool, creds: Optional[Creds] = None, skipClusterStart:$/;"	f
+svcStart	bigbang.py	/^def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,$/;"	f
 svcStop	bigbang.py	/^def svcStop(onlyEmptyNodes: bool = False) -> None:$/;"	f
 svcports	bigbang.py	/^svcports    = {$/;"	v
 synapseslcat	bigbang.py	/^synapseslcat   = "synapse_sl"$/;"	v
 syscat	bigbang.py	/^syscat         = "system"$/;"	v
 targetlabel	bigbang.py	/^targetlabel     = "Target"$/;"	v
 tblfmt	capcalc.py	/^tblfmt = "psql"$/;"	v
-templatedir	bigbang.py	/^templatedir    = where("templates")$/;"	v
+templatedir	bigbang.py	/^templatedir    = bbio.where("templates")$/;"	v
 templates	bigbang.py	/^templates = {}$/;"	v
-tfdir	bigbang.py	/^tfdir = where(target)$/;"	v
+tfdir	bigbang.py	/^tfdir = bbio.where(target)$/;"	v
 tfvars	bigbang.py	/^tfvars         = "variables.tf" # basename only, no path!$/;"	v
 tlscoordlabel	bigbang.py	/^tlscoordlabel   = "RequireCoordTls"$/;"	v
 tlsenabled	bigbang.py	/^def tlsenabled() -> bool: return ingresslb or tlscoord$/;"	f
 tmpdir	bigbang.py	/^tmpdir         = "\/tmp"$/;"	v
-toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
-toDict	bigbang.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds
+toDict	creds.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds
+toDict	creds.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds
 tpccats	tpc.py	/^tpccats  = {tpchcat, tpcdscat}$/;"	v
 tpcds_queries	tpc.py	/^tpcds_queries = { 'q01.sql', 'q02.sql', 'q03.sql', 'q04.sql', 'q05.sql',$/;"	v
 tpcdsbigschema	bigbang.py	/^tpcdsbigschema = tpc.scale_sets.smallest()$/;"	v
@@ -317,5 +325,5 @@ waitUntilDeploymentsAvail	bigbang.py	/^def waitUntilDeploymentsAvail(namespace: 
 waitUntilLoadBalancersUp	bigbang.py	/^def waitUntilLoadBalancersUp(services: list, namespace: str = None,$/;"	f
 waitUntilNodesReady	bigbang.py	/^def waitUntilNodesReady(minNodes: int) -> float:$/;"	f
 waitUntilPodsReady	bigbang.py	/^def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:$/;"	f
-where	bigbang.py	/^def where(leaf):$/;"	f
-writeableDir	bigbang.py	/^def writeableDir(p):$/;"	f
+where	bbio.py	/^def where(leaf):$/;"	f
+writeableDir	bbio.py	/^def writeableDir(p):$/;"	f

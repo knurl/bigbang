@@ -4,7 +4,7 @@
 from run import run, runShell, runTry, runStdout, runCollect, retryRun
 from capcalc import planWorkerSize, numberOfReplicas, numberOfContainers
 from capcalc import nodeIsTainted
-import sql, tpc, cmdgrp
+import sql, tpc, cmdgrp, creds, bbio
 from out import *
 
 import os, hashlib, argparse, sys, pdb, textwrap, requests, json, re
@@ -14,31 +14,19 @@ import atexit, psutil # type: ignore
 from subprocess import CalledProcessError
 from typing import List, Tuple, Iterable, Callable, Optional, Any, Dict, Set
 from urllib.parse import urlparse
-from abc import ABC, abstractmethod
 import jinja2
 from jinja2.meta import find_undeclared_variables
 
 # Do this just to get rid of the warning when we try to read from the
 # api server, and the certificate isn't trusted
 from urllib3 import disable_warnings, exceptions # type: ignore
-disable_warnings(exceptions.InsecureRequestWarning)
-
-def myDir():
-    return os.path.dirname(os.path.abspath(__file__))
-def where(leaf):
-    return os.path.join(myDir(), leaf)
-def readableFile(p):
-    return os.path.isfile(p) and os.access(p, os.R_OK)
-def readableDir(p):
-    return os.path.isdir(p) and os.access(p, os.R_OK | os.X_OK)
-def writeableDir(p):
-    return readableDir and os.access(p, os.W_OK)
+disable_warnings()
 
 #
 # Global variables.
 #
 clouds         = ("aws", "az", "gcp")
-templatedir    = where("templates")
+templatedir    = bbio.where("templates")
 tmpdir         = "/tmp"
 ingressname    = "sb-ingress"
 rsa            = os.path.expanduser("~/.ssh/id_rsa")
@@ -66,9 +54,6 @@ kube           = "kubectl"
 kubens         = f"{kube} -n {namespace}"
 minNodes       = 3 # See getMinNodeResources(); allows rolling upgrades
 maxpodpnode    = 32
-awsdir         = os.path.expanduser("~/.aws")
-awsconfig      = os.path.expanduser("~/.aws/config")
-awscreds       = os.path.expanduser("~/.aws/credentials")
 localhost      = "localhost"
 localhostip    = "127.0.0.1"
 domain         = "az.starburstdata.net"
@@ -77,9 +62,9 @@ ldapfqdn       = "ldap." + domain
 bastionfqdn    = "bastion." + domain
 keystorepass   = "test123"
 hostsf         = "/etc/hosts"
-bastlaunchf    = where("bastlaunch.sh")
-ldapsetupf     = where("install-slapd.sh")
-ldaplaunchf    = where("ldaplaunch.sh")
+bastlaunchf    = bbio.where("bastlaunch.sh")
+ldapsetupf     = bbio.where("install-slapd.sh")
+ldaplaunchf    = bbio.where("ldaplaunch.sh")
 minbucketsize  = 1 << 12
 
 tpchbigschema  = tpc.scale_sets.smallest()
@@ -92,7 +77,7 @@ tpcdssmlschema = tpcdsbigschema
 #
 secrets: dict[str, dict[str, str]] = {}
 secretsbf    = "secrets.yaml"
-secretsf     = where(secretsbf)
+secretsf     = bbio.where(secretsbf)
 
 #
 # Start of execution. Handle commandline args.
@@ -177,7 +162,7 @@ if ns.bastion and (ns.azaddrs or ns.gcpaddrs):
 # password for the helm repo you wish to use to get the helm charts.
 #
 myvarsbf        = "my-vars.yaml"
-myvarsf         = where("my-vars.yaml")
+myvarsf         = bbio.where("my-vars.yaml")
 targetlabel     = "Target"
 nodecountlabel  = "NodeCount"
 chartvlabel     = "ChartVersion"
@@ -228,7 +213,7 @@ try:
 
     nobastionfw  = myvars["DisableBastionFw"] or ns.disable_bastion_fw
     myvars["DisableBastionFw"] = nobastionfw
-
+    noslowdbs    = myvars["DisableSlowSources"]
     sfdcenabled  = myvars[salesforcelabel] # SalesforceEnabled
 
     perftest     = myvars[perftestlabel] # PerformanceTesting
@@ -340,9 +325,10 @@ def getRegionFromZone(zone: str) -> str:
         awsregion = runCollect("aws configure get region".split())
         if awsregion != region:
             sys.exit(textwrap.dedent(f"""\
-                    Region {awsregion} specified in your {awsconfig} doesn't
-                    match region {region} set in your {myvarsf} file. Cannot
-                    continue. Please ensure these match and re-run."""))
+                    Region {awsregion} specified in your {creds.awsconfig} "
+                    "doesn't match region {region} set in your {myvarsf} file."
+                    "Cannot continue. Please ensure these match and
+                    re-run."""))
 
     return region
 
@@ -380,10 +366,10 @@ assert len(instanceTypes) > 0
 assert capacityType == "Spot" or len(instanceTypes) == 1
 
 # Terraform files are in a directory named for target
-tfdir = where(target)
+tfdir = bbio.where(target)
 tf    = f"terraform -chdir={tfdir}"
 for d in [templatedir, tmpdir, tfdir]:
-    assert writeableDir(d)
+    assert bbio.writeableDir(d)
 
 #
 # ChartVersion.
@@ -453,7 +439,7 @@ mySubnetCidr = genmask(target, octet)
 # Now, read the credentials file for helm ("./helm-creds.yaml"), also found in
 # this directory.  This is the 2nd configuration file one needs to edit.
 #
-helmcredsf  = where("helm-creds.yaml")
+helmcredsf  = bbio.where("helm-creds.yaml")
 try:
     with open(helmcredsf) as mypf:
         helmcreds = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -473,7 +459,7 @@ myvars |= helmcreds
 # edit, but only if Salesforce access is desired.
 #
 if sfdcenabled:
-    sfdccredsf  = where("sfdc-creds.yaml")
+    sfdccredsf  = bbio.where("sfdc-creds.yaml")
     try:
         with open(sfdccredsf) as mypf:
             sfdccreds = yaml.load(mypf, Loader = yaml.FullLoader)
@@ -495,7 +481,9 @@ resourcegrp = shortname + "rg"
 templates = {}
 releases = {}
 charts = {}
-modules = ['hive', 'enterprise']
+modules = ['enterprise']
+if target != 'aws':
+    modules.append('hive')
 if cachesrv_enabled:
     modules.append('cache-service')
 for module in modules:
@@ -629,7 +617,11 @@ def getOutputVars() -> dict:
         assert u.port == None or u.port == 443
         env["k8s_api_server"] = u.hostname
 
-    sources = ["evtlog", "hmsdb"]
+    sources = ["evtlog"]
+
+    if target != "aws":
+        sources.append('hmsdb')
+
     if cachesrv_enabled:
         sources.append('cachesrv')
 
@@ -638,10 +630,11 @@ def getOutputVars() -> dict:
     if mysql_enabled:
         sources.append('mysql')
 
-    if target == "aws":
-        sources.append('redshift')
-    elif target == 'az':
-        sources += ['synapse_sl', 'synapse_pool']
+    if not noslowdbs:
+        if target == "aws":
+            sources.append('redshift')
+        elif target == 'az':
+            sources += ['synapse_sl', 'synapse_pool']
 
     for db in sources:
         env[db + "_user"] = dbuser
@@ -1031,7 +1024,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
             "DBName":              dbschema,
             "DBNameCacheSrv":      dbcachesrv,
             "DBNameEventLogger":   dbevtlog,
-			"DBNameHms":		   dbhms,
+            "DBNameHms":           dbhms,
             "DBPassword":          dbpwd,
             "DBUser":              dbuser,
             "InstanceTypes":       instanceTypes,
@@ -1049,7 +1042,9 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
             "UserName":            username,
             "Zone":                zone
             }
+
     assert target in clouds
+
     if target == "az":
         env["ResourceGroup"] = resourcegrp
         env["StorageAccount"] = storageacct
@@ -1236,7 +1231,7 @@ def copySchemaTables(tpc_cat_info: tpc.TpcCatInfo, srcCatalog: str,
                             f"as select * from "\
                             f"{srcCatalog}.{srcSchema}.{srctable}"
                     cg.addSqlTableCommand(tpc_cat_info, srcSchema, srctable,
-                            dstCatalog, srcSchema, cmd, True)
+                            dstCatalog, srcSchema, cmd, check=True)
                 else:
                     cg.addBqCommand(tpc_cat_info, srcSchema, srcCatalog,
                             srcSchema, srctable, bqcat, srcSchema, bucket,
@@ -1515,8 +1510,8 @@ def helmInstallRelease(module: str, env: dict = {}) -> None:
               "CacheSchema":        cacheschema,
               "DBName":             dbschema,
               "DBNameEventLogger":  dbevtlog,
-              "DBNameHms":          dbhms,
               "DBNameCacheSrv":     dbcachesrv,
+              "DBNameHms":          dbhms,
               "DBPassword":         dbpwd,
               "EvtLogCat":          evtlogcat,
               "HiveCat":            hivecat,
@@ -1581,7 +1576,9 @@ def helmInstallAll(env):
     helmCreateNamespace()
     env |= installSecrets(secrets)
     ensureHelmRepoSetUp(repo)
-    env |= planWorkerSize(namespace)
+    # for AWS we use Glue, not a separate HMS
+    env |= planWorkerSize(namespace, cachesrv_enabled,
+            hms_enabled=(target!='aws'))
     for module in modules:
         helmInstallRelease(module, env)
     # Speed up the deployment of the updated pods by killing the old ones
@@ -1621,79 +1618,6 @@ def helmUninstallAll():
     killAllTerminatingPods()
     helmDeleteNamespace()
 
-class Creds(ABC):
-    def __init__(self, accesskey: str, secret: str):
-        self.accesskey = accesskey
-        self.secret = secret
-        super().__init__()
-        pass
-
-    @abstractmethod
-    def getAccessKeyName(self) -> str:
-        pass
-
-    @abstractmethod
-    def getSecretName(self) -> str:
-        pass
-
-    @abstractmethod
-    def toDict(self) -> dict[str, str]:
-        return { self.getAccessKeyName(): self.accesskey,
-                 self.getSecretName(): self.secret }
-
-class AwsCreds(Creds):
-    def isTokenFresh(self, awsAccess: str) -> bool:
-        r = runTry("aws sts get-access-key-info --access-key-id".split() +
-                [awsAccess])
-        rc = r.returncode
-        assert rc != 253, "Shouldn't happen. I just checked creds files?"
-        if rc not in (0, 254):
-            sys.exit(f"Unknown error {rc} trying to get credentials.")
-        return rc == 0
-
-    def __init__(self):
-        if target != "aws":
-            return
-
-        # First make sure we can find the credentials files
-        badAws = False
-        if not writeableDir(awsdir):
-            badAws = True
-            err = f"Directory {awsdir} doesn't exist or has bad permissions."
-        elif not readableFile(awsconfig):
-            badAws = True
-            err = f"File {awsconfig} doesn't exist or isn't readable."
-        elif not readableFile(awscreds):
-            badAws = True
-            err = f"File {awscreds} doesn't exist or isn't readable."
-        if badAws:
-            print(err)
-            sys.exit("Have you run aws configure?")
-        awsAccess = runCollect("aws configure get "
-                "aws_access_key_id".split())
-        awsSecret = runCollect("aws configure get "
-                "aws_secret_access_key".split())
-
-        # Next, ensure that if we are using an access token, it remains valid
-        if not self.isTokenFresh(awsAccess):
-            print("Your aws access token is stale.")
-            yn = input("Would you like me to refresh it? [y/N] -> ")
-            if yn.lower() in ("y", "yes"):
-                runStdout("gimme-aws-creds -m".split())
-            if not self.isTokenFresh(awsAccess):
-                sys.exit("Unable to refresh access token.")
-        super().__init__(awsAccess, awsSecret)
-
-    def getAccessKeyName(self) -> str:
-        return "AWSAccessKey"
-
-    def getSecretName(self) -> str:
-        return "AWSSecretKey"
-
-    def toDict(self) -> dict[str, str]:
-        assert target == "aws", f"Target is {target} not aws!"
-        return super().toDict()
-
 def announceReady(bastionIp: str) -> list[str]:
     a = [getStarburstUrl()]
     who = f"user: {trinouser}"
@@ -1718,9 +1642,10 @@ def getObjectStoreUrl(env: dict) -> str:
     else: # target == "gcp"
         return env["object_address"] # change nothing
 
-def svcStart(perftest: bool, creds: Optional[Creds] = None, skipClusterStart:
-        bool = False, dropTables: bool = False, dontLoad: bool = False,
-        nobastionfw: bool = False) -> tuple[list[Tunnel], list[str]]:
+def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,
+        skipClusterStart: bool = False, dropTables: bool = False,
+        dontLoad: bool = False, nobastionfw: bool = False) -> tuple[list[Tunnel],
+                list[str]]:
     # First see if there isn't a cluster created yet, and create the
     # cluster. This will create the control plane and workers.
     tuns: list[Tunnel] = []
@@ -1728,8 +1653,8 @@ def svcStart(perftest: bool, creds: Optional[Creds] = None, skipClusterStart:
 
     zid = env["route53_zone_id"] if target == "aws" else None
     env["Region"] = region
-    if creds and isinstance(creds, Creds):
-        env |= creds.toDict()
+    if credobj and isinstance(credobj, creds.Creds):
+        env |= credobj.toDict()
     helmInstallAll(env)
     tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
 
@@ -1862,8 +1787,13 @@ def buildLdapLauncher(fqdn: str) -> None:
     ldapkeybf = "ldap.key"
     ldapcertbf = "ldap.pem"
     certinfobf = "certinfo.ldif"
-    with \
-            open(ldapsetupf) as sh, \
+    check_rc = '''
+if [[ $? -ne 0 ]]; then
+    echo Command failed with RC=$?
+    exit $?
+fi
+'''
+    with open(ldapsetupf) as sh, \
             open(ldaplaunchf, 'w') as wh, \
             open(secrets["ldaptls"]["chain"]) as cach, \
             open(secrets["ldaptls"]["cert"]) as ch, \
@@ -1905,11 +1835,13 @@ def buildLdapLauncher(fqdn: str) -> None:
         wh.write("EOM\n")
         wh.write("sudo ldapmodify -Y EXTERNAL -H ldapi:// -f "
                 f"/tmp/{certinfobf}\n")
+        wh.write(check_rc)
 
         # Enable ldaps
         regex = r"s/(^\s*[^#].*)ldap:/\1ldaps:/g"
         wh.write(f"sudo sed -E -i '{regex}' /etc/default/slapd\n")
         wh.write("sudo systemctl restart slapd\n")
+        wh.write(check_rc)
 
         # Configure for LDAP clients
         wh.write("cat <<EOM | sudo tee /etc/ldap/ldap.conf\n")
@@ -1923,6 +1855,7 @@ def buildLdapLauncher(fqdn: str) -> None:
         wh.write("EOM\n")
         wh.write("sudo ldapadd -H ldapi:// -Y EXTERNAL -D 'cn=config' -f "
                 "/tmp/memberof.ldif\n")
+        wh.write(check_rc)
 
         # Populate the slapd database with some basic entries that we'll need.
         wh.write("cat <<EOM | sudo tee /tmp/who.ldif\n")
@@ -1937,6 +1870,7 @@ def buildLdapLauncher(fqdn: str) -> None:
         wh.write("EOM\n")
         wh.write("sudo ldapadd -x -w admin -D "
                 "cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif\n")
+        wh.write(check_rc)
         wh.write("echo finished | sudo tee /tmp/finished\n")
 
 def buildBastionLauncher() -> None:
@@ -2002,12 +1936,12 @@ def getSecrets() -> None:
         base = values["bf"]
         if "dir" in values:
             base = values["dir"] + "/" + base
-        filename = where(base)
+        filename = bbio.where(base)
 
         # If the secret is not generated later by this program, then it is
         # a pre-made secret, and it must already be on disk and readable.
         if ("generated" not in values or values["generated"] == False) \
-                and not readableFile(filename):
+                and not bbio.readableFile(filename):
             sys.exit(f"Can't find a readable file at {filename} for {name}")
 
         # Certificate groups should be treated specially, and we should add
@@ -2030,8 +1964,9 @@ def getSecrets() -> None:
         # value may also be present optionally
         assert "cert" in values and "key" in values, \
                 f"cert and key not found together for {groupname}"
-        # if there is a chain, then verify the certificate and chain
-        if "chain" in values:
+        # if there is a chain, and we have enabled TLS to the coordinator, then
+        # verify the certificate and chain
+        if "chain" in values and tlsenabled():
             # openssl always returns 0 as the return code, so we have to
             # actually parse the output to see if the certificate is valid
             output = runCollect("openssl verify -untrusted {ch} {c}".format(ch
@@ -2048,25 +1983,8 @@ def getSecrets() -> None:
 def announceSummary() -> None:
     announceLoud(getCloudSummary())
 
-def getCreds() -> Optional[Creds]:
-    assert target in clouds
-    creds: Optional[Creds] = None
-    if target == "aws":
-        creds = AwsCreds()
-    elif target == "az":
-        azuredir = os.path.expanduser("~/.azure")
-        if not writeableDir(azuredir):
-            print(f"Directory {azuredir} doesn't exist or isn't readable.")
-            sys.exit("Have you run az login and az configure?")
-    elif target == "gcp":
-        gcpdir = os.path.expanduser("~/.config/gcloud")
-        if not writeableDir(gcpdir):
-            print("Directory {gcpdir} doesn't exist or isn't readable.")
-            sys.exit("Have you run gcloud init?")
-    return creds
-
 def checkRSAKey() -> None:
-    if readableFile(rsa) and readableFile(rsaPub):
+    if bbio.readableFile(rsa) and bbio.readableFile(rsaPub):
         return
 
     print(f"You do not have readable {rsa} and {rsaPub} files.")
@@ -2087,7 +2005,7 @@ def checkEtcHosts() -> None:
     if not tlsenabled():
         return
 
-    if readableFile(hostsf):
+    if bbio.readableFile(hostsf):
         with open(hostsf) as fh:
             for line in fh:
                 # skip commented lines
@@ -2151,13 +2069,14 @@ def main() -> None:
         spinWaitTest()
         sys.exit(0)
     elif ns.node_layout:
-        planWorkerSize(namespace, verbose = True)
+        planWorkerSize(namespace, cachesrv_enabled,
+                hms_enabled=(target!='aws'), verbose=True)
         sys.exit(0)
 
     announce("Verifying environment")
     getSecrets()
     announceSummary()
-    creds = getCreds()
+    credobj = creds.getCreds(target)
     checkRSAKey()
     checkEtcHosts()
     cleanOldTunnels()
@@ -2177,7 +2096,7 @@ def main() -> None:
 
     tuns: list[Tunnel] = []
     if ns.command in ("start", "restart"):
-        newtuns, w = svcStart(perftest, creds, ns.skip_cluster_start,
+        newtuns, w = svcStart(perftest, credobj, ns.skip_cluster_start,
                 ns.drop_tables, ns.dont_load, nobastionfw)
         tuns.extend(newtuns)
         started = True

@@ -13,7 +13,7 @@ resource "google_compute_instance" "ldaps" {
 
   network_interface {
     subnetwork = google_compute_subnetwork.snet.self_link
-    network_ip = cidrhost(local.subnetwork_cidr, 102)
+    network_ip = local.ldap_address
   }
 
   metadata = {
@@ -23,6 +23,11 @@ resource "google_compute_instance" "ldaps" {
 
   metadata_startup_script = file(var.ldaps_launch_script)
   labels                  = var.tags
+
+  /* We have a dependency on our NAT gateway for outbound connectivity during
+   * our launch script, as well as DNS so that certificates can be validated.
+   */
+  depends_on = [google_compute_router_nat.nat, google_dns_record_set.ldap_a_record]
 }
 
 resource "google_compute_firewall" "fw-ldaps" {

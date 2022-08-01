@@ -48,6 +48,11 @@ resource "azurerm_linux_virtual_machine" "bastion" {
   }
 
   tags = var.tags
+
+  /* We don't need a dependency on a NAT here, since Azure doesn't have one; by
+   * default a VNET can always route to the Internet. But we do need a
+   * dependency on DNS being set up in order for certificates to work */
+  depends_on = [azurerm_private_dns_a_record.bastion_a_record]
 }
 
 resource "azurerm_network_security_group" "sg_bastion" {

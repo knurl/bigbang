@@ -8,6 +8,8 @@ locals {
   proxy_ntwk_cidr   = local.cidrs[4] # 13.1 - 13.254, 24 b = 254 hosts
   ilb_cidr          = local.cidrs[5] # 14.1 - 14.254, 24 b = 254 hosts
   master_ntwk_cidr  = local.cidrs[6] # 15.1 - 15.16, 28 b = 16 hosts
+  bastion_address   = cidrhost(local.subnetwork_cidr, 101)
+  ldap_address      = cidrhost(local.subnetwork_cidr, 102)
   starburst_address = cidrhost(local.subnetwork_cidr, 103)
 }
 
@@ -112,7 +114,7 @@ resource "google_compute_router" "router" {
   project = data.google_project.project.project_id
   name    = "${google_compute_subnetwork.snet.name}-router"
   region  = var.region
-  network = resource.google_compute_network.vpc.self_link
+  network = google_compute_network.vpc.self_link
 }
 
 resource "google_compute_router_nat" "nat" {

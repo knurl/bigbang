@@ -64,6 +64,11 @@ resource "aws_instance" "bastion" {
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   user_data              = file(var.bastion_launch_script)
   tags                   = merge(var.tags, { Name = "${var.bastion_name}" })
+
+  /* We have a dependency on our NAT gateway for outbound connectivity during
+   * our launch script, as well as DNS so that certificates can be validated.
+   */
+  depends_on = [module.vpc, aws_route53_record.bastion_a_record]
 }
 
 resource "aws_eip" "bastion_eip" {

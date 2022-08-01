@@ -3,7 +3,7 @@ PYFILES = $(wildcard *.py)
 ALL: mypy ./tags
 
 mypy: $(PYFILES)
-	mypy $^
+	MYPYPATH=.:.. mypy $^
 
 ./tags: $(PYFILES)
 	/usr/local/bin/ctags --languages=python --python-kinds=-i -f $@ $^

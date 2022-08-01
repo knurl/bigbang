@@ -32,7 +32,8 @@ config:
           "timestamp(0)":     "timestamp(3)",
           "timestamp(1)":     "timestamp(3)",
           "timestamp(2)":     "timestamp(3)",
-          "varchar(131072)":  "varchar"
+          "VARCHAR(131072)":  "VARCHAR(10000)",
+          "VARCHAR(130000)":  "VARCHAR(10000)"
         }
       }
     }
@@ -140,6 +141,12 @@ config:
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
           "tableName": "pov__c"
+        },
+        {
+          "refreshInterval": "8h",
+          "catalogName": "{{SfdcCat}}",
+          "schemaName": "salesforce",
+          "tableName": "onboarding__c"
         }
       ]
     }

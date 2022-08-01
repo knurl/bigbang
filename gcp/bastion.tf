@@ -20,7 +20,7 @@ resource "google_compute_instance" "bastion" {
 
   network_interface {
     subnetwork = google_compute_subnetwork.snet.self_link
-    network_ip = cidrhost(local.subnetwork_cidr, 101)
+    network_ip = local.bastion_address
     access_config {
       nat_ip = google_compute_address.bastion_ip.address
     }
@@ -33,6 +33,11 @@ resource "google_compute_instance" "bastion" {
   # Make sure sshguard never blocks the home IP
   metadata_startup_script = "echo ${var.my_public_ip} >> /etc/sshguard/whitelist && /etc/init.d/sshguard restart"
   labels                  = var.tags
+
+  /* We have a dependency on our NAT gateway for outbound connectivity during
+   * our launch script, as well as DNS so that certificates can be validated.
+   */
+  depends_on = [google_compute_router_nat.nat, google_dns_record_set.bastion_a_record]
 }
 
 resource "google_compute_firewall" "fw-bastion" {

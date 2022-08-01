@@ -2,12 +2,11 @@ module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
   cluster_version = "1.22"
-  version         = "18.26.0"
+  version         = "18.26.2"
 
   # Where to place the EKS cluster and workers.
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
-
+  vpc_id                          = module.vpc.vpc_id
+  subnet_ids                      = module.vpc.private_subnets
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = false
 
@@ -28,12 +27,14 @@ module "eks" {
       min_size     = 0
       max_size     = var.node_count
       desired_size = var.node_count
+      subnet_ids   = [local.preferred_nodegroup_subnet]
+      ami_type     = length(regexall("g", split(".", local.preferred_eks_instance_type)[0])) > 0 ? "AL2_ARM_64" : "AL2_x86_64"
+      update_config = {
+        max_unavailable = var.node_count
+      }
 
-      instance_types = [local.eks_instance_type]
+      instance_types = [local.preferred_eks_instance_type]
       capacity_type  = var.capacity_type == "Spot" ? "SPOT" : "ON_DEMAND"
-
-      # Use only the first AZ to avoid transfer costs between AZs
-      subnet_ids = [module.vpc.private_subnets[0]]
 
       security_group_rules = {
         /* By default, eks module does not allow node-to-node communication.

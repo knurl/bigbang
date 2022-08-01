@@ -18,10 +18,6 @@ output "evtlog_address" {
   value = aws_db_instance.evtlog.address
 }
 
-output "hmsdb_address" {
-  value = aws_db_instance.hmsdb.address
-}
-
 output "cachesrv_address" {
   value = length(aws_db_instance.cachesrvdb) > 0 ? aws_db_instance.cachesrvdb[0].address : null
 }
@@ -39,5 +35,5 @@ output "redshift_endpoint" {
 }
 
 output "object_address" {
-  value = replace(module.vpc_endpoints.endpoints["s3"].dns_entry.0.dns_name, "*", aws_s3_bucket.s3_bucket.bucket)
+  value = aws_s3_bucket.s3_bucket.bucket_regional_domain_name
 }

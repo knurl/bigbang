@@ -1,0 +1,196 @@
+OpenJDK 64-Bit Server VM warning: Option UseBiasedLocking was deprecated in version 15.0 and will likely be removed in a future release.
+2022-07-28T18:33:09.307Z	INFO	main	io.airlift.log.Logging	Logging to stderr
+2022-07-28T18:33:09.309Z	INFO	main	Bootstrap	Loading configuration
+2022-07-28T18:33:10.601Z	INFO	main	Bootstrap	Initializing logging
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	PROPERTY                                                           DEFAULT                   RUNTIME                                                                                          DESCRIPTION
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	cancellation-check-interval                                        15.00s                    15.00s
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	cleanup-initial-delay                                              0.00m                     0.00m
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	cleanup-interval                                                   5.00m                     5.00m
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	max-table-delete-threads                                           10                        10
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	max-table-import-threads                                           20                        20
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	refresh-initial-delay                                              0.00m                     5.00s
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	refresh-interval                                                   2.00m                     20.00m
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	rules.file                                                         ----                      etc/rules.json
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	rules.refresh-period                                               1.00m                     1.00m
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	service-database.connection-pool.enabled                           true                      true                                                                                             Enables pooling for connections to the service database
+2022-07-28T18:33:13.292Z	INFO	main	Bootstrap	service-database.connection-pool.idle-timeout                      10.00m                    10.00m                                                                                           Maximum time an idle connection will be kept in the pool
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	service-database.jdbc-url                                          ----                      jdbc:postgresql://cachesrv-server-rob157.cgtecgtcifjg.us-east-1.rds.amazonaws.com:5432/cachesrv  Service database JDBC URL
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	service-database.connection-pool.max-size                          10                        10                                                                                               Maximum number of connections in the pool
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	service-database.password                                          [REDACTED]                [REDACTED]                                                                                       MySQL user password
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	service-database.user                                              ----                      starburstuser                                                                                    MySQL user name
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	http-server.authentication.type                                    NONE                      NONE                                                                                             Authentication types (supported types: PASSWORD, NONE)
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	starburst.jdbc-url                                                 ----                      jdbc:trino://starburst.az.starburstdata.net:8443?SSL=true                                        Starburst JDBC URL
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	partitioned.preferred-write-partitioning-min-number-of-partitions  1                         1                                                                                                Use preferred write partitioning when the number of written partitions exceeds the configured threshold when writing to partitioned table
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	partitioned.scale-writers                                          false                     false                                                                                            Scale writers when writing partitioned table
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	partitioned.use-preferred-write-partitioning                       true                      true                                                                                             Use table partitioning to split data between writers when writing partitioned table
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	partitioned.writer-count                                           4                         4                                                                                                Number of writers per task when writing partitioned table
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	partitioned.writer-min-size                                        32MB                      32MB                                                                                             Target minimum size of writer output when writing partitioned table with writers scaling
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	starburst.password                                                 [REDACTED]                [REDACTED]                                                                                       Starburst user password
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	source-catalogs                                                    ----                      ----
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	unpartitioned.scale-writers                                        false                     false                                                                                            Scale writers when writing unpartitioned table
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	unpartitioned.writer-count                                         4                         4                                                                                                Number of writers per task when writing unpartitioned table
+2022-07-28T18:33:13.293Z	INFO	main	Bootstrap	unpartitioned.writer-min-size                                      32MB                      32MB                                                                                             Target minimum size of writer output when writing unpartitioned table with writers scaling
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	starburst.user                                                     ----                      starburst_service                                                                                Starburst user name
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	type-mapping.file                                                  ----                      etc/type-mapping.json
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	type-mapping.file.refresh-period                                   1.00m                     1.00m
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	type-mapping                                                       NONE                      FILE
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.admin.enabled                                          false                     false
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.admin.threads.max                                      200                       200
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.admin.threads.min                                      2                         2
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.admin.port                                             0                         0
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http2.session-receive-window-size                      16MB                      16MB                                                                                             Initial size of session's flow control receive window for HTTP/2
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http2.stream-receive-window-size                       16MB                      16MB                                                                                             Initial size of stream's flow control receive window for HTTP/2
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http2.input-buffer-size                                8kB                       8kB                                                                                              Size of the buffer used to read from the network for HTTP/2
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http2.max-concurrent-streams                           16384                     16384                                                                                            Maximum concurrent streams per connection for HTTP/2
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http2.stream-idle-timeout                              15.00s                    15.00s
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.accept-queue-size                                      8000                      8000
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http.acceptor-threads                                  ----                      ----
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http.enabled                                           true                      true
+2022-07-28T18:33:13.294Z	INFO	main	Bootstrap	http-server.http.port                                              8180                      8180
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.http.selector-threads                                  ----                      ----
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.https.acceptor-threads                                 ----                      ----
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.https.enabled                                          false                     false
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.https.selector-threads                                 ----                      ----
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.log.compression.enabled                                true                      true
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.log.enabled                                            true                      true
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.log.max-history                                        15                        15
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.log.max-size                                           100MB                     100MB
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.log.path                                               var/log/http-request.log  var/log/http-request.log
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.log.queue-size                                         10000                     10000
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.max-request-header-size                                ----                      ----
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.max-response-header-size                               ----                      ----
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.threads.max                                            200                       200
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.threads.min                                            2                         2
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.net.max-idle-time                                      200.00s                   200.00s
+2022-07-28T18:33:13.295Z	INFO	main	Bootstrap	http-server.process-forwarded                                      false                     false                                                                                            Process Forwarded and X-Forwarded headers (for proxied environments)
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	http-server.show-stack-trace                                       true                      true                                                                                             Show the stack trace when generating an error response
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	http-server.threads.max-idle-time                                  1.00m                     1.00m
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	http-server.auth.users-file                                        ----                      ----
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	jmx.rmiregistry.port                                               ----                      ----
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	jmx.rmiserver.port                                                 ----                      ----
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	node.binary-spec                                                   ----                      ----
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	node.config-spec                                                   ----                      ----
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	node.environment                                                   starburst_cache_service   starburst_cache_service
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	node.internal-address-source                                       IP                        IP
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	node.location                                                      ----                      ----
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	node.bind-ip                                                       ----                      ----
+2022-07-28T18:33:13.296Z	INFO	main	Bootstrap	node.external-address                                              ----                      ----
+2022-07-28T18:33:13.297Z	INFO	main	Bootstrap	node.id                                                            ----                      ----
+2022-07-28T18:33:13.297Z	INFO	main	Bootstrap	node.internal-address                                              ----                      ----
+2022-07-28T18:33:13.297Z	INFO	main	Bootstrap	node.pool                                                          general                   general
+2022-07-28T18:33:15.097Z	INFO	main	com.zaxxer.hikari.HikariDataSource	service-database - Starting...
+2022-07-28T18:33:16.696Z	INFO	main	com.zaxxer.hikari.pool.HikariPool	service-database - Added connection org.postgresql.jdbc.PgConnection@146dcfe6
+2022-07-28T18:33:16.699Z	INFO	main	com.zaxxer.hikari.HikariDataSource	service-database - Start completed.
+2022-07-28T18:33:17.409Z	INFO	main	org.flywaydb.core.internal.license.VersionPrinter	Flyway Community Edition 7.2.1 by Redgate
+2022-07-28T18:33:17.594Z	INFO	main	org.flywaydb.core.internal.database.base.DatabaseType	Database: jdbc:postgresql://cachesrv-server-rob157.cgtecgtcifjg.us-east-1.rds.amazonaws.com:5432/cachesrv (PostgreSQL 13.4)
+2022-07-28T18:33:17.705Z	INFO	main	org.flywaydb.core.internal.command.DbValidate	Successfully validated 7 migrations (execution time 00:00.018s)
+2022-07-28T18:33:17.791Z	INFO	main	org.flywaydb.core.internal.command.DbMigrate	Current version of schema "public": 007
+2022-07-28T18:33:17.792Z	INFO	main	org.flywaydb.core.internal.command.DbMigrate	Schema "public" is up to date. No migration necessary.
+2022-07-28T18:33:17.799Z	INFO	main	com.starburstdata.cache.db.FlywayMigration	Performed 0 migrations
+2022-07-28T18:33:18.294Z	INFO	main	org.eclipse.jetty.util.log	Logging initialized @9399ms to org.eclipse.jetty.util.log.Slf4jLog
+2022-07-28T18:33:19.193Z	INFO	main	org.eclipse.jetty.server.Server	jetty-9.4.44.v20210927; built: 2021-09-27T23:02:44.612Z; git: 8da83308eeca865e495e53ef315a249d63ba9332; jvm 17.0.3+7-LTS
+2022-07-28T18:33:20.387Z	WARN	main	org.glassfish.jersey.internal.inject.Providers	A provider com.starburstdata.cache.resource.RedirectionsResource registered in SERVER runtime does not implement any provider interfaces applicable in the SERVER runtime. Due to constraint configuration problems the provider com.starburstdata.cache.resource.RedirectionsResource will be ignored. 
+2022-07-28T18:33:20.387Z	WARN	main	org.glassfish.jersey.internal.inject.Providers	A provider com.starburstdata.cache.resource.MaterializedViewsResource registered in SERVER runtime does not implement any provider interfaces applicable in the SERVER runtime. Due to constraint configuration problems the provider com.starburstdata.cache.resource.MaterializedViewsResource will be ignored. 
+2022-07-28T18:33:20.387Z	WARN	main	org.glassfish.jersey.internal.inject.Providers	A provider io.airlift.jmx.MBeanResource registered in SERVER runtime does not implement any provider interfaces applicable in the SERVER runtime. Due to constraint configuration problems the provider io.airlift.jmx.MBeanResource will be ignored. 
+2022-07-28T18:33:20.387Z	WARN	main	org.glassfish.jersey.internal.inject.Providers	A provider com.starburstdata.cache.resource.StatusResource registered in SERVER runtime does not implement any provider interfaces applicable in the SERVER runtime. Due to constraint configuration problems the provider com.starburstdata.cache.resource.StatusResource will be ignored. 
+2022-07-28T18:33:20.387Z	WARN	main	org.glassfish.jersey.internal.inject.Providers	A provider com.starburstdata.cache.resource.CacheResource registered in SERVER runtime does not implement any provider interfaces applicable in the SERVER runtime. Due to constraint configuration problems the provider com.starburstdata.cache.resource.CacheResource will be ignored. 
+2022-07-28T18:33:20.988Z	INFO	main	org.eclipse.jetty.server.handler.ContextHandler	Started o.e.j.s.ServletContextHandler@7e5b621b{/,null,AVAILABLE,@http}
+2022-07-28T18:33:20.997Z	INFO	main	org.eclipse.jetty.server.AbstractConnector	Started http@5d318e91{HTTP/1.1, (http/1.1, h2c)}{0.0.0.0:8180}
+2022-07-28T18:33:20.997Z	INFO	main	org.eclipse.jetty.server.Server	Started @12102ms
+2022-07-28T18:33:21.688Z	INFO	main	io.airlift.bootstrap.LifeCycleManager	Life cycle starting...
+2022-07-28T18:33:21.689Z	INFO	main	io.airlift.bootstrap.LifeCycleManager	Life cycle started
+2022-07-28T18:33:24.805Z	INFO	cache-refresh-service-0	com.starburstdata.cache.rules.FileCacheRulesProvider	Refreshing cache rules from etc/rules.json
+2022-07-28T18:33:29.196Z	INFO	table-import-service-0	com.starburstdata.cache.typemapping.FileBasedTypeMappingProvider	Refreshing type mapping rules from etc/type-mapping.json
+2022-07-28T18:33:31.011Z	ERROR	table-import-service-3	com.starburstdata.cache.TableImportService	Import from sfdc.salesforce.onboarding__c to s3.cache.onboarding__c_4ffb8a20_b805_4a5c_b32e_f666173b2a01 failed
+org.jdbi.v3.core.statement.UnableToExecuteStatementException: java.sql.SQLException: Query failed (#20220728_183330_00130_eesg2): Unsupported Hive type: varchar(130000). Supported VARCHAR types: VARCHAR(<=65535), VARCHAR. [statement:"CREATE TABLE "s3"."cache"."onboarding__c_4ffb8a20_b805_4a5c_b32e_f666173b2a01"  AS SELECT "id","ownerid","isdeleted","name","recordtypeid",CAST("createddate" AS timestamp(3)) AS "createddate","createdbyid",CAST("lastmodifieddate" AS timestamp(3)) AS "lastmodifieddate","lastmodifiedbyid",CAST("systemmodstamp" AS timestamp(3)) AS "systemmodstamp","lastactivitydate",CAST("lastvieweddate" AS timestamp(3)) AS "lastvieweddate",CAST("lastreferenceddate" AS timestamp(3)) AS "lastreferenceddate","opportunity__c","account__c","start_date__c","end_date__c","stage__c","type__c","customer_contact__c","notes__c","onboarding_status__c","status_detail__c","technical_account_manager__c","solution_architect__c","onboarding_age__c","sales_owner__c","success_criteria__c","use_case__c","economic_buyer__c","champion__c","phase__c","link_to_work_plan__c","link_to_adoption_plan__c","usage_metrics_tracking_in_place__c","risks_blockers__c","my_cs_activities_tam__c","production_use_cases_implemented__c","production_use_cases_to_be_impl[...]", arguments:{positional:{}, named:{}, finder:[]}]
+	at org.jdbi.v3.core.statement.SqlStatement.internalExecute(SqlStatement.java:1790)
+	at org.jdbi.v3.core.result.ResultProducers.lambda$returningUpdateCount$0(ResultProducers.java:46)
+	at org.jdbi.v3.core.statement.Update.execute(Update.java:60)
+	at org.jdbi.v3.core.statement.Update.execute(Update.java:48)
+	at com.starburstdata.cache.trino.TrinoDao.lambda$copyTable$4(TrinoDao.java:140)
+	at com.starburstdata.cache.trino.ImportCanceller.callCancellably(ImportCanceller.java:267)
+	at com.starburstdata.cache.trino.TrinoDao.lambda$copyTable$5(TrinoDao.java:127)
+	at org.jdbi.v3.sqlobject.WithHandleMethodHandlerFactory.lambda$buildHandler$0(WithHandleMethodHandlerFactory.java:36)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:44)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:26)
+	at org.jdbi.v3.core.LazyHandleSupplier.lambda$invokeInContext$1(LazyHandleSupplier.java:77)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:44)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:26)
+	at org.jdbi.v3.core.LazyHandleSupplier.invokeInContext(LazyHandleSupplier.java:76)
+	at org.jdbi.v3.sqlobject.WithHandleMethodHandlerFactory.lambda$buildHandler$1(WithHandleMethodHandlerFactory.java:33)
+	at org.jdbi.v3.sqlobject.internal.SqlObjectInitData$1.lambda$invoke$0(SqlObjectInitData.java:132)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:44)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:26)
+	at org.jdbi.v3.core.LazyHandleSupplier.lambda$invokeInContext$1(LazyHandleSupplier.java:77)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:44)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:26)
+	at org.jdbi.v3.core.LazyHandleSupplier.invokeInContext(LazyHandleSupplier.java:76)
+	at org.jdbi.v3.sqlobject.internal.SqlObjectInitData$1.call(SqlObjectInitData.java:138)
+	at org.jdbi.v3.sqlobject.internal.SqlObjectInitData$1.invoke(SqlObjectInitData.java:132)
+	at org.jdbi.v3.sqlobject.SqlObjectFactory.lambda$attach$2(SqlObjectFactory.java:110)
+	at jdk.proxy2/jdk.proxy2.$Proxy108.withHandle(Unknown Source)
+	at com.starburstdata.cache.trino.TrinoDao.copyTable(TrinoDao.java:119)
+	at java.base/java.lang.invoke.MethodHandle.invokeWithArguments(MethodHandle.java:732)
+	at org.jdbi.v3.core.internal.exceptions.Unchecked.lambda$function$4(Unchecked.java:76)
+	at org.jdbi.v3.sqlobject.DefaultMethodHandler.invoke(DefaultMethodHandler.java:50)
+	at org.jdbi.v3.sqlobject.internal.SqlObjectInitData$1.lambda$invoke$0(SqlObjectInitData.java:132)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:44)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:26)
+	at org.jdbi.v3.core.LazyHandleSupplier.lambda$invokeInContext$1(LazyHandleSupplier.java:77)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:44)
+	at org.jdbi.v3.core.internal.Invocations.invokeWith(Invocations.java:26)
+	at org.jdbi.v3.core.LazyHandleSupplier.invokeInContext(LazyHandleSupplier.java:76)
+	at org.jdbi.v3.sqlobject.internal.SqlObjectInitData$1.call(SqlObjectInitData.java:138)
+	at org.jdbi.v3.sqlobject.internal.SqlObjectInitData$1.invoke(SqlObjectInitData.java:132)
+	at org.jdbi.v3.sqlobject.SqlObjectFactory.lambda$attach$2(SqlObjectFactory.java:110)
+	at org.jdbi.v3.core.internal.OnDemandExtensions.lambda$invoke$5(OnDemandExtensions.java:98)
+	at org.jdbi.v3.core.internal.exceptions.Unchecked.lambda$function$4(Unchecked.java:76)
+	at org.jdbi.v3.core.internal.OnDemandExtensions.invoke(OnDemandExtensions.java:98)
+	at org.jdbi.v3.core.internal.OnDemandExtensions.lambda$createProxy$2(OnDemandExtensions.java:82)
+	at org.jdbi.v3.core.Jdbi.callWithExtension(Jdbi.java:476)
+	at org.jdbi.v3.core.Jdbi.withExtension(Jdbi.java:463)
+	at org.jdbi.v3.core.internal.OnDemandExtensions.lambda$createProxy$3(OnDemandExtensions.java:82)
+	at jdk.proxy2/jdk.proxy2.$Proxy81.copyTable(Unknown Source)
+	at com.starburstdata.cache.TableImportService.importTable(TableImportService.java:460)
+	at com.starburstdata.cache.TableImportService.lambda$createRedirectionAndScheduleImport$1(TableImportService.java:315)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:833)
+Caused by: java.sql.SQLException: Query failed (#20220728_183330_00130_eesg2): Unsupported Hive type: varchar(130000). Supported VARCHAR types: VARCHAR(<=65535), VARCHAR.
+	at io.trino.jdbc.AbstractTrinoResultSet.resultsException(AbstractTrinoResultSet.java:1937)
+	at io.trino.jdbc.TrinoResultSet.getColumns(TrinoResultSet.java:285)
+	at io.trino.jdbc.TrinoResultSet.create(TrinoResultSet.java:61)
+	at io.trino.jdbc.TrinoStatement.internalExecute(TrinoStatement.java:262)
+	at io.trino.jdbc.TrinoStatement.execute(TrinoStatement.java:240)
+	at io.trino.jdbc.TrinoPreparedStatement.execute(TrinoPreparedStatement.java:165)
+	at org.jdbi.v3.core.statement.SqlLoggerUtil.wrap(SqlLoggerUtil.java:31)
+	at org.jdbi.v3.core.statement.SqlStatement.internalExecute(SqlStatement.java:1782)
+	... 52 more
+Caused by: io.trino.spi.TrinoException: Unsupported Hive type: varchar(130000). Supported VARCHAR types: VARCHAR(<=65535), VARCHAR.
+	at io.trino.plugin.hive.util.HiveTypeTranslator.toTypeInfo(HiveTypeTranslator.java:127)
+	at io.trino.plugin.hive.HiveType.toHiveType(HiveType.java:214)
+	at io.trino.plugin.hive.HiveMetadata.validateColumns(HiveMetadata.java:3392)
+	at io.trino.plugin.hive.HiveMetadata.getNewTableLayout(HiveMetadata.java:3108)
+	at io.trino.plugin.base.classloader.ClassLoaderSafeConnectorMetadata.getNewTableLayout(ClassLoaderSafeConnectorMetadata.java:118)
+	at io.trino.metadata.MetadataManager.getNewTableLayout(MetadataManager.java:811)
+	at io.trino.sql.analyzer.StatementAnalyzer$Visitor.visitCreateTableAsSelect(StatementAnalyzer.java:899)
+	at io.trino.sql.analyzer.StatementAnalyzer$Visitor.visitCreateTableAsSelect(StatementAnalyzer.java:449)
+	at io.trino.sql.tree.CreateTableAsSelect.accept(CreateTableAsSelect.java:96)
+	at io.trino.sql.tree.AstVisitor.process(AstVisitor.java:27)
+	at io.trino.sql.analyzer.StatementAnalyzer$Visitor.process(StatementAnalyzer.java:466)
+	at io.trino.sql.analyzer.StatementAnalyzer.analyze(StatementAnalyzer.java:429)
+	at io.trino.sql.analyzer.Analyzer.analyze(Analyzer.java:79)
+	at io.trino.sql.analyzer.Analyzer.analyze(Analyzer.java:71)
+	at io.trino.execution.SqlQueryExecution.analyze(SqlQueryExecution.java:269)
+	at io.trino.execution.SqlQueryExecution.<init>(SqlQueryExecution.java:193)
+	at io.trino.execution.SqlQueryExecution$SqlQueryExecutionFactory.createQueryExecution(SqlQueryExecution.java:814)
+	at io.trino.dispatcher.LocalDispatchQueryFactory.lambda$createDispatchQuery$0(LocalDispatchQueryFactory.java:135)
+	at io.trino.$gen.Trino_391_e____20220728_181426_2.call(Unknown Source)
+	at com.google.common.util.concurrent.TrustedListenableFutureTask$TrustedFutureInterruptibleTask.runInterruptibly(TrustedListenableFutureTask.java:131)
+	at com.google.common.util.concurrent.InterruptibleTask.run(InterruptibleTask.java:74)
+	at com.google.common.util.concurrent.TrustedListenableFutureTask.run(TrustedListenableFutureTask.java:82)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:833)
+
+

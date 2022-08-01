@@ -95,6 +95,7 @@ coordinator:
     insights.metrics-collection-interval=15s
     insights.metrics-persistence-interval=60s
     insights.authorized-users=.*
+  {% if PerformanceTesting or AuthNLdap %}
   etcFiles:
     properties:
       {% if PerformanceTesting %}
@@ -112,6 +113,7 @@ coordinator:
         ldap.user-base-dn=ou=People,dc=az,dc=starburstdata,dc=net
         ldap.user-bind-pattern=uid=${USER},ou=People,dc=az,dc=starburstdata,dc=net
       {% endif %}
+    {% endif %}
     {% if PerformanceTesting %}
     other:
       resource-groups.json: |
@@ -130,7 +132,7 @@ coordinator:
             }
           ]
         }
-    {% endif %}
+  {% endif %}
   resources:
     requests:
       memory: {{coordinator_mem}}
@@ -179,7 +181,11 @@ userDatabase:
 catalogs:
   {{ HiveCat }}: |
     connector.name=hive
+    {% if Target == "aws" %}
+    hive.metastore=glue
+    {% else %}
     hive.metastore.uri=thrift://hive:9083
+    {% endif %}
     hive.security=allow-all
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
@@ -213,7 +219,6 @@ catalogs:
   delta: |
     connector.name=delta-lake
     hive.metastore=glue
-    hive.metastore.glue.pin-client-to-current-region=true
     hive.security=allow-all
     delta.hide-non-delta-lake-tables=true
   {% if not DisableSlowSources %}

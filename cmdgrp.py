@@ -61,8 +61,8 @@ class CommandGroup:
             try:
                 copiedRows = sql.sendSql(self.url, self.ssl, self.user,
                         self.pwd, f"select count(*) from {dest}")[0][0]
-                if copiedRows < rows:
-                    print(f"Tried to process {rows}, only did {copiedRows}")
+                if copiedRows != rows:
+                    print(f"Expected {rows} rows, but found {copiedRows}")
             except sql.ApiError as e:
                 print(f"Couldn't read rows from {dest}")
 
