@@ -625,8 +625,9 @@ def getOutputVars() -> dict:
     if cachesrv_enabled:
         sources.append('cachesrv')
 
-    # MySQL is optional. Note that we always need to do something with
-    # PostgreSQL, because we use it internally for HMS, cache service, etc.
+    if postgres_enabled:
+        sources.append('postgres')
+
     if mysql_enabled:
         sources.append('mysql')
 
@@ -1787,12 +1788,10 @@ def buildLdapLauncher(fqdn: str) -> None:
     ldapkeybf = "ldap.key"
     ldapcertbf = "ldap.pem"
     certinfobf = "certinfo.ldif"
-    check_rc = '''
-if [[ $? -ne 0 ]]; then
-    echo Command failed with RC=$?
-    exit $?
-fi
-'''
+    check_rc=('RC=$?; if [[ $RC -ne 0 ]]; '
+            'then echo Command failed with RC=$RC; fi\n')
+    check_dns = f'dig {ldapfqdn}\n'
+
     with open(ldapsetupf) as sh, \
             open(ldaplaunchf, 'w') as wh, \
             open(secrets["ldaptls"]["chain"]) as cach, \
@@ -1833,6 +1832,7 @@ fi
         wh.write("replace: olcTLSCertificateFile\n")
         wh.write(f"olcTLSCertificateFile: {certdir}/{ldapcertbf}\n")
         wh.write("EOM\n")
+        wh.write(check_dns)
         wh.write("sudo ldapmodify -Y EXTERNAL -H ldapi:// -f "
                 f"/tmp/{certinfobf}\n")
         wh.write(check_rc)
@@ -1853,6 +1853,7 @@ fi
         wh.write("cat <<EOM | sudo tee /tmp/memberof.ldif\n")
         wh.write(getOverlays())
         wh.write("EOM\n")
+        wh.write(check_dns)
         wh.write("sudo ldapadd -H ldapi:// -Y EXTERNAL -D 'cn=config' -f "
                 "/tmp/memberof.ldif\n")
         wh.write(check_rc)
@@ -1868,6 +1869,7 @@ fi
         wh.write(getGroup("analysts",   5000, dcs, ["alice", "bob"]))
         wh.write(getGroup("superusers", 5001, dcs, ["carol", trinouser]))
         wh.write("EOM\n")
+        wh.write(check_dns)
         wh.write("sudo ldapadd -x -w admin -D "
                 "cn=admin,dc=az,dc=starburstdata,dc=net -f /tmp/who.ldif\n")
         wh.write(check_rc)
