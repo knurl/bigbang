@@ -26,9 +26,9 @@ __repr__	capcalc.py	/^    def __repr__(self):$/;"	m	class:NodeResource	file:
 __str__	bigbang.py	/^    def __str__(self):$/;"	m	class:Tunnel	file:
 accountSbCpu	capcalc.py	/^    def accountSbCpu(nn: str, cn: str, cpu: int):$/;"	f	function:getMinNodeResources
 accountSbMem	capcalc.py	/^    def accountSbMem(nn: str, cn: str, mem: int):$/;"	f	function:getMinNodeResources
-addBqCommand	cmdgrp.py	/^    def addBqCommand(self, tpc_cat_info, tpcdsSchema: str, srcCatalog: str,$/;"	m	class:CommandGroup
 addCont	capcalc.py	/^    def addCont(self, podname, contname, cpu, mem):$/;"	m	class:NodeResource
 addSqlCommand	cmdgrp.py	/^    def addSqlCommand(self, cmd, callback = None,$/;"	m	class:CommandGroup
+addSqlCommands	cmdgrp.py	/^    def addSqlCommands(self, cmds: list[str]) -> None:$/;"	m	class:CommandGroup
 addSqlTableCommand	cmdgrp.py	/^    def addSqlTableCommand(self, tpcds_cat_info, tpcdsSchema: str, srcTable:$/;"	m	class:CommandGroup
 allCommandsDone	cmdgrp.py	/^    def allCommandsDone(self) -> bool:$/;"	m	class:CommandGroup
 allocateResources	capcalc.py	/^def allocateResources(nodeCount: int, mincpu: int, minmem: int, namespace: str,$/;"	f
@@ -45,18 +45,16 @@ authnldaplabel	bigbang.py	/^authnldaplabel  = "AuthNLdap"$/;"	v
 awsconfig	creds.py	/^awsconfig      = os.path.expanduser("~\/.aws\/config")$/;"	v
 awscreds	creds.py	/^awscreds       = os.path.expanduser("~\/.aws\/credentials")$/;"	v
 awsdir	creds.py	/^awsdir         = os.path.expanduser("~\/.aws")$/;"	v
-azArchiveDirectories	bigbang.py	/^def azArchiveDirectories(accountName: str, accessKey: str, fsName: str) -> None:$/;"	f
+azArchiveDirectories	bigbang.py	/^def azArchiveDirectories(accountName: str, accessKey: str,$/;"	f
 azaddrs	bigbang.py	/^    azaddrs = { "bastion": ns.azaddrs[0], "starburst": ns.azaddrs[1] }$/;"	v
 azaddrs	bigbang.py	/^azaddrs = None$/;"	v
 bastionfqdn	bigbang.py	/^bastionfqdn    = "bastion." + domain$/;"	v
 bastlaunchf	bigbang.py	/^bastlaunchf    = bbio.where("bastlaunch.sh")$/;"	v
-bqcat	bigbang.py	/^bqcat          = "bq" # for now, connector doesn't support INSERT or CTAS$/;"	v
 bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
 buildBastionLauncher	bigbang.py	/^def buildBastionLauncher() -> None:$/;"	f
 buildLdapLauncher	bigbang.py	/^def buildLdapLauncher(fqdn: str) -> None:$/;"	f
 c	bigbang.py	/^                c = ", ".join(clouds)))$/;"	v
 cacheschema	bigbang.py	/^cacheschema    = "cache"$/;"	v
-cachesrvlabel	bigbang.py	/^cachesrvlabel   = 'CacheServiceEnabled'$/;"	v
 canFit	capcalc.py	/^    def canFit(self, cpu, mem):$/;"	m	class:NodeResource
 capacitytypes	bigbang.py	/^capacitytypes   = {"Spot", "OnDemand"}$/;"	v
 captypelabel	bigbang.py	/^captypelabel    = "CapacityType"$/;"	v
@@ -73,9 +71,9 @@ clustname	bigbang.py	/^clustname = shortname + "cl"$/;"	v
 code	bigbang.py	/^code = username[:codelen]$/;"	v
 codelen	bigbang.py	/^codelen = min(3, len(username))$/;"	v
 components	bigbang.py	/^components = chartversion.split('.')$/;"	v
-copySchemaTables	bigbang.py	/^def copySchemaTables(tpc_cat_info: tpc.TpcCatInfo, srcCatalog: str,$/;"	f
+copySchemaTables	bigbang.py	/^def copySchemaTables(env: dict, tpc_cat_info: tpc.TpcCatInfo, srcCatalog: str,$/;"	f
 countUp	out.py	/^    def countUp(maxinc: float) -> float:$/;"	f	function:spinWaitTest
-createSchemas	bigbang.py	/^def createSchemas(dstCatalogs: list, dstSchemas: set[str],$/;"	f
+create_schema	bigbang.py	/^def create_schema(dst_catalog: str, dst_schema: str, hive_target: str):$/;"	f
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AwsDbInstanceType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AzureDbVmType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["GcpDbMachineType"]$/;"	v
@@ -95,7 +93,6 @@ domain	bigbang.py	/^domain         = "az.starburstdata.net"$/;"	v
 dontLoadCat	bigbang.py	/^def dontLoadCat(cat: str) -> bool:$/;"	f
 downstreamSG	bigbang.py	/^        downstreamSG = True$/;"	v
 downstreamSG	bigbang.py	/^downstreamSG = False$/;"	v
-dropSchemas	bigbang.py	/^def dropSchemas() -> None:$/;"	f
 dumpNodesAndPods	capcalc.py	/^    def dumpNodesAndPods() -> None:$/;"	f	function:getMinNodeResources
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
 emitSshTunnel	bigbang.py	/^            def emitSshTunnel(wh, bindaddr: ipaddress.IPv4Address, lclport:$/;"	f	function:buildBastionLauncher
@@ -105,6 +102,7 @@ eraseBucketContents	bigbang.py	/^def eraseBucketContents(env: dict) -> None:$/;"
 eraseLine	out.py	/^    def eraseLine(flush: bool = False):$/;"	f	function:spinWait
 establishBastionTunnel	bigbang.py	/^def establishBastionTunnel(env: dict) -> list[Tunnel]:$/;"	f
 evtlogcat	bigbang.py	/^evtlogcat      = "evtlog" # catalog name for event logger$/;"	v
+execute_sql_commands	bigbang.py	/^def execute_sql_commands(cmds: list[str]):$/;"	f
 fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 gcpaccount	bigbang.py	/^gcpaccount = ""$/;"	v
 gcpaddrs	bigbang.py	/^    gcpaddrs = { "bastion": ns.gcpaddrs[0], "starburst": ns.gcpaddrs[1] }$/;"	v
@@ -138,6 +136,9 @@ getStarburstUrl	bigbang.py	/^def getStarburstUrl() -> str:$/;"	f
 getTablesForSchemaCatalog	bigbang.py	/^def getTablesForSchemaCatalog(schema: str, catalog: str) -> list[str]:$/;"	f
 getUser	bigbang.py	/^def getUser(user: str, uid: int, gid: int, dcs: str) -> str:$/;"	f
 get_cat_name	tpc.py	/^    def get_cat_name(self) -> str:$/;"	m	class:TpcCatInfo
+get_command_group	bigbang.py	/^def get_command_group() -> cmdgrp.CommandGroup:$/;"	f
+get_schema_and_drop	bigbang.py	/^def get_schema_and_drop(env: dict, tpc_cat_info: tpc.TpcCatInfo,$/;"	f
+get_schema_commands	bigbang.py	/^def get_schema_commands(dstCatalogs: list,$/;"	f
 get_table_names	tpc.py	/^    def get_table_names(self) -> Set[str]:$/;"	m	class:TpcCatInfo
 get_table_size	tpc.py	/^    def get_table_size(self, scale_set: str, table_name: str) -> int:$/;"	m	class:TpcCatInfo
 get_tunnel_procs	bigbang.py	/^    def get_tunnel_procs():$/;"	f	function:cleanOldTunnels
@@ -168,7 +169,6 @@ help	bigbang.py	/^        help="Skip checking to see if cluster needs to be star
 help	bigbang.py	/^        help="Specify upstream bastion IP address, if this is a downstream "$/;"	v
 help	bigbang.py	/^        help="Summarise the ssh tunnels on exit.")$/;"	v
 help	bigbang.py	/^        help="Unload k8s cluster only. Used with stop or restart.")$/;"	v
-help	bigbang.py	/^        help='Use performance nodes for a test (AWS only)')$/;"	v
 help	bigbang.py	/^        help=argparse.SUPPRESS)$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "adls"$/;"	v
 hivecat	bigbang.py	/^    hivecat   = "gcs"$/;"	v
@@ -178,7 +178,7 @@ ingresslblabel	bigbang.py	/^ingresslblabel  = "IngressLoadBalancer"$/;"	v
 ingressname	bigbang.py	/^ingressname    = "sb-ingress"$/;"	v
 installSecrets	bigbang.py	/^def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:$/;"	f
 instanceTypes	bigbang.py	/^        instanceTypes = myvars["AwsInstanceTypes"][capacityType]$/;"	v
-instanceTypes	bigbang.py	/^        instanceTypes = myvars["AwsPerfInstanceTypes"][capacityType]$/;"	v
+instanceTypes	bigbang.py	/^        instanceTypes = myvars["AwsPerfInstanceTypes"]$/;"	v
 instanceTypes	bigbang.py	/^    instanceTypes     = myvars["AzureVmTypes"][capacityType]$/;"	v
 instanceTypes	bigbang.py	/^    instanceTypes     = myvars["GcpMachineTypes"][capacityType]$/;"	v
 invalidchars	bigbang.py	/^invalidchars = r'[^' + validchars + r']'$/;"	v
@@ -197,7 +197,7 @@ ldapfqdn	bigbang.py	/^ldapfqdn       = "ldap." + domain$/;"	v
 ldaplaunchf	bigbang.py	/^ldaplaunchf    = bbio.where("ldaplaunch.sh")$/;"	v
 ldapsetupf	bigbang.py	/^ldapsetupf     = bbio.where("install-slapd.sh")$/;"	v
 loadBalancerResponding	bigbang.py	/^def loadBalancerResponding(service: str) -> bool:$/;"	f
-loadDatabases	bigbang.py	/^def loadDatabases(perftest: bool, tpcds_cat_info: tpc.TpcCatInfo, hive_location: str) -> None:$/;"	f
+loadDatabases	bigbang.py	/^def loadDatabases(env: dict, perftest: bool, tpcds_cat_info: tpc.TpcCatInfo,$/;"	f
 localhost	bigbang.py	/^localhost      = "localhost"$/;"	v
 localhostip	bigbang.py	/^localhostip    = "127.0.0.1"$/;"	v
 main	bigbang.py	/^def main() -> None:$/;"	f
@@ -232,7 +232,6 @@ planWorkerSize	capcalc.py	/^def planWorkerSize(namespace: str, cachesrv_enabled:
 podHasSufficientResource	capcalc.py	/^def podHasSufficientResource(podname: str, podcpu: int, podmem: int) -> bool:$/;"	f
 portoffset	bigbang.py	/^portoffset = { "aws": 0, "az": 1, "gcp": 2 }$/;"	v
 postgresenlabel	bigbang.py	/^postgresenlabel = 'PostgreSqlEnabled'$/;"	v
-processBqCommand	cmdgrp.py	/^    def processBqCommand(self, srcCatalog: str, srcSchema: str, srcTable: str,$/;"	m	class:CommandGroup
 processSqlCommand	cmdgrp.py	/^    def processSqlCommand(self, cmd: str, callback = None) -> None:$/;"	m	class:CommandGroup
 processSqlTableCommand	cmdgrp.py	/^    def processSqlTableCommand(self, srcTable: str, dstCatalog: str,$/;"	m	class:CommandGroup
 randomString	out.py	/^def randomString(length: int) -> str:$/;"	f
@@ -285,7 +284,7 @@ starburstfqdn	bigbang.py	/^starburstfqdn  = "starburst." + domain$/;"	v
 startPortForwardToLBs	bigbang.py	/^def startPortForwardToLBs(bastionIp: str,$/;"	f
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
 svcStart	bigbang.py	/^def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,$/;"	f
-svcStop	bigbang.py	/^def svcStop(onlyEmptyNodes: bool = False) -> None:$/;"	f
+svcStop	bigbang.py	/^def svcStop(perf_test: bool, onlyEmptyNodes: bool = False) -> None:$/;"	f
 svcports	bigbang.py	/^svcports    = {$/;"	v
 synapseslcat	bigbang.py	/^synapseslcat   = "synapse_sl"$/;"	v
 syscat	bigbang.py	/^syscat         = "system"$/;"	v

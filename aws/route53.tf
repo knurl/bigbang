@@ -4,7 +4,7 @@ resource "aws_route53_zone" "private_dns" {
   force_destroy = true
 
   vpc {
-    vpc_id = module.vpc.vpc_id
+    vpc_id = data.aws_vpc.sb_vpc.id
   }
 }
 

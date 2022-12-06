@@ -1,6 +1,6 @@
 resource "aws_security_group" "ldaps_sg" {
   name                   = "ldaps_sg"
-  vpc_id                 = module.vpc.vpc_id
+  vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
 
   /* Allow communication to port 22 (SSH) from internal IP addresses only */
@@ -8,7 +8,7 @@ resource "aws_security_group" "ldaps_sg" {
     from_port   = 0
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
+    cidr_blocks = local.prvpub_subnet_cidrs
   }
 
   # LDAPS port is 636
@@ -16,7 +16,7 @@ resource "aws_security_group" "ldaps_sg" {
     from_port   = 0
     to_port     = 636
     protocol    = "tcp"
-    cidr_blocks = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
+    cidr_blocks = local.prvpub_subnet_cidrs
   }
 
   /*
@@ -38,15 +38,13 @@ resource "aws_security_group" "ldaps_sg" {
 resource "aws_instance" "ldaps" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.small_instance_type
-  subnet_id              = module.vpc.private_subnets.0
+  subnet_id              = data.aws_subnet.private_subnet[0].id
   private_ip             = local.ldap_ip
   key_name               = aws_key_pair.key_pair.key_name
   vpc_security_group_ids = [aws_security_group.ldaps_sg.id]
   user_data              = file(var.ldaps_launch_script)
   tags                   = merge(var.tags, { Name = "${var.ldaps_name}" })
 
-  /* We have a dependency on our NAT gateway for outbound connectivity during
-   * our launch script, as well as DNS so that certificates can be validated.
-   */
-  depends_on = [module.vpc, aws_route53_record.ldap_a_record]
+  /* We have a dependency on DNS so that certificates can be validated. */
+  depends_on = [aws_route53_record.ldap_a_record]
 }

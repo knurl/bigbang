@@ -1,12 +1,12 @@
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
-  cluster_version = "1.22"
-  version         = "18.26.2"
+  cluster_version = "1.24"
+  version         = "18.31.2"
 
   # Where to place the EKS cluster and workers.
-  vpc_id                          = module.vpc.vpc_id
-  subnet_ids                      = module.vpc.private_subnets
+  vpc_id                          = data.aws_vpc.sb_vpc.id
+  subnet_ids                      = local.prv_subnet_ids
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = false
 
@@ -27,8 +27,12 @@ module "eks" {
       min_size     = 0
       max_size     = var.node_count
       desired_size = var.node_count
-      subnet_ids   = [local.preferred_nodegroup_subnet]
+      subnet_ids   = [local.prv_subnet_ids[0]]
       ami_type     = length(regexall("g", split(".", local.preferred_eks_instance_type)[0])) > 0 ? "AL2_ARM_64" : "AL2_x86_64"
+      lifecycle = {
+        create_before_destroy = false
+      }
+
       update_config = {
         max_unavailable = var.node_count
       }
@@ -80,7 +84,7 @@ module "eks" {
 }
 
 resource "aws_iam_policy" "eks_trino_worker_policy" {
-  name = "eks-trino-worker-policy"
+  name_prefix = "eks-trino-worker-policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

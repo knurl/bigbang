@@ -3,8 +3,6 @@ import sql, tpc
 
 # other
 import os, sys, pdb, requests, time, threading, io
-import google.api_core.exceptions # type: ignore
-from google.cloud import bigquery, storage # type: ignore
 
 class CommandGroup:
     def __init__(self, url: str, ssl: bool, user: str, pwd: str):
@@ -54,6 +52,10 @@ class CommandGroup:
         if not nothread:
             t.start()
 
+    def addSqlCommands(self, cmds: list[str]) -> None:
+        for cmd in cmds:
+            self.addSqlCommand(cmd)
+
     def checkCopiedTable(self, dstCatalog: str, dstSchema: str, dstTable: str,
             rows: int) -> None:
             dest = "{dc}.{ds}.{dt}".format(dc = dstCatalog, ds = dstSchema,
@@ -86,57 +88,6 @@ class CommandGroup:
         rows = tpcds_cat_info.get_table_size(tpcdsSchema, srcTable)
         t = threading.Thread(target = self.processSqlTableCommand,
                 args = (srcTable, dstCatalog, dstSchema, rows, cmd, check, ))
-        with self.cv:
-            self.workToDo += rows
-        t.start()
-
-    def processBqCommand(self, srcCatalog: str, srcSchema: str, srcTable: str,
-            bqCatalog: str, dstSchema: str, rows: int, bucket: str,
-            gcp_project: str, check: bool = False) -> None:
-        # Get the list of files to be loaded
-        storage_client = storage.Client()
-        blobs = storage_client.list_blobs(bucket,
-                prefix=f"{srcCatalog}/{srcSchema}/{srcTable}/")
-        paths = [f"gs://{bucket}/{b.name}" for b in blobs if b.name[-1] != '/']
-        assert len(paths) > 0
-
-        # Construct a BigQuery client object.
-        client = bigquery.Client()
-
-        # TODO this could break if someone changes to Parquet format
-        job_config = bigquery.LoadJobConfig(write_disposition =
-            bigquery.WriteDisposition.WRITE_EMPTY, source_format =
-            bigquery.SourceFormat.ORC,)
-
-        table_id = "{dp}.{ds}.{st}".format(dp = gcp_project, ds = dstSchema,
-                st = srcTable)
-        try:
-            load_job = client.load_table_from_uri(paths, table_id,
-                    job_config=job_config)  # Make an API request.
-            load_job.result()  # Waits for the job to complete.
-        except google.api_core.exceptions.Conflict as e:
-            # This exception indicates that there was already a table. That's
-            # fine and we can completely ignore that message.
-            pass
-        # This check should pass even if we got a write conflict
-        destination_table = client.get_table(table_id)
-        assert destination_table.num_rows == rows
-
-        if check:
-            self.checkCopiedTable(bqCatalog, dstSchema, srcTable, rows)
-
-        # We get here whether it works or not
-        with self.cv:
-            self.workDone += rows
-            self.cv.notify_all()
-
-    def addBqCommand(self, tpc_cat_info, tpcdsSchema: str, srcCatalog: str,
-            srcSchema: str, srcTable: str, bqCatalog: str, dstSchema: str,
-            bucket: str, gcp_project: str, check: bool = False) -> None:
-        rows = tpc_cat_info.get_table_size(tpcdsSchema, srcTable)
-        t = threading.Thread(target = self.processBqCommand,
-                args = (srcCatalog, srcSchema, srcTable, bqCatalog, dstSchema,
-                rows, bucket, gcp_project, check,))
         with self.cv:
             self.workToDo += rows
         t.start()

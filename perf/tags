@@ -5,6 +5,7 @@
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.8	//
 Counter	loadgen.py	/^class Counter:$/;"	c
+QueryErrorException	test_harness.py	/^class QueryErrorException(Exception):$/;"	c
 __init__	loadgen.py	/^    def __init__(self):$/;"	m	class:Counter
 average_latency	test_harness.py	/^def average_latency(filenames: list[str]) -> float:$/;"	f
 build_logfile_dict	test_harness.py	/^def build_logfile_dict():$/;"	f
@@ -33,12 +34,8 @@ nq	loadgen.py	/^nq = Counter()$/;"	v
 numloops	summarise.py	/^numloops=1$/;"	v
 numloops	test_harness.py	/^numloops = 1$/;"	v
 numthreadcount	summarise.py	/^numthreadcount = 8$/;"	v
-nworkers	test_harness.py	/^nworkers = 4$/;"	v
-okta_re	test_harness.py	/^okta_re = re.compile('^\\[(\\d)\\] Okta')$/;"	v
+nworkers	test_harness.py	/^nworkers = 8$/;"	v
 queries	loadgen.py	/^queries = [ "select max(nationkey) from s3.s.nation",$/;"	v
-renew_creds_async	test_harness.py	/^def renew_creds_async():$/;"	f
-renew_creds_now	test_harness.py	/^def renew_creds_now() -> None:$/;"	f
-renew_creds_sync	test_harness.py	/^def renew_creds_sync() -> None:$/;"	f
 reportingpause	loadgen.py	/^reportingpause = 1.0$/;"	v
 runme	loadgen.py	/^def runme():$/;"	f
 send_email	test_harness.py	/^def send_email(address, body):$/;"	f

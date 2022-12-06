@@ -18,6 +18,8 @@ logfile_dict = build_logfile_dict()
 concur_l = 'Concurrency'
 sizes = (1, 10, 100, 200, 400)
 sizes_str = list(map(str, sizes))
+
+# All threadcounts between 1 and 128, inclusive
 numthreadcount = 8
 threads = list(map(lambda x: 2**x, range(numthreadcount)))
 
@@ -55,12 +57,18 @@ def main() -> None:
                     avg = 'NULL'
 
                     # See if there is an existing logfile that we completed
-                    existing = get_best_existing_logfile(logfile_dict, pfx, t)
-                    if len(existing) > 1 and ns.recent:
-                        most_recent = get_most_recent(existing)
-                        avg = str(round(average_latency([most_recent])))
-                    if existing:
-                        avg = str(round(average_latency(existing)))
+                    try:
+                        existing = get_best_existing_logfile(logfile_dict, pfx,
+                                                             t)
+                        if len(existing) > 1 and ns.recent:
+                            most_recent = get_most_recent(existing)
+                            avg = str(round(average_latency([most_recent])))
+                        elif existing:
+                            avg = str(round(average_latency(existing)))
+                    except test_harness.QueryErrorException as e:
+                        # Unrecoverable query error; don't try again
+                        pass
+
                     row[str(size)] = avg
 
                 csv_writer.writerow(row)

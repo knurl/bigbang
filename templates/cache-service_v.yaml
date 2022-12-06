@@ -32,15 +32,15 @@ config:
           "timestamp(0)":     "timestamp(3)",
           "timestamp(1)":     "timestamp(3)",
           "timestamp(2)":     "timestamp(3)",
-          "VARCHAR(131072)":  "VARCHAR(10000)",
-          "VARCHAR(130000)":  "VARCHAR(10000)"
+          "varchar(131072)":  "varchar",
+          "varchar(130000)":  "varchar"
         }
       }
     }
   rules.json: |
     {
       "defaultGracePeriod": "15m",
-      "defaultMaxImportDuration": "5m",
+      "defaultMaxImportDuration": "2m",
       "defaultCacheCatalog": "{{HiveCat}}",
       "defaultCacheSchema": "{{CacheSchema}}",
       "defaultUnpartitionedImportConfig": {
@@ -52,7 +52,7 @@ config:
       },
       "rules": [
         {
-          "refreshInterval": "8h",
+          "refreshInterval": "3m",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
           "tableName": "account",
@@ -71,7 +71,7 @@ config:
           ]
         },
         {
-          "refreshInterval": "8h",
+          "refreshInterval": "3m",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
           "tableName": "opportunity",
@@ -137,13 +137,13 @@ config:
           ]
         },
         {
-          "refreshInterval": "8h",
+          "refreshInterval": "3m",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
           "tableName": "pov__c"
         },
         {
-          "refreshInterval": "8h",
+          "refreshInterval": "3m",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
           "tableName": "onboarding__c"

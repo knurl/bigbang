@@ -72,7 +72,7 @@
           <stringProp name="LoopController.loops">${__P(LOOPS, 4)}</stringProp>
         </elementProp>
         <stringProp name="ThreadGroup.num_threads">${__P(THREADS)}</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">10</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">0</stringProp>
         <boolProp name="ThreadGroup.scheduler">false</boolProp>
         <stringProp name="ThreadGroup.duration">500</stringProp>
         <stringProp name="ThreadGroup.delay">5</stringProp>
@@ -95,7 +95,7 @@
           <boolProp name="UserParameters.per_iteration">false</boolProp>
         </UserParameters>
         <hashTree/>
-        <RandomOrderController guiclass="RandomOrderControllerGui" testclass="RandomOrderController" testname="Random Order Controller" enabled="true"/>
+        <GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="Simple Controller" enabled="true"/>
         <hashTree>
           <JDBCSampler guiclass="TestBeanGUI" testclass="JDBCSampler" testname="q01.sql" enabled="true">
             <stringProp name="dataSource">jdbcConfig</stringProp>

@@ -14,9 +14,7 @@ Target: aws
 # XXX Choose something appropriate for the cloud you've selected above.
 # This value can be overridden with -z flag on commandline
 #
-Zone: eu-west-1 # AWS - Dublin, Ireland, EU
-#Zone: eu-west-2 # AWS - London, UK, EU
-#Zone: eu-west-3 # AWS - Paris, France, EU
+Zone: eu-west-2 # AWS - London, UK, EU
 #Zone: us-east-1 # AWS - Northern Virginia, USA
 #Zone: us-east-2 # AWS - Columbus, OH, USA
 #Zone: uksouth # Azure - London, UK, EU
@@ -27,20 +25,20 @@ Zone: eu-west-1 # AWS - Dublin, Ireland, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 391.0.0
+ChartVersion: 393.5.0
 
 # Number of nodes in K8S cluster.
-NodeCount: 3
+NodeCount: 9
 
 # Use an external load balancer as ingress
 IngressLoadBalancer: False
 
 # Require TLS on client <-> coordinator connection.
-RequireCoordTls: True
+RequireCoordTls: False
 
 # Authenticate using LDAP. Needs a secured connection, and therefore requires
 # either RequireCoordTls, IngressLoadBalancer or RequireTlsToLb.
-AuthNLdap: True
+AuthNLdap: False
 
 # Disable bastion firewall—don't use unless you know the risks!
 DisableBastionFw: False
@@ -52,9 +50,9 @@ DisableSlowSources: True
 SalesforceEnabled: False
 
 # Set up for performance testing
-PerformanceTesting: False
+PerformanceTesting: True
 
-# node pool capacity type
+# node pool capacity type, for non-performance mode only
 CapacityType: OnDemand
 
 # non-performance (default) node pool types
@@ -77,17 +75,8 @@ GcpMachineTypes:
   OnDemand:
     - e2-standard-16
 
-# performance testing nodes (always AWS, Spot)
-# AWS Spot Instance Advisor for 32 vCPUs, 64 GB
+# performance testing nodes (always AWS, on-demand)
 AwsPerfInstanceTypes:
-  Spot:
-    - c6gd.8xlarge
-    - c6gn.8xlarge
-    - c6g.8xlarge
-      #    - c6id.8xlarge
-      #    - c5ad.8xlarge
-      #    - c6a.8xlarge
-  OnDemand:
     - m5.8xlarge
 
 # smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM
@@ -100,13 +89,10 @@ AwsDbInstanceType: db.m5.xlarge
 AzureDbVmType: GP_Gen5_4
 GcpDbMachineType: db-custom-4-15360
 
-# Cache Service enable.
-CacheServiceEnabled: False
-
 # MySQL and PostgreSQL enable/disable. These databases are the instances used
 # for demoing Starburst functionality, not for internal use (e.g. HMS).
-MySqlEnabled: True
-PostgreSqlEnabled: True
+MySqlEnabled: False
+PostgreSqlEnabled: False
 
 #
 # Helm repo information

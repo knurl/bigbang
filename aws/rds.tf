@@ -5,7 +5,7 @@
 # mysql client to connect).
 resource "aws_security_group" "rds_sg" {
   name                   = "rds_sg"
-  vpc_id                 = module.vpc.vpc_id
+  vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
 
   # Any protocol or port, as long as it comes from one of the worker nodes in
@@ -31,7 +31,7 @@ resource "aws_db_instance" "evtlog" {
   password                 = var.db_password
   skip_final_snapshot      = true
   delete_automated_backups = true
-  db_subnet_group_name     = module.vpc.database_subnet_group
+  db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.evtlog_server_name })
@@ -49,7 +49,7 @@ resource "aws_db_instance" "cachesrvdb" {
   password                 = var.db_password
   skip_final_snapshot      = true
   delete_automated_backups = true
-  db_subnet_group_name     = module.vpc.database_subnet_group
+  db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.cachesrv_server_name })
@@ -67,7 +67,7 @@ resource "aws_db_instance" "postgres" {
   password                 = var.db_password
   skip_final_snapshot      = true
   delete_automated_backups = true
-  db_subnet_group_name     = module.vpc.database_subnet_group
+  db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.postgres_server_name })
@@ -85,7 +85,7 @@ resource "aws_db_instance" "mysql" {
   password                 = var.db_password
   skip_final_snapshot      = true
   delete_automated_backups = true
-  db_subnet_group_name     = module.vpc.database_subnet_group
+  db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
   tags                     = merge(var.tags, { Name = var.mysql_server_name })

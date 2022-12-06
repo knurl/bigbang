@@ -10,7 +10,7 @@ import pyjq # type: ignore
 import csv
 from collections import Counter
 
-nworkers = 4
+nworkers = 8
 numloops = 1
 filename_re = re.compile(r'(tpcds_u)(\d\d?\d?)(_)(sf\d\d?\d?)(_)(\d\d?)'
         r'_[\da-zA-Z]{6}\.csv')
@@ -62,9 +62,9 @@ def logfile_completed(filename, numthreads):
             rm = row.get('responseMessage')
             if rc and rc == '200' and rm and rm == 'OK':
                 queries.append(row['label'])
-            elif rc and rm:
-                return (False, -1)
-                break
+            # query error, probably from overload; don't try it again
+            elif rc and rm and rc != 'null 0':
+                return (False, -1.0)
     needed_tests = len(tpc.tpcds_queries) * numthreads
     c = Counter(queries)
     quality: float = float(sum(c.values())) / float(needed_tests)
@@ -89,6 +89,8 @@ def average_latency(filenames: list[str]) -> float:
             cutoff, outliers))
 
     return mean
+class QueryErrorException(Exception):
+    pass
 
 def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:
     logfilenames = logfile_dict.get(prefix)
@@ -100,10 +102,11 @@ def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:
             completed, quality = logfile_completed(logfilename, numthreads)
             if not completed:
                 if quality < 0.0:
-                    out.announce(f'ERRORED FILE {logfilename}')
-                else:
-                    out.announce('INCOMPLETE {}, q={}%'.format(logfilename,
-                                round(quality*100,2)))
+                    out.announce(f'QUERY ERROR {logfilename}')
+                    raise QueryErrorException(f'Query error in {logfilename}')
+
+                out.announce('INCOMPLETE {fn}, q={q}%'.format(fn = logfilename,
+                  q = round(quality*100, 2)))
             else:
                 if quality >= best_quality:
                     best_quality = quality
@@ -212,19 +215,23 @@ def main():
                 continue
 
             # See if there is an existing logfile that we completed
-            existing = get_best_existing_logfile(logfile_dict, prefix, t)
-            if not existing:
-                tests_to_run.append((len(tpc.tpcds_queries)*t*numloops,
-                    generate_cmd(t, s, numloops)))
-            else:
-                avg = round(average_latency(existing))
-                print('Test complete for {s}, t={t} in {existing} [average '
-                        'latency {avg}]'.format(s=s, t=t, existing=existing,
-                            avg=avg))
+            try:
+                existing = get_best_existing_logfile(logfile_dict, prefix, t)
+                if not existing:
+                    tests_to_run.append((len(tpc.tpcds_queries)*t*numloops,
+                        generate_cmd(t, s, numloops)))
+                else:
+                    avg = round(average_latency(existing))
+                    print('Test complete for {s}, t={t} in {existing} '
+                          '[average latency {avg}]'.format(s=s, t=t,
+                                                           existing=existing,
+                                                           avg=avg))
+            except QueryErrorException as e:
+                print(f'Avoiding test: {e}')
 
     if tests_to_run:
         t2r = [x[1] for x in tests_to_run]
-        print('Tests to run:\n{}'.format("\n".join(t2r)))
+        print('{n} tests to run:\n{t}'.format(n=len(t2r), t="\n".join(t2r)))
     else:
         print('No tests to run!')
 
@@ -328,7 +335,7 @@ def main():
                         email_status_update(f'{msg1}\n{msg2}', cmd_output)
                         continue
 
-        email_status_update(f'Just successfully completed: {cmd}', cmd_output)
+        email_status_update(f'Just completed: {cmd}', cmd_output)
 
     if ns.mail_status:
         send_email(ns.mail_status, "All tests are now complete.")

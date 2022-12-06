@@ -28,7 +28,7 @@ data "aws_iam_policy_document" "bucket_access_policy_doc" {
     condition {
       test     = "StringEquals"
       variable = "aws:SourceVpc"
-      values   = ["${module.vpc.vpc_id}"]
+      values   = ["${data.aws_vpc.sb_vpc.id}"]
     }
   }
 }

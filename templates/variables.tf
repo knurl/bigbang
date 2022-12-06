@@ -8,7 +8,6 @@ variable "tags" {
     project     = "sizing"
     user        = "{{UserName}}"
     info        = "{{Zone}}"
-    lifecycle   = "PERSISTENT"
   }
 }
 
@@ -18,10 +17,6 @@ variable "region" {
 
 variable "zone" {
   default = "{{Zone}}"
-}
-
-variable "my_cidr" {
-  default = "{{MyCIDR}}"
 }
 
 variable "cluster_name" {
@@ -192,6 +187,10 @@ variable "redshift_cluster_name" {
   default = "redshift-cluster-{{ShortName}}"
 }
 {% elif Target == "az" %}
+variable "my_cidr" {
+  default = "{{MyCIDR}}"
+}
+
 variable "azure_postgres_collation" {
   default = "en-US"
 }
@@ -208,6 +207,10 @@ variable "synapse_ws_name" {
   default = "synapse-ws-{{ShortName}}"
 }
 {% elif Target == "gcp" %}
+variable "my_cidr" {
+  default = "{{MyCIDR}}"
+}
+
 variable "gcp_project_id" {
   default = "{{GcpProjectId}}"
 }

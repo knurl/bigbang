@@ -36,7 +36,6 @@ tfvars         = "variables.tf" # basename only, no path!
 dbports        = { "mysql": 3306, "postgres": 5432 }
 syscat         = "system"
 sfdccat        = "sfdc"
-bqcat          = "bq" # for now, connector doesn't support INSERT or CTAS
 synapseslcat   = "synapse_sl"
 trinouser      = "starburst_service"
 trinopass      = "test"
@@ -105,8 +104,6 @@ p.add_argument('-l', '--dont-load', action="store_true",
         help="Don't load databases with tpc data.")
 p.add_argument('-n', '--node-layout', action="store_true",
         help="Show how containers lay out in nodes.")
-p.add_argument('-p', '--perf-test', action='store_true',
-        help='Use performance nodes for a test (AWS only)')
 p.add_argument('-r', '--drop-tables', action="store_true",
         help="Drop all tables before loading with tpc data.")
 p.add_argument('-s', '--summarise-ssh-tunnels', action="store_true",
@@ -173,7 +170,6 @@ captypelabel    = "CapacityType"
 salesforcelabel = "SalesforceEnabled"
 perftestlabel   = "PerformanceTesting"
 capacitytypes   = {"Spot", "OnDemand"}
-cachesrvlabel   = 'CacheServiceEnabled'
 mysqlenlabel    = 'MySqlEnabled'
 postgresenlabel = 'PostgreSqlEnabled'
 
@@ -215,17 +211,11 @@ try:
     myvars["DisableBastionFw"] = nobastionfw
     noslowdbs    = myvars["DisableSlowSources"]
     sfdcenabled  = myvars[salesforcelabel] # SalesforceEnabled
+    cachesrv_enabled = sfdcenabled
 
     perftest     = myvars[perftestlabel] # PerformanceTesting
-    if ns.perf_test:
-        perftest = ns.perf_test
-        myvars[perftestlabel] = perftest
-    assert perftest == myvars[perftestlabel]
 
     capacityType = myvars[captypelabel]
-
-    if perftest and target != "aws":
-        sys.exit("Performance mode supported with AWS only")
 
     requireKey("AwsInstanceTypes", myvars)
     requireKey("AwsPerfInstanceTypes", myvars)
@@ -238,11 +228,9 @@ try:
     requireKey("GcpSmallMachineType", myvars)
     requireKey("GcpDbMachineType", myvars)
 
-    requireKey(cachesrvlabel, myvars)
     requireKey(mysqlenlabel, myvars)
     requireKey(postgresenlabel, myvars)
 
-    cachesrv_enabled = myvars[cachesrvlabel]
     mysql_enabled = myvars[mysqlenlabel]
     postgres_enabled = myvars[postgresenlabel]
 
@@ -333,37 +321,6 @@ def getRegionFromZone(zone: str) -> str:
     return region
 
 region = getRegionFromZone(zone)
-
-# Verify the cloud target is set up correctly, and gather up other related
-# items based on which cloud target it is.
-
-instanceTypes: list[str] = []
-smallInstanceType = ""
-dbInstanceType = ""
-
-if target == "aws":
-    if perftest:
-        instanceTypes = myvars["AwsPerfInstanceTypes"][capacityType]
-    else:
-        instanceTypes = myvars["AwsInstanceTypes"][capacityType]
-    smallInstanceType = myvars["AwsSmallInstanceType"]
-    dbInstanceType    = myvars["AwsDbInstanceType"]
-elif target == "az":
-    instanceTypes     = myvars["AzureVmTypes"][capacityType]
-    smallInstanceType = myvars["AzureSmallVmType"]
-    dbInstanceType    = myvars["AzureDbVmType"]
-elif target == "gcp":
-    instanceTypes     = myvars["GcpMachineTypes"][capacityType]
-    smallInstanceType = myvars["GcpSmallMachineType"]
-    dbInstanceType    = myvars["GcpDbMachineType"]
-else:
-    sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
-            "{c}".format(t = target, tl = targetlabel, m = myvarsf,
-                c = ", ".join(clouds)))
-
-assert capacityType in ("OnDemand", "Spot")
-assert len(instanceTypes) > 0
-assert capacityType == "Spot" or len(instanceTypes) == 1
 
 # Terraform files are in a directory named for target
 tfdir = bbio.where(target)
@@ -469,6 +426,51 @@ if sfdcenabled:
     requireKey("SalesforceUser", sfdccreds)
     requireKey("SalesforcePassword", sfdccreds)
     myvars |= sfdccreds
+
+# Performance testing
+if perftest:
+    if target != "aws":
+        sys.exit('Performance mode supported with AWS only')
+
+    if tlsenabled():
+        sys.exit('Performance mode cannot be used with TLS')
+
+    if capacityType != 'OnDemand':
+        sys.exit('Performance mode supported with on-demand instances only')
+
+    if mysql_enabled or postgres_enabled:
+        sys.exit('Performance mode must have MySQL and PostgreSQL disabled')
+
+#
+# Determine which instance types we're using for this cloud target
+#
+instanceTypes: list[str] = []
+smallInstanceType = ""
+dbInstanceType = ""
+
+if target == "aws":
+    if perftest:
+        instanceTypes = myvars["AwsPerfInstanceTypes"]
+    else:
+        instanceTypes = myvars["AwsInstanceTypes"][capacityType]
+    smallInstanceType = myvars["AwsSmallInstanceType"]
+    dbInstanceType    = myvars["AwsDbInstanceType"]
+elif target == "az":
+    instanceTypes     = myvars["AzureVmTypes"][capacityType]
+    smallInstanceType = myvars["AzureSmallVmType"]
+    dbInstanceType    = myvars["AzureDbVmType"]
+elif target == "gcp":
+    instanceTypes     = myvars["GcpMachineTypes"][capacityType]
+    smallInstanceType = myvars["GcpSmallMachineType"]
+    dbInstanceType    = myvars["GcpDbMachineType"]
+else:
+    sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
+            "{c}".format(t = target, tl = targetlabel, m = myvarsf,
+                c = ", ".join(clouds)))
+
+assert capacityType in ("OnDemand", "Spot")
+assert len(instanceTypes) > 0
+assert capacityType == "Spot" or len(instanceTypes) == 1
 
 #
 # Create some names for some cloud resources we'll need
@@ -1018,6 +1020,7 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
     env = myvars | {
             "BastionLaunchScript": bastlaunchf,
             "BucketName":          bucket,
+            "CacheServiceEnabled": cachesrv_enabled,
             "CapacityType":        capacityType,
             "ClusterName":         clustname,
             "DownstreamSG":        downstreamSG,
@@ -1177,66 +1180,124 @@ def startPortForwardToLBs(bastionIp: str,
 
 def dontLoadCat(cat: str) -> bool:
     # FIXME For now, don't write tpcds data to Delta because of typing issues
-    # FIXME For now, don't write to BigQuery
     avoidcat = {evtlogcat, tpc.tpchcat, tpc.tpcdscat, syscat, sfdccat,
-            deltacat, bqcat}
+            deltacat}
     # Synapse serverless pools are read-only
     if target == "az":
         avoidcat.add(synapseslcat)
     return cat in avoidcat or cat.startswith("sg_")
 
-def createSchemas(dstCatalogs: list, dstSchemas: set[str],
-        hiveTarget: str) -> None:
-    cg = cmdgrp.CommandGroup(getStarburstHttpUrl(), tlsenabled(), trinouser,
-            trinopass)
-    announce('creating schema{s} in {cats}: {schs}'.format(s = "s" if
-        len(dstSchemas) > 1 else "", schs = ", ".join(dstSchemas),
-        cats = ", ".join(dstCatalogs)))
-    for dstCatalog in dstCatalogs:
-        for dstSchema in dstSchemas:
-            clause = ""
-            if dstCatalog in lakecats:
-                clause = " with (location = '{l}/{c}/{s}')".format(l =
-                        hiveTarget, c = dstCatalog, s = dstSchema)
-            cg.addSqlCommand("create schema if not exists "
-                    f"{dstCatalog}.{dstSchema}{clause}")
+def get_command_group() -> cmdgrp.CommandGroup:
+    return cmdgrp.CommandGroup(getStarburstHttpUrl(),
+                               tlsenabled(),
+                               trinouser,
+                               trinopass)
 
-    # Progress meter on all transfers across all destination schemas
+def execute_sql_commands(cmds: list[str]):
+    # Issue all SQL commands in parallel
+    cg = get_command_group()
+    cg.addSqlCommands(cmds)
+
+    # Progress meter on all SQL commands we've issued
     spinWait(cg.ratioDone)
     cg.waitOnAllCopies() # Should be a no-op
 
-def copySchemaTables(tpc_cat_info: tpc.TpcCatInfo, srcCatalog: str,
-        srcSchemas: set[str], dstCatalogs: list[str], hiveTarget: str):
+def create_schema(dst_catalog: str, dst_schema: str, hive_target: str):
+    schemaname = dst_catalog + '.' + dst_schema
+    announce(f'creating special schema {schemaname}')
+    cmd = f'create schema if not exists {schemaname}'
+    execute_sql_commands([cmd])
+
+def get_schema_commands(dstCatalogs: list,
+                        dstSchemas: set[str],
+                        hiveTarget: str) -> tuple[list[str],
+                                                  list[str],
+                                                  list[str]]:
+    schemas = []
+    drop_schema_cmds = []
+    create_schema_cmds = []
+
+    for dstCatalog in dstCatalogs:
+        for dstSchema in dstSchemas:
+            schemaname = f'{dstCatalog}.{dstSchema}'
+            schemas.append(schemaname)
+            drop_schema_cmds.append(f'drop schema if exists {schemaname}')
+
+            clause = ""
+            if dstCatalog in lakecats:
+                clause = (" with (location = "
+                          f"'{hiveTarget}/{dstCatalog}/{dstSchema}')")
+
+            create_schema_cmds.append('create schema if not exists '
+                                      f'{schemaname}{clause}')
+    return (schemas, drop_schema_cmds, create_schema_cmds)
+
+def get_schema_and_drop(env: dict, tpc_cat_info: tpc.TpcCatInfo,
+                        schemas: set[str], dstCatalogs: list[str],
+                        drop_first: bool):
+    hiveTarget = getObjectStoreUrl(env)
+    drop_schema_names, drop_schema_cmds, create_schema_cmds = \
+            get_schema_commands(dstCatalogs, schemas, hiveTarget)
+
+    drop_table_cmds = []
+    for dstCatalog in dstCatalogs:
+        # Now copy the data over from our source tables, one by one.
+        for schema in schemas:
+            for srctable in tpc_cat_info.get_table_names():
+                dsttablename = f'{dstCatalog}.{schema}.{srctable}'
+                drop_table_cmds.append(f'drop table if exists {dsttablename}')
+
+    # If requested, drop tables (1st) then schemas (2nd) before creating
+    if drop_first:
+        announce('dropping schemas {} with '
+                 'their tables'.format(', '.join(drop_schema_names)))
+        execute_sql_commands(drop_table_cmds)
+        execute_sql_commands(drop_schema_cmds)
+        if hivecat in dstCatalogs:
+            eraseBucketContents(env)
+
+    return drop_schema_names, create_schema_cmds
+
+def copySchemaTables(env: dict, tpc_cat_info: tpc.TpcCatInfo, srcCatalog: str,
+                     srcSchemas: set[str], dstCatalogs: list[str],
+                     dropFirst: bool):
     # Never write to the source, or to unwritable catalogs
-    dstCatalogs = [c for c in dstCatalogs if not dontLoadCat(c)
-            or c == srcCatalog]
-    # If there are no catalogs to process, then just return
+    dstCatalogs = [c for c in dstCatalogs
+                   if not dontLoadCat(c) or c == srcCatalog]
     if len(dstCatalogs) < 1:
         return
 
-    # First, create all the schemas that we need
-    createSchemas(dstCatalogs, srcSchemas, hiveTarget)
+    hiveTarget = getObjectStoreUrl(env)
+    schema_names, create_schema_cmds = \
+            get_schema_and_drop(env, tpc_cat_info, srcSchemas, dstCatalogs,
+                                dropFirst)
+    #
+    # create the schemas
+    #
+    announce('creating schema{s} in {cats}: '
+             '{schs}'.format(s = "s" if len(schema_names) > 1 else "",
+                             schs = ', '.join(schema_names),
+                             cats = ', '.join(dstCatalogs)))
+    execute_sql_commands(create_schema_cmds)
 
-    cg = cmdgrp.CommandGroup(getStarburstHttpUrl(), tlsenabled(), trinouser,
-            trinopass)
+    #
+    # finally, create tables
+    #
     announce('creating {tpc} tables in {cat}; schemas: {scm}'.format(tpc =
         tpc_cat_info.get_cat_name(), cat = ", ".join(dstCatalogs), scm =
         ", ".join(srcSchemas)))
+    cg = get_command_group()
+
     for dstCatalog in dstCatalogs:
         # Now copy the data over from our source tables, one by one.
         for srcSchema in srcSchemas:
             for srctable in tpc_cat_info.get_table_names():
-                if dstCatalog != bqcat:
-                    cmd = "create table if not exists " \
-                            f"{dstCatalog}.{srcSchema}.{srctable} "\
-                            f"as select * from "\
-                            f"{srcCatalog}.{srcSchema}.{srctable}"
-                    cg.addSqlTableCommand(tpc_cat_info, srcSchema, srctable,
-                            dstCatalog, srcSchema, cmd, check=True)
-                else:
-                    cg.addBqCommand(tpc_cat_info, srcSchema, srcCatalog,
-                            srcSchema, srctable, bqcat, srcSchema, bucket,
-                            gcpproject, True)
+                cmd = ('create table if not exists '
+                       f'{dstCatalog}.{srcSchema}.{srctable} '
+                       'as select * from '
+                       f'{srcCatalog}.{srcSchema}.{srctable}')
+                cg.addSqlTableCommand(tpc_cat_info, srcSchema, srctable,
+                        dstCatalog, srcSchema, cmd, check=True)
 
     # Progress meter on all transfers across all destination schemas
     spinWait(cg.ratioDone)
@@ -1245,7 +1306,8 @@ def copySchemaTables(tpc_cat_info: tpc.TpcCatInfo, srcCatalog: str,
 # Incredibly, Azure doesn't currently provide a simple way of doing an rm -rf
 # on a directory. So we'll just move everything we find in the root directory
 # to an archive directory.
-def azArchiveDirectories(accountName: str, accessKey: str, fsName: str) -> None:
+def azArchiveDirectories(accountName: str, accessKey: str,
+                         fsName: str) -> None:
     opt = f"--account-name {accountName} --account-key {accessKey} " \
             f"--file-system {fsName} --output json"
 
@@ -1306,49 +1368,13 @@ def getTablesForSchemaCatalog(schema: str, catalog: str) -> list[str]:
             trinopass, f"show tables in {schema}.{catalog}")
     return [t[0] for t in ttab]
 
-def dropSchemas() -> None:
-    avoidschema: set[str] = {'information_schema', 'performance_schema',
-            'pg_catalog', 'public', 'cache', 'default'}
-    catalogs = getCatalogs()
+def loadDatabases(env: dict, perftest: bool, tpcds_cat_info: tpc.TpcCatInfo,
+                  drop_first: bool) -> None:
+    hive_location = getObjectStoreUrl(env)
 
-    # Commands for dropping tables (all can be done in parallel)
-    cgt = cmdgrp.CommandGroup(getStarburstHttpUrl(), tlsenabled(), trinouser,
-            trinopass)
-
-    # Keep track of these schemas so we don't have to call getSchemasInCatalog
-    # more than once per catalog
-    schemasForCatalog: dict[str, List[str]] = {}
-
-    tablesToDrop = []
-    for catalog in catalogs:
-        schemasForCatalog[catalog] = [s for s in getSchemasInCatalog(catalog)
-                if s not in avoidschema]
-        for schema in schemasForCatalog[catalog]:
-            tables = getTablesForSchemaCatalog(catalog, schema)
-            for table in tables:
-                table = f"{catalog}.{schema}.{table}"
-                tablesToDrop.append(table)
-                cgt.addSqlCommand(f'drop table if exists {table}')
-
-    # Block until all tables are dropped
-    announce("dropping tables {}".format(', '.join(tablesToDrop)))
-    spinWait(cgt.ratioDone)
-    cgt.waitOnAllCopies() # Should be a no-op
-
-    announce(f"dropping all schemas in all catalogs")
-    # Commands for dropping schemas
-    cgs = cmdgrp.CommandGroup(getStarburstHttpUrl(), tlsenabled(), trinouser,
-            trinopass)
-    for catalog in catalogs:
-        for schema in schemasForCatalog[catalog]:
-            cgs.addSqlCommand(f"drop schema if exists {catalog}.{schema}")
-    spinWait(cgs.ratioDone)
-    cgs.waitOnAllCopies() # Should be a no-op
-
-def loadDatabases(perftest: bool, tpcds_cat_info: tpc.TpcCatInfo, hive_location: str) -> None:
+    # create a schema to hold cached views if we're using cache service
     if cachesrv_enabled:
-        # First, create a schema to hold our cached views
-        createSchemas([hivecat], {cacheschema}, hive_location)
+        create_schema(hivecat, cacheschema, hive_location)
 
     # First copy tpcds large scale set to hive...
     scale_sets = {tpcdsbigschema}
@@ -1356,30 +1382,22 @@ def loadDatabases(perftest: bool, tpcds_cat_info: tpc.TpcCatInfo, hive_location:
         scale_sets = tpc.scale_sets.range(tpc.scale_sets.smallest(),
                 tpc.scale_sets.largest())
 
-    copySchemaTables(tpcds_cat_info, tpc.tpcdscat, scale_sets, [hivecat],
-            hive_location)
+    # copy from the TPC-DS catalog to Hive
+    copySchemaTables(env, tpcds_cat_info, tpc.tpcdscat, scale_sets, [hivecat],
+            drop_first)
 
     dstCatalogs = getCatalogs(avoid = [hivecat]) # already done hivecat
 
-    # BigQuery has to be handled specially, as it needs to be loaded from the
-    # files we've already stored in GCS. If we're going to be loading the rest
-    # of the tables from a tpc generator catalog, then we'll need to make a
-    # special case for BigQuery here.
-    if tpcdsbigschema == tpcdssmlschema:
-        # in this case, the we'll be copying from hive, so we'll handle
-        # BigQuery with all of the remaining data sources to be loaded
-        copySchemaTables(tpcds_cat_info, hivecat, {tpcdssmlschema},
-                dstCatalogs, hive_location)
+    if tpcdsbigschema != tpcdssmlschema:
+        # Where we have a large schema, we'll copy from TPC-DS directly to all
+        # the other catalogs
+        copySchemaTables(env, tpcds_cat_info, tpc.tpcdscat, {tpcdssmlschema},
+                dstCatalogs, drop_first)
     else:
-        # otherwise we'll do BQ first and then the rest
-        if bqcat in dstCatalogs:
-            copySchemaTables(tpcds_cat_info, hivecat, {tpcdsbigschema},
-                    [bqcat], hive_location)
-            dstCatalogs.remove(bqcat)
-        if len(dstCatalogs) > 0:
-            # Then copy tpcds small scale set to everywhere else
-            copySchemaTables(tpcds_cat_info, tpc.tpcdscat, {tpcdssmlschema},
-                    dstCatalogs, hive_location)
+        # Where we have a big schema, we'll copy from Hive (which we've already
+        # populated) to all the other catalogs
+        copySchemaTables(env, tpcds_cat_info, hivecat, {tpcdssmlschema},
+                dstCatalogs, drop_first)
 
 def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
     env = {}
@@ -1441,26 +1459,10 @@ def ensureHelmRepoSetUp(repo: str) -> None:
     if (r := helmTry("repo list -o=json")).returncode == 0:
         repos = [x["name"] for x in json.loads(r.stdout)]
         if repo in repos:
-            announce(f"Upgrading repo {repo}")
-            # Unfortunately, helm repo update returns a 0 error code even when
-            # it fails. So we actually have to collect the output and look to
-            # see if it failed. :-( If it fails, then just remove the repo and
-            # re-install it.
-            output = helmGet("repo update")
-            if "Unable" not in output:
-                print("Upgrade of repo succeeded")
-                return
+            return
 
-            announce(f"Update of repo failed. Removing repo {repo}")
-            helm(f"repo remove {repo}")
-
-    try:
-        helm(f"repo add --username {repouser} --password {repopass} {repo} "
-                f"{repoloc}")
-    except CalledProcessError as e:
-        print("Could not install (or verify installation of) "
-                f"{repo} at {repoloc}")
-        raise
+    helm(f"repo add --username {repouser} --password {repopass} {repo} "
+         f"{repoloc}")
 
 def helmGetNamespaces() -> list:
     n = []
@@ -1507,24 +1509,25 @@ def helmWhichChartInstalled(module: str) -> Optional[str]:
 # created--either during an install, or because we revved up a version
 def helmInstallRelease(module: str, env: dict = {}) -> None:
     env |= myvars |\
-            { "BucketName":         bucket,
-              "CacheSchema":        cacheschema,
-              "DBName":             dbschema,
-              "DBNameEventLogger":  dbevtlog,
-              "DBNameCacheSrv":     dbcachesrv,
-              "DBNameHms":          dbhms,
-              "DBPassword":         dbpwd,
-              "EvtLogCat":          evtlogcat,
-              "HiveCat":            hivecat,
-              "IngressName":        ingressname,
-              "KeystorePass":       keystorepass,
-              "UpstreamSG":         upstreamSG,
-              "StarburstHost":      starburstfqdn,
-              "StorageAccount":     storageacct,
-              "TlsEnabled":         tlsenabled(),
-              "TrinoUser":          trinouser,
-              "TrinoPass":          trinopass,
-              "postgres_port":      dbports["postgres"] }
+            { "BucketName":          bucket,
+              "CacheSchema":         cacheschema,
+              "CacheServiceEnabled": cachesrv_enabled,
+              "DBName":              dbschema,
+              "DBNameEventLogger":   dbevtlog,
+              "DBNameCacheSrv":      dbcachesrv,
+              "DBNameHms":           dbhms,
+              "DBPassword":          dbpwd,
+              "EvtLogCat":           evtlogcat,
+              "HiveCat":             hivecat,
+              "IngressName":         ingressname,
+              "KeystorePass":        keystorepass,
+              "UpstreamSG":          upstreamSG,
+              "StarburstHost":       starburstfqdn,
+              "StorageAccount":      storageacct,
+              "TlsEnabled":          tlsenabled(),
+              "TrinoUser":           trinouser,
+              "TrinoPass":           trinopass,
+              "postgres_port":       dbports["postgres"] }
 
     if mysql_enabled:
         env['mysql_port'] = dbports['mysql']
@@ -1644,7 +1647,7 @@ def getObjectStoreUrl(env: dict) -> str:
         return env["object_address"] # change nothing
 
 def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,
-        skipClusterStart: bool = False, dropTables: bool = False,
+        skipClusterStart: bool = False, drop_first: bool = False,
         dontLoad: bool = False, nobastionfw: bool = False) -> tuple[list[Tunnel],
                 list[str]]:
     # First see if there isn't a cluster created yet, and create the
@@ -1664,15 +1667,11 @@ def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,
     if perftest:
         tpcds_scale_sets = tpc.scale_sets.range(tpcdssmlschema, tpcdsbigschema)
 
-    if dropTables:
-        dropSchemas()
-        eraseBucketContents(env)
-
     tpcds_cat_info = tpc.TpcCatInfo(getStarburstHttpUrl(), tlsenabled(),
             trinouser, trinopass, tpc.tpcdscat, tpcds_scale_sets)
 
     if not dontLoad:
-        loadDatabases(perftest, tpcds_cat_info, getObjectStoreUrl(env))
+        loadDatabases(env, perftest, tpcds_cat_info, drop_first)
 
     return tuns, announceReady(env["bastion_address"])
 
@@ -1684,7 +1683,7 @@ def isTerraformSettled(tgtResource: str = None) -> bool:
             "-detailed-exitcode".split()).returncode
     return r == 0
 
-def svcStop(onlyEmptyNodes: bool = False) -> None:
+def svcStop(perf_test: bool, onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion, or our helm and kubectl
     # commands won't work.
     announce("Checking current Terraform status")
@@ -1698,7 +1697,15 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
             t = time.time()
             zid = env["route53_zone_id"] if target == "aws" else None
             tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
-            dropSchemas()
+            scale_sets: set[str] = {tpcdssmlschema, tpcdsbigschema}
+            if perf_test:
+                scale_sets = tpc.scale_sets.range(tpc.scale_sets.smallest(),
+                                                  tpc.scale_sets.largest())
+            tpc_cat_info = tpc.TpcCatInfo(getStarburstHttpUrl(), tlsenabled(),
+                                          trinouser, trinopass, tpc.tpcdscat,
+                                          scale_sets)
+            get_schema_and_drop(env, tpc_cat_info, scale_sets, getCatalogs(),
+                                drop_first=True)
             eraseBucketContents(env)
             lbs = deleteAllServices()
             # TODO AWS has to be handled differently because of its inability
@@ -1971,14 +1978,14 @@ def getSecrets() -> None:
         if "chain" in values and tlsenabled():
             # openssl always returns 0 as the return code, so we have to
             # actually parse the output to see if the certificate is valid
-            output = runCollect("openssl verify -untrusted {ch} {c}".format(ch
-                = values["chain"], c = values["cert"]).split()).splitlines()
-            if output[-1] == values['cert'] + ': OK':
-                print('Verified certificate ' + values["cert"])
-            else:
+            try:
+                output = runCollect("openssl verify -untrusted {ch} {c}".format(ch
+                    = values["chain"], c = values["cert"]).split()).splitlines()
+                if output[-1] == values['cert'] + ': OK':
+                    print('Verified certificate ' + values["cert"])
+            except CalledProcessError as e:
                 print("Unable to verify cert {c} & chain {ch}".format(c =
                     values["cert"], ch = values["chain"]))
-                print(output)
                 sys.exit(-1)
         secrets[groupname] = values
 
@@ -2094,7 +2101,7 @@ def main() -> None:
     started = False
 
     if ns.command in ("stop", "restart"):
-        svcStop(ns.empty_nodes)
+        svcStop(perftest, ns.empty_nodes)
 
     tuns: list[Tunnel] = []
     if ns.command in ("start", "restart"):

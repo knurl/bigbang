@@ -1,6 +1,6 @@
 resource "aws_security_group" "bastion_sg" {
   name                   = "bastion_sg"
-  vpc_id                 = module.vpc.vpc_id
+  vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
 
   /* Allow communication to port 22 (SSH) from the home IP only, or in the case
@@ -24,14 +24,14 @@ resource "aws_security_group" "bastion_sg" {
     from_port   = 8444
     to_port     = 8445
     protocol    = "tcp"
-    cidr_blocks = [var.my_cidr]
+    cidr_blocks = [data.aws_vpc.sb_vpc.cidr_block]
   }
 
   ingress {
     from_port   = 8
     to_port     = 0
     protocol    = "icmp"
-    cidr_blocks = concat(module.vpc.private_subnets_cidr_blocks, module.vpc.public_subnets_cidr_blocks)
+    cidr_blocks = local.prvpub_subnet_cidrs
   }
 
   /*
@@ -58,22 +58,20 @@ resource "aws_security_group" "bastion_sg" {
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.small_instance_type
-  subnet_id              = module.vpc.public_subnets.0
+  subnet_id              = data.aws_subnet.public_subnet[0].id
   private_ip             = local.bastion_ip
   key_name               = aws_key_pair.key_pair.key_name
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   user_data              = file(var.bastion_launch_script)
   tags                   = merge(var.tags, { Name = "${var.bastion_name}" })
 
-  /* We have a dependency on our NAT gateway for outbound connectivity during
-   * our launch script, as well as DNS so that certificates can be validated.
-   */
-  depends_on = [module.vpc, aws_route53_record.bastion_a_record]
+  /* We have a dependency on DNS so that certificates can be validated. */
+  depends_on = [aws_route53_record.bastion_a_record]
 }
 
 resource "aws_eip" "bastion_eip" {
   vpc                       = true
   instance                  = aws_instance.bastion.id
   associate_with_private_ip = aws_instance.bastion.private_ip
-  depends_on                = [module.vpc, aws_instance.bastion]
+  depends_on                = [aws_instance.bastion]
 }
