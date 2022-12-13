@@ -82,7 +82,7 @@ python -m ensurepip --upgrade
 pip install --upgrade pip
 
 p "installing python dependencies for BigBang"
-pip install jinja2 pyyaml psutil requests tabulate termcolor 
+pip install --upgrade jinja2 pyyaml pyjq psutil requests tabulate termcolor 
 
 p "installing BigBang"
 git clone https://github.com/knurl/bigbang
