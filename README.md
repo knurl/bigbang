@@ -56,10 +56,9 @@ password _test_.
 
 ### Homebrew
 
-You will need to have Homebrew installed (on MacOS), (or your favourite Linux
-package manager, if you're on Linux), and python. To install Homebrew, follow
-the instructions at the top of [the Homebrew page](https://brew.sh). Once this
-is done, you'll have access to an executable called `brew`:
+You will need to have Homebrew installed and python. To install Homebrew,
+follow the instructions at the top of [the Homebrew page](https://brew.sh).
+Once this is done, you'll have access to an executable called `brew`:
 
 ```
 ~/git/demosvc % which brew  
@@ -124,7 +123,7 @@ NB: For GCP you will also need to set your project name in my-vars.html.
 
 ### Python
 
-Next, you will need python 3.9.1 or higher. On a Mac, the built-in ("system")
+Next, you will need python 3.10.x or higher. On a Mac, the built-in ("system")
 zversion of python that comes with the OS is 2.7.x, which obviously won't do.
 If you type `which python`, you'll probably get `/usr/bin/python`. You can
 check the version with `python -V`. You'll probably see something like this:
@@ -146,15 +145,15 @@ to install the right version of python.
 
 ```
 brew install pyenv
-pyenv install 3.9.13
-pyenv global 3.9.13
+pyenv install 3.10.5
+pyenv global 3.10.5
 ```
 
 Then once you've got that installed, you should install the required python
 libraries using python itself, like this:
 
-`python -m pip install jinja2 pyyaml psutil requests google-cloud-bigquery
-google-cloud-storage termcolor tabulate`
+`python -m pip install jinja2 pyyaml psutil requests tabulate termcolor \
+    google-cloud-bigquery google-cloud-storage`
 
 ## Other
 
@@ -164,4 +163,5 @@ a monospace font with a full representation of Plane 0, which includes the
 arrows (U+2500–U+257F) and box-drawing characters (U+2500–U+257F). I highly
 recommend [Iosevka](https://en.wikipedia.org/wiki/Iosevka), which renders
 beautifully.
+
 ====
