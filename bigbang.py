@@ -1,4 +1,4 @@
-#!python
+#! /usr/bin/env python
 
 # modules expressly for bigbang
 from run import run, runShell, runTry, runStdout, runCollect, retryRun
