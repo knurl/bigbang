@@ -28,7 +28,7 @@ Zone: eu-west-2 # AWS - London, UK, EU
 ChartVersion: 393.5.0
 
 # Number of nodes in K8S cluster.
-NodeCount: 9
+NodeCount: 5
 
 # Use an external load balancer as ingress
 IngressLoadBalancer: False
