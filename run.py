@@ -19,8 +19,9 @@ def run(args, check = True, verbose = True) -> subprocess.CompletedProcess:
 
 # Run a command string in a shell
 def runShell(cmd: str) -> int:
-    return subprocess.run(cmd, shell = True, stdout = subprocess.DEVNULL,
-            stderr = subprocess.STDOUT).returncode
+    return subprocess.run(cmd, shell=True, executable='/bin/bash',
+                          stdout=subprocess.DEVNULL,
+                          stderr=subprocess.STDOUT).returncode
 
 # CheckRC==False, as we don't want to throw an exception if this fails. Just get
 # the returncode and send it back, and don't print anything out.
