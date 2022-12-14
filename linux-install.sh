@@ -30,8 +30,7 @@ p "installing base packages necessary for brew"
 sudo apt-get -y install build-essential libssl-dev zlib1g-dev libbz2-dev \
     libreadline-dev libsqlite3-dev curl llvm libncursesw5-dev xz-utils \
     tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev \
-    libgdbm-compat-dev libgdbm-dev \
-    git 
+    libgdbm-compat-dev libgdbm-dev autoconf libtool git 
 
 p "installing brew"
 NONINTERACTIVE=1 /bin/bash -c \
