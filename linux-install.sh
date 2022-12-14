@@ -44,6 +44,24 @@ p "installing dependencies for BigBang"
 brew install gcc awscli azure-cli aws-iam-authenticator helm kubectl libyaml \
     terraform gimme-aws-creds pyenv $OPENSSL jmeter
 
+p "getting trino JDBC jarfile"
+JMETERPREFIX=$(brew --prefix jmeter)
+JMETERLIB=$JMETERPREFIX/libexec/lib
+TRINOROOTVERSION=393
+TRINOUPDATE=e.7
+TRINOORIGVERSION=${TRINOROOTVERSION}e
+TRINOVERSION=$TRINOROOTVERSION-$TRINOUPDATE
+TRINOJDBC=trino-jdbc-$TRINOVERSION.jar
+TRINOJDBCURL=https://s3.us-east-2.amazonaws.com/software.starburstdata.net/$TRINOORIGVERSION/$TRINOVERSION/trino-jdbc-$TRINOVERSION.jar
+if wget $TRINOJDBCURL; then
+    mv $TRINOJDBC $JMETERLIB
+    rm -f ${TRINOJDBC}*
+else
+    RC=$?
+    echo Failed to get $TRINOJDBC at $TRINOJDBCURL
+    exit $RC
+fi
+
 p "determining correct versions of dependencies"
 PYVERSION=3.10.5
 OPENSSL="openssl@1.1"
