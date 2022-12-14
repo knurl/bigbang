@@ -9,8 +9,8 @@ import run, out, tpc, creds
 import pyjq # type: ignore
 import csv
 from collections import Counter
+from typing import IO
 
-nworkers = 8
 numloops = 1
 filename_re = re.compile(r'(tpcds_u)(\d\d?\d?)(_)(sf\d\d?\d?)(_)(\d\d?)'
         r'_[\da-zA-Z]{6}\.csv')
@@ -118,7 +118,7 @@ def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:
     return best_logfiles
 
 # Returns the new 
-def cluster_is_stable(old_nodes):
+def cluster_is_stable(nworkers: int, old_nodes):
     if not old_nodes or len(old_nodes) < 3:
         print('Snapshot of node state looks corrupt!')
         return False
@@ -135,7 +135,7 @@ def cluster_is_stable(old_nodes):
     return True
 
 # We are unstable. Wait until we are stabilised
-def wait_until_cluster_stable():
+def wait_until_cluster_stable(nworkers: int):
     print("Waiting for cluster to stabilise")
     goodruns = 0
     while True:
@@ -154,18 +154,20 @@ def send_email(address, body):
         print('Failed to send status mail')
 
 def main():
-    p = argparse.ArgumentParser(description="Run test battery")
-    p.add_argument('-n', '--analyse-only', action='store_true',
-            help='Analyse only, and do not run')
-    p.add_argument('-m', '--mail-status', action='store', type=str,
-            metavar='email_address',
-            help='Email status to specified address')
-    p.add_argument('-r', '--redo', action='store', nargs='+',
-            dest='tests_to_redo', default=[])
-    p.add_argument('-c', '--renew-creds', action='store_true',
-            help='Renew credentials and quit.')
-    ns = p.parse_args()
-    nodes = []
+    parser = argparse.ArgumentParser(description="Run test battery")
+    parser.add_argument('nworkers', type=int,
+                   help='How many workers are running in cluster?')
+    parser.add_argument('-n', '--analyse-only', action='store_true',
+                        help='Analyse only, and do not run')
+    parser.add_argument('-m', '--mail-status', action='store', type=str,
+                        metavar='email_address',
+                        help='Email status to specified address')
+    parser.add_argument('-r', '--redo', action='store', nargs='+',
+                        dest='tests_to_redo', default=[])
+    parser.add_argument('-c', '--renew-creds', action='store_true',
+                        help='Renew credentials and quit.')
+    ns = parser.parse_args()
+    nworkers = ns.nworkers
 
     if ns.renew_creds:
         creds.renew_creds_sync()
@@ -173,7 +175,6 @@ def main():
 
     def generate_cmd(t, s, nl) -> str:
         uniq = out.randomString(6)
-        global nworkers
         fn = f'tpcds_u{t}_{s}_{nworkers}_{uniq}.csv'
         cmd = (f'jmeter -n -JTHREADS={t} -JSCALESET={s} -JLOOPS={nl} -t '
                 f'run_tpcds.jmx -l {fn}')
@@ -187,8 +188,10 @@ def main():
 
     for test_filename in tests_to_redo:
         mobj = filename_re.match(test_filename)
+        if not mobj:
+            sys.exit(f'Test {test_filename} is not of correct format')
         groups = mobj.groups()
-        if not mobj or len(groups) != 6:
+        if len(groups) != 6:
             sys.exit(f'Test {test_filename} is not of correct format')
         assert int(groups[5]) == nworkers
         tests_to_redo_pfx.append(''.join(mobj.groups()))
@@ -198,11 +201,13 @@ def main():
         cmd = generate_cmd(t=threads, s=groups[3], nl=numloops)
         tests_to_run.append((testcount, cmd))
 
+    nodes = []
+
     if not ns.analyse_only:
         nodes = get_nodes() # Shouldn't change as long as we remain stable
-        if not cluster_is_stable(nodes):
+        if not cluster_is_stable(nworkers, nodes):
             out.announceLoud(['Cluster lost stability', 'finding it again'])
-            wait_until_cluster_stable()
+            wait_until_cluster_stable(nworkers)
             nodes = get_nodes()
             out.announce(f'Cluster restabilised at {nworkers} workers')
 
@@ -271,12 +276,14 @@ def main():
         with subprocess.Popen(cmd.split(), stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, bufsize=1,
                 preexec_fn=os.setsid) as p:
+            assert p.stdout is not None
+            stdout: IO[str] = p.stdout
             polly = select.poll()
-            polly.register(p.stdout, select.POLLIN)
+            polly.register(stdout.fileno(), select.POLLIN)
 
             while p.poll() is None:
                 if polly.poll(3):
-                    line = p.stdout.readline()
+                    line = stdout.readline()
                     status = ''
                     m = testrun_re.match(line)
                     m_add = testrun_add_re.match(line)
@@ -310,7 +317,7 @@ def main():
                     # stable. If not, we need to kill the process.
                     cluster_stable_timer = time.time() # reset timer
 
-                    if not cluster_is_stable(nodes):
+                    if not cluster_is_stable(nworkers, nodes):
                         unstable_time = time.time()
 
                         # suspend the jmeter process for now
@@ -321,7 +328,7 @@ def main():
 
                         out.announceLoud(['Cluster lost stability',
                             'temporarily pausing jmeter'])
-                        wait_until_cluster_stable()
+                        wait_until_cluster_stable(nworkers)
                         nodes = get_nodes()
                         elapsed_time = time.time() - unstable_time
                         msg1 = (f'Cluster restabilised at {nworkers} workers'

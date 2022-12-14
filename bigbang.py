@@ -748,7 +748,7 @@ def waitUntilNodesReady(minNodes: int) -> float:
                     numer += 1
     return divideOrZero(numer, denom)
 
-def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:
+def waitUntilPodsReady(namespace: str, mincontainers: int = 0) -> float:
     numer = 0
     denom = 0
     namesp = f" --namespace {namespace}" if namespace else ""
@@ -778,8 +778,7 @@ def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:
         denom = min(mincontainers, denom)
     return divideOrZero(numer, denom)
 
-def waitUntilDeploymentsAvail(namespace: str = None,
-        minreplicas: int = 0) -> float:
+def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:
     numer = 0
     denom = 0
     namesp = f" --namespace {namespace}" if namespace else ""
@@ -839,7 +838,7 @@ def loadBalancerResponding(service: str) -> bool:
 # list returned might not cover all the services presented, notably in the case
 # when the load balancers aren't yet ready. The caller needs to be prepared for
 # this possibility.
-def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:
+def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:
     lbs: dict[str, str] = {}
     namesp = f" --namespace {namespace}" if namespace else ""
     for serv in services:
@@ -903,8 +902,8 @@ def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:
                 lbs[name] = ingress0["hostname"]
     return lbs
 
-def waitUntilLoadBalancersUp(services: list, namespace: str = None,
-        checkConnectivity: bool = False) -> float:
+def waitUntilLoadBalancersUp(services: list, namespace: str,
+                             checkConnectivity: bool = False) -> float:
     numer = 0
     denom = len(services)
     lbs = getLoadBalancers(services, namespace)
@@ -932,26 +931,25 @@ def waitUntilApiServerResponding() -> float:
 # A class for recording ssh tunnels
 class Tunnel:
     def __init__(self, shortname: str, bastionIp: ipaddress.IPv4Address,
-            lPort: int, rAddr: str, rPort: int):
+                 lPort: int, rAddr: str, rPort: int):
         self.shortname = shortname
         self.bastion = bastionIp
         self.lport = lPort
         self.raddr = rAddr
         self.rport = rPort
-        self.p = None
         self.command = "ssh -N -L{p}:{a}:{k} ubuntu@{b}".format(p = lPort, a =
                 rAddr, k = rPort, b = bastionIp)
         print(self.command)
         self.p = subprocess.Popen(self.command.split())
-        global announce
+        assert self.p is not None
         announce("Created tunnel " + str(self))
 
     def __del__(self):
         announce("Terminating tunnel " + str(self))
         if ns.summarise_ssh_tunnels:
             print(self.command)
-        if self.p != None:
-            self.p.terminate()
+        assert self.p is not None
+        self.p.terminate()
 
     def __str__(self):
         tgtname = self.shortname
@@ -1135,8 +1133,7 @@ def setRoute53Cname(lbs: dict[str, str], route53ZoneId: str,
             f"{route53ZoneId} --change-batch file://{batchf}"
     runCollect(cmd.split())
 
-def startPortForwardToLBs(bastionIp: str,
-        route53ZoneId: str = None) -> list[Tunnel]:
+def startPortForwardToLBs(bastionIp: str, route53ZoneId: str) -> list[Tunnel]:
     tuns: list[Tunnel] = []
 
     announce("Waiting for pods to be ready")
@@ -1675,12 +1672,9 @@ def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,
 
     return tuns, announceReady(env["bastion_address"])
 
-def isTerraformSettled(tgtResource: str = None) -> bool:
-    tgt = ""
-    if tgtResource:
-        tgt = f"-target='{tgtResource}' "
-    r = runTry(f"{tf} plan -input=false {tgt}"
-            "-detailed-exitcode".split()).returncode
+def isTerraformSettled() -> bool:
+    r = runTry(f"{tf} plan -input=false "
+               "-detailed-exitcode".split()).returncode
     return r == 0
 
 def svcStop(perf_test: bool, onlyEmptyNodes: bool = False) -> None:

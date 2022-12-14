@@ -9,7 +9,7 @@ QueryErrorException	test_harness.py	/^class QueryErrorException(Exception):$/;"	
 __init__	loadgen.py	/^    def __init__(self):$/;"	m	class:Counter
 average_latency	test_harness.py	/^def average_latency(filenames: list[str]) -> float:$/;"	f
 build_logfile_dict	test_harness.py	/^def build_logfile_dict():$/;"	f
-cluster_is_stable	test_harness.py	/^def cluster_is_stable(old_nodes):$/;"	f
+cluster_is_stable	test_harness.py	/^def cluster_is_stable(nworkers: int, old_nodes):$/;"	f
 concur_l	summarise.py	/^concur_l = 'Concurrency'$/;"	v
 dec	loadgen.py	/^    def dec(self):$/;"	m	class:Counter
 email_status_update	test_harness.py	/^    def email_status_update(msg: str, results: list[str]) -> None:$/;"	f	function:main
@@ -34,7 +34,6 @@ nq	loadgen.py	/^nq = Counter()$/;"	v
 numloops	summarise.py	/^numloops=1$/;"	v
 numloops	test_harness.py	/^numloops = 1$/;"	v
 numthreadcount	summarise.py	/^numthreadcount = 8$/;"	v
-nworkers	test_harness.py	/^nworkers = 8$/;"	v
 queries	loadgen.py	/^queries = [ "select max(nationkey) from s3.s.nation",$/;"	v
 reportingpause	loadgen.py	/^reportingpause = 1.0$/;"	v
 runme	loadgen.py	/^def runme():$/;"	f
@@ -46,4 +45,4 @@ testrun_add_re	test_harness.py	/^testrun_add_re = re.compile(r'^(summary\\s+\\+\
 testrun_re	test_harness.py	/^testrun_re = re.compile(r'^(summary\\s+=\\s+)(\\d+)(.*)$')$/;"	v
 threadpoolsize	loadgen.py	/^threadpoolsize = 200$/;"	v
 threads	summarise.py	/^threads = list(map(lambda x: 2**x, range(numthreadcount)))$/;"	v
-wait_until_cluster_stable	test_harness.py	/^def wait_until_cluster_stable():$/;"	f
+wait_until_cluster_stable	test_harness.py	/^def wait_until_cluster_stable(nworkers: int):$/;"	f

@@ -69,7 +69,7 @@ class CommandGroup:
                 print(f"Couldn't read rows from {dest}")
 
     def processSqlTableCommand(self, srcTable: str, dstCatalog: str,
-            dstSchema: str, rows: int, cmd: str = None,
+            dstSchema: str, rows: int, cmd: str = "",
             check: bool = False) -> None:
         if cmd:
             sql.sendSql(self.url, self.ssl, self.user, self.pwd, cmd)
@@ -83,8 +83,8 @@ class CommandGroup:
             self.cv.notify_all()
 
     def addSqlTableCommand(self, tpcds_cat_info, tpcdsSchema: str, srcTable:
-            str, dstCatalog: str, dstSchema: str, cmd: str = None,
-            check: bool = False) -> None:
+            str, dstCatalog: str, dstSchema: str, cmd,
+                           check: bool = False) -> None:
         rows = tpcds_cat_info.get_table_size(tpcdsSchema, srcTable)
         t = threading.Thread(target = self.processSqlTableCommand,
                 args = (srcTable, dstCatalog, dstSchema, rows, cmd, check, ))

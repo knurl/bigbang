@@ -117,7 +117,7 @@ getCreds	creds.py	/^def getCreds(target: str) -> Optional[Creds]:$/;"	f
 getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:$/;"	f
 getLclPort	bigbang.py	/^def getLclPort(service: str) -> int:$/;"	f
 getLclPortSG	bigbang.py	/^def getLclPortSG(service: str, target: str) -> int:$/;"	f
-getLoadBalancers	bigbang.py	/^def getLoadBalancers(services: list, namespace: str = None) -> dict[str, str]:$/;"	f
+getLoadBalancers	bigbang.py	/^def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:$/;"	f
 getMinNodeResources	capcalc.py	/^def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:$/;"	f
 getMyPublicIp	bigbang.py	/^def getMyPublicIp() -> ipaddress.IPv4Address:$/;"	f
 getObjectStoreUrl	bigbang.py	/^def getObjectStoreUrl(env: dict) -> str:$/;"	f
@@ -182,7 +182,7 @@ instanceTypes	bigbang.py	/^        instanceTypes = myvars["AwsPerfInstanceTypes"
 instanceTypes	bigbang.py	/^    instanceTypes     = myvars["AzureVmTypes"][capacityType]$/;"	v
 instanceTypes	bigbang.py	/^    instanceTypes     = myvars["GcpMachineTypes"][capacityType]$/;"	v
 invalidchars	bigbang.py	/^invalidchars = r'[^' + validchars + r']'$/;"	v
-isTerraformSettled	bigbang.py	/^def isTerraformSettled(tgtResource: str = None) -> bool:$/;"	f
+isTerraformSettled	bigbang.py	/^def isTerraformSettled() -> bool:$/;"	f
 isTokenFresh	creds.py	/^    def isTokenFresh(self, awsAccess: str) -> bool:$/;"	m	class:AwsCreds
 json2str	capcalc.py	/^def json2str(jsondict):$/;"	f
 keystorepass	bigbang.py	/^keystorepass   = "test123"$/;"	v
@@ -237,8 +237,8 @@ processSqlTableCommand	cmdgrp.py	/^    def processSqlTableCommand(self, srcTable
 randomString	out.py	/^def randomString(length: int) -> str:$/;"	f
 range	tpc.py	/^    def range(self, first: str, last: str) -> set[str]:$/;"	m	class:ScaleSets
 ratioDone	cmdgrp.py	/^    def ratioDone(self) -> float:$/;"	m	class:CommandGroup
-readableDir	bbio.py	/^def readableDir(p):$/;"	f
-readableFile	bbio.py	/^def readableFile(p):$/;"	f
+readableDir	bbio.py	/^def readableDir(p) -> bool:$/;"	f
+readableFile	bbio.py	/^def readableFile(p) -> bool:$/;"	f
 region	bigbang.py	/^region = getRegionFromZone(zone)$/;"	v
 releases	bigbang.py	/^releases = {}$/;"	v
 removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
@@ -281,7 +281,7 @@ spinWait	out.py	/^def spinWait(waitFunc: Callable[[], float]) -> None:$/;"	f
 spinWaitTest	out.py	/^def spinWaitTest():$/;"	f
 sqlstr	out.py	/^sqlstr = "Issued 🢩 "$/;"	v
 starburstfqdn	bigbang.py	/^starburstfqdn  = "starburst." + domain$/;"	v
-startPortForwardToLBs	bigbang.py	/^def startPortForwardToLBs(bastionIp: str,$/;"	f
+startPortForwardToLBs	bigbang.py	/^def startPortForwardToLBs(bastionIp: str, route53ZoneId: str) -> list[Tunnel]:$/;"	f
 storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
 svcStart	bigbang.py	/^def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,$/;"	f
 svcStop	bigbang.py	/^def svcStop(perf_test: bool, onlyEmptyNodes: bool = False) -> None:$/;"	f
@@ -320,9 +320,9 @@ v	bigbang.py	/^    v = vars(ns)$/;"	v
 validchars	bigbang.py	/^validchars = r"a-zA-Z0-9"$/;"	v
 waitOnAllCopies	cmdgrp.py	/^    def waitOnAllCopies(self) -> None:$/;"	m	class:CommandGroup
 waitUntilApiServerResponding	bigbang.py	/^def waitUntilApiServerResponding() -> float:$/;"	f
-waitUntilDeploymentsAvail	bigbang.py	/^def waitUntilDeploymentsAvail(namespace: str = None,$/;"	f
-waitUntilLoadBalancersUp	bigbang.py	/^def waitUntilLoadBalancersUp(services: list, namespace: str = None,$/;"	f
+waitUntilDeploymentsAvail	bigbang.py	/^def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:$/;"	f
+waitUntilLoadBalancersUp	bigbang.py	/^def waitUntilLoadBalancersUp(services: list, namespace: str,$/;"	f
 waitUntilNodesReady	bigbang.py	/^def waitUntilNodesReady(minNodes: int) -> float:$/;"	f
-waitUntilPodsReady	bigbang.py	/^def waitUntilPodsReady(namespace: str = None, mincontainers: int = 0) -> float:$/;"	f
+waitUntilPodsReady	bigbang.py	/^def waitUntilPodsReady(namespace: str, mincontainers: int = 0) -> float:$/;"	f
 where	bbio.py	/^def where(leaf):$/;"	f
-writeableDir	bbio.py	/^def writeableDir(p):$/;"	f
+writeableDir	bbio.py	/^def writeableDir(p) -> bool: $/;"	f
