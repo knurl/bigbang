@@ -42,7 +42,7 @@ brew doctor
 
 p "installing dependencies for BigBang"
 brew install gcc awscli azure-cli aws-iam-authenticator helm kubectl libyaml \
-    terraform gimme-aws-creds pyenv $OPENSSL
+    terraform gimme-aws-creds pyenv $OPENSSL jmeter
 
 p "determining correct versions of dependencies"
 PYVERSION=3.10.5
@@ -90,7 +90,7 @@ p "configuring AWS profile"
 aws configure
 
 p "configuring Okta"
-gimme-aws-creds -m
+gimme-aws-creds -c
 
 #pip install google-cloud-bigquery google-cloud-storage
 #brew install --cask google-cloud-sdk
