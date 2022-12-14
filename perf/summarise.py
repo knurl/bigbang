@@ -1,4 +1,4 @@
-#!python
+#! /usr/bin/env python
 
 import sys, os, json, re, pdb, time, threading, subprocess, select, signal
 import csv, argparse

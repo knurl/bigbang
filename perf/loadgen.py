@@ -1,4 +1,4 @@
-#!python
+#! /usr/bin/env python
 
 import prestodb # type: ignore
 import time, threading

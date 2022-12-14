@@ -1,4 +1,4 @@
-#!python
+#! /usr/bin/env python
 
 from run import runCollect
 import os, sys, pdb, json, argparse
