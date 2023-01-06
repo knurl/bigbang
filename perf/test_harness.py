@@ -11,9 +11,25 @@ import csv
 from collections import Counter
 from typing import IO
 
+# 99.7% of values within a normal distribution lie within three standard
+# deviations from the mean; 95% within two standard deviations; and 68% within
+# one standard deviation
+stddev_997pct = 3
+
 numloops = 1
-filename_re = re.compile(r'(tpcds_u)(\d\d?\d?)(_)(sf\d\d?\d?)(_)(\d\d?)'
-        r'_[\da-zA-Z]{6}\.csv')
+
+def prefix_regexp(nworkers: int) -> str:
+    return r'(tpcds_u)(\d\d?\d?)(_)(sf\d\d?\d?)(_)' + f'({nworkers})'
+
+def filename_regexp(nworkers: int) -> str:
+    return prefix_regexp(nworkers) + r'_[\da-zA-Z]{6}\.csv'
+
+def prefix_re(nworkers: int):
+    return re.compile(prefix_regexp(nworkers))
+
+def filename_re(nworkers: int):
+    return re.compile(filename_regexp(nworkers))
+
 testrun_re = re.compile(r'^(summary\s+=\s+)(\d+)(.*)$')
 testrun_add_re = re.compile(r'^(summary\s+\+\s+)(\d+)(.*)$')
 
@@ -30,21 +46,21 @@ def get_nodes():
                     nodes)
     return ready_nodes
 
-def get_unready_pods():
+def get_ready_pods():
     pods = []
     r = run.runTry(f'kubectl get pods -ojson'.split())
     if r.returncode == 0:
         podsjson = json.loads(r.stdout)
         if podsjson and len(podsjson) > 0:
             pods = pyjq.all('.items[] | '
-            'select(.status.containerStatuses[]?.ready==false) |'
+            'select(.status.containerStatuses[]?.ready==true) |'
             '.metadata.name', podsjson)
     return pods
 
-def build_logfile_dict():
+def build_logfile_dict(nworkers: int) -> dict[str, list[str]]:
     logfile_dict = {}
     for filename in filter(os.path.isfile, os.listdir()):
-        mobj = filename_re.match(filename)
+        mobj = filename_re(nworkers).match(filename)
         if mobj:
             prefix = ''.join(mobj.groups())
             if prefix not in logfile_dict:
@@ -80,15 +96,22 @@ def average_latency(filenames: list[str]) -> float:
                         row['responseMessage'] == 'OK'):
                     response_times.append(float(row['elapsed']))
 
-    cutoff = 12 * statistics.stdev(response_times)
     mean = statistics.mean(response_times)
+
+    # include everything within 95% of data (assuming a normal distribution)
+    cutoff = stddev_997pct * statistics.stdev(response_times)
+
     outliers = list(filter(lambda x: abs(x - mean) > abs(cutoff - mean),
-            response_times))
-    if len(outliers) > 0:
-        print('{}: mean={}, cutoff={}, outliers={}'.format(filename, mean,
-            cutoff, outliers))
+                           response_times))
+    nrt = len(response_times)
+    within = round((nrt - len(outliers)) * 100.0 / float(nrt), 1)
+    if within > 99.7:
+        print('WARNING: In calculating mean {m} for file {f}, {w}% of data '
+              'were within 3*stddev vs 99.7% expected for normal '
+              'distribution'.format(m=mean, f=filename, w=within))
 
     return mean
+
 class QueryErrorException(Exception):
     pass
 
@@ -119,29 +142,39 @@ def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:
 
 # Returns the new 
 def cluster_is_stable(nworkers: int, old_nodes):
+    exp_nnodes = nworkers + 1
+
     if not old_nodes or len(old_nodes) < 3:
         print('Snapshot of node state looks corrupt!')
         return False
 
     new_nodes = get_nodes()
-    badpods = get_unready_pods()
-    if (old_nodes != new_nodes or len(new_nodes) - 1 != nworkers
-            or len(badpods) > 0):
-        if old_nodes != new_nodes:
-            print("Nodes have changed. Did we lose a spot instance?")
-        if len(badpods) > 0:
-            print("Bad pods: {}".format(badpods))
+    if old_nodes != new_nodes:
+        print('Nodes have changed. Did we lose a spot instance?')
         return False
+
+    if len(new_nodes) != exp_nnodes:
+        print('Expected {x} nodes but only see {n}'.format(x=exp_nnodes,
+                                                           n=len(new_nodes)))
+        return False
+
+    goodpods = get_ready_pods()
+    if len(goodpods) != exp_nnodes:
+        print('Expected {p} ready pods but see {n}'.format(p=exp_nnodes,
+                                                           n=len(goodpods)))
+        return False
+
     return True
 
 # We are unstable. Wait until we are stabilised
 def wait_until_cluster_stable(nworkers: int):
     print("Waiting for cluster to stabilise")
+    exp_nnodes = nworkers + 1
     goodruns = 0
     while True:
         time.sleep(30)
-        badpods = get_unready_pods()
-        if len(badpods) == 0 and nworkers == len(get_nodes()) - 1:
+        goodpods = get_ready_pods()
+        if len(goodpods) == exp_nnodes and len(get_nodes()) == exp_nnodes:
             goodruns += 1
         if goodruns >= 4:
             break
@@ -163,7 +196,8 @@ def main():
                         metavar='email_address',
                         help='Email status to specified address')
     parser.add_argument('-r', '--redo', action='store', nargs='+',
-                        dest='tests_to_redo', default=[])
+                        dest='tests_to_redo', default=[],
+                        help='Provide prefix for tests to redo')
     parser.add_argument('-c', '--renew-creds', action='store_true',
                         help='Renew credentials and quit.')
     ns = parser.parse_args()
@@ -180,25 +214,24 @@ def main():
                 f'run_tpcds.jmx -l {fn}')
         return cmd
 
-    logfile_dict = build_logfile_dict()
+    logfile_dict = build_logfile_dict(nworkers)
 
     tests_to_run: list[tuple[int, str]] = []
-    tests_to_redo: list[str] = ns.tests_to_redo
-    tests_to_redo_pfx: list[str] = []
+    tests_to_redo_pfx: list[str] = ns.tests_to_redo
 
-    for test_filename in tests_to_redo:
-        mobj = filename_re.match(test_filename)
+    for prefix in tests_to_redo_pfx:
+        mobj = prefix_re(nworkers).match(prefix)
         if not mobj:
-            sys.exit(f'Test {test_filename} is not of correct format')
+            sys.exit('Prefix {} is not of correct format'
+                     '{}'.format(prefix, prefix_regexp(nworkers)))
         groups = mobj.groups()
         if len(groups) != 6:
-            sys.exit(f'Test {test_filename} is not of correct format')
-        assert int(groups[5]) == nworkers
-        tests_to_redo_pfx.append(''.join(mobj.groups()))
+            sys.exit('Prefix {} is not of correct format'
+                     '{}'.format(prefix, prefix_regexp(nworkers)))
         threads = int(groups[1])
-        new_filename = ''.join(groups)
+        scaleset = groups[3]
         testcount = len(tpc.tpcds_queries)*threads*numloops
-        cmd = generate_cmd(t=threads, s=groups[3], nl=numloops)
+        cmd = generate_cmd(t=threads, s=scaleset, nl=numloops)
         tests_to_run.append((testcount, cmd))
 
     nodes = []
@@ -215,7 +248,8 @@ def main():
         for t in (1, 2, 4, 8, 16, 32, 64, 128):
             prefix = f'tpcds_u{t}_{s}_{nworkers}'
 
-            # Avoid double-counting
+            # Avoid double-counting, if we've already specified that tests for
+            # specified prefixes need to be redone
             if prefix in tests_to_redo_pfx:
                 continue
 

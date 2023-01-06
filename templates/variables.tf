@@ -6,6 +6,7 @@ variable "tags" {
     org         = "sales"
     team        = "sa"
     project     = "sizing"
+    LIFECYCLE   = "PERSISTENT"
     user        = "{{UserName}}"
     info        = "{{Zone}}"
   }

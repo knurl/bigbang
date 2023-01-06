@@ -13,8 +13,6 @@ from collections import Counter
 
 numloops=1
 
-logfile_dict = build_logfile_dict()
-
 concur_l = 'Concurrency'
 sizes = (1, 10, 100, 200, 400)
 sizes_str = list(map(str, sizes))
@@ -37,9 +35,13 @@ def get_most_recent(filenames: list[str]) -> str:
 def main() -> None:
     p = argparse.ArgumentParser(description="Run test battery")
     p.add_argument('-r', '--recent', action='store_true',
-            help='If there are multiple logs, prefer most recent.')
+            help=('If there are multiple valid logs for a given test prefix, '
+                  'prefer most recent.'))
     ns = p.parse_args()
+    use_recent = ns.recent
     for nworkers in (4, 8, 16):
+        logfile_dict = build_logfile_dict(nworkers)
+
         # Write a separate file for each scale set
         with open(f'avglatency_{nworkers}.csv', 'w', newline='') as outf:
             headers = [concur_l] + sizes_str
@@ -52,15 +54,20 @@ def main() -> None:
                 # Fill in the columns in the row
                 row = {concur_l: t}
                 for size in (1, 10, 100, 200, 400):
-                    s = f'sf{size}'
-                    pfx = f'tpcds_u{t}_{s}_{nworkers}'
+                    pfx = f'tpcds_u{t}_sf{size}_{nworkers}'
                     avg = 'NULL'
 
                     # See if there is an existing logfile that we completed
                     try:
-                        existing = get_best_existing_logfile(logfile_dict, pfx,
+                        existing = get_best_existing_logfile(logfile_dict,
+                                                             pfx,
                                                              t)
-                        if len(existing) > 1 and ns.recent:
+
+                        # If there are multiple suitable logfiles, and the user
+                        # has requested that we use only the most recent ones,
+                        # then retrieve the most recent logfiles from the
+                        # returned list of suitable logfiles.
+                        if len(existing) > 1 and use_recent:
                             most_recent = get_most_recent(existing)
                             avg = str(round(average_latency([most_recent])))
                         elif existing:

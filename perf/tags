@@ -8,12 +8,13 @@ Counter	loadgen.py	/^class Counter:$/;"	c
 QueryErrorException	test_harness.py	/^class QueryErrorException(Exception):$/;"	c
 __init__	loadgen.py	/^    def __init__(self):$/;"	m	class:Counter
 average_latency	test_harness.py	/^def average_latency(filenames: list[str]) -> float:$/;"	f
-build_logfile_dict	test_harness.py	/^def build_logfile_dict():$/;"	f
+build_logfile_dict	test_harness.py	/^def build_logfile_dict(nworkers: int) -> dict[str, list[str]]:$/;"	f
 cluster_is_stable	test_harness.py	/^def cluster_is_stable(nworkers: int, old_nodes):$/;"	f
 concur_l	summarise.py	/^concur_l = 'Concurrency'$/;"	v
 dec	loadgen.py	/^    def dec(self):$/;"	m	class:Counter
 email_status_update	test_harness.py	/^    def email_status_update(msg: str, results: list[str]) -> None:$/;"	f	function:main
-filename_re	test_harness.py	/^filename_re = re.compile(r'(tpcds_u)(\\d\\d?\\d?)(_)(sf\\d\\d?\\d?)(_)(\\d\\d?)'$/;"	v
+filename_re	test_harness.py	/^def filename_re(nworkers: int):$/;"	f
+filename_regexp	test_harness.py	/^def filename_regexp(nworkers: int) -> str:$/;"	f
 generate_cmd	test_harness.py	/^    def generate_cmd(t, s, nl) -> str:$/;"	f	function:main
 getCount	loadgen.py	/^    def getCount(self):$/;"	m	class:Counter
 get_best_existing_logfile	test_harness.py	/^def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:$/;"	f
@@ -25,7 +26,6 @@ last	loadgen.py	/^        last = now$/;"	v
 last	loadgen.py	/^last = time.time()$/;"	v
 lock	loadgen.py	/^lock = threading.Lock()$/;"	v
 logfile_completed	test_harness.py	/^def logfile_completed(filename, numthreads):$/;"	f
-logfile_dict	summarise.py	/^logfile_dict = build_logfile_dict()$/;"	v
 main	summarise.py	/^def main() -> None:$/;"	f
 main	test_harness.py	/^def main():$/;"	f
 newconnectionpause	loadgen.py	/^newconnectionpause = 0.1$/;"	v
@@ -34,12 +34,15 @@ nq	loadgen.py	/^nq = Counter()$/;"	v
 numloops	summarise.py	/^numloops=1$/;"	v
 numloops	test_harness.py	/^numloops = 1$/;"	v
 numthreadcount	summarise.py	/^numthreadcount = 8$/;"	v
+prefix_re	test_harness.py	/^def prefix_re(nworkers: int):$/;"	f
+prefix_regexp	test_harness.py	/^def prefix_regexp(nworkers: int) -> str:$/;"	f
 queries	loadgen.py	/^queries = [ "select max(nationkey) from s3.s.nation",$/;"	v
 reportingpause	loadgen.py	/^reportingpause = 1.0$/;"	v
 runme	loadgen.py	/^def runme():$/;"	f
 send_email	test_harness.py	/^def send_email(address, body):$/;"	f
 sizes	summarise.py	/^sizes = (1, 10, 100, 200, 400)$/;"	v
 sizes_str	summarise.py	/^sizes_str = list(map(str, sizes))$/;"	v
+stddev_997pct	test_harness.py	/^stddev_997pct = 3$/;"	v
 t	loadgen.py	/^        t = threading.Thread(target = runme)$/;"	v
 testrun_add_re	test_harness.py	/^testrun_add_re = re.compile(r'^(summary\\s+\\+\\s+)(\\d+)(.*)$')$/;"	v
 testrun_re	test_harness.py	/^testrun_re = re.compile(r'^(summary\\s+=\\s+)(\\d+)(.*)$')$/;"	v
