@@ -800,14 +800,14 @@ def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:
     return divideOrZero(numer, denom)
 
 def getStarburstUrl() -> str:
-    scheme = "http"
-    host = localhost
-    port = getLclPort("starburst")
-
-    # If we are TLS-protected to the coordinator...
     if tlsenabled():
         scheme = "https"
-        host = starburstfqdn
+    else:
+        scheme = "http"
+
+    host = starburstfqdn
+    port = getLclPort("starburst")
+
     return f"{scheme}://{host}:{port}"
 
 def getStarburstHttpUrl() -> str:
@@ -2002,28 +2002,39 @@ def checkRSAKey() -> None:
     sys.exit(f"Script cannot continue without {rsa} file.")
 
 def checkEtcHosts() -> None:
-    # We only need to make sure that we have a binding for the starburst host
-    # if we are running with TLS to the coordinator but the internal
-    # connections are NOT secured, as in that the cert only has starburst host
-    if not tlsenabled():
-        return
+    # We now always require a hosts entry for the starburst host into
+    # /etc/hosts, invariantly mapping to 127.0.0.1 (localhost).
+    announce(f'Ensuring needed mapping entries are in {hostsf}')
 
+    # Start by trying to see if the entries are already in the hosts file, in
+    # the form we want. If they are, we don't need to create them.
     if bbio.readableFile(hostsf):
         with open(hostsf) as fh:
             for line in fh:
                 # skip commented lines
                 if re.match(r"^\s*#", line):
                     continue
+
+                # skip non-mapping entries
                 cols = line.split()
                 if len(cols) < 2:
                     continue
+
+                # this is a mapping entry; see if we find a mapping that
+                # matches what we're looking for
                 ip = cols[0]
                 hostname = cols[1]
                 if ip == localhostip and hostname == starburstfqdn:
+                    # Success! We have all we need in the /etc/hosts file, so
+                    # we can quit searching and leave this function
+                    print(f'Found {hostsf} entry satisfying requirement:')
+                    print(line)
                     return
 
-    print(f"For TLS-encryption to coordinator, you will need {starburstfqdn} "
-            f"in {hostsf}.\nI can add this but I'll need to run this as sudo:")
+    # We didn't manage to return out of this function, so the /etc/hosts file
+    # didn't have the required entries. Offer to create them.
+    print(f'You will need {starburstfqdn} in {hostsf}.')
+    print(f'I can add this but will need to run this as sudo:')
     cmd = f"echo {localhostip} {starburstfqdn} | sudo tee -a {hostsf}"
     print(cmd)
     yn = input("Would you like me to run that with sudo? [y/N] -> ")
