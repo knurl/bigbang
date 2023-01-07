@@ -1,4 +1,4 @@
-PYFILES = $(wildcard *.py)
+PYFILES = $(wildcard *.py ../*.py)
 
 ALL: mypy ./tags
 

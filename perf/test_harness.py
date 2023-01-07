@@ -201,15 +201,32 @@ def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:
 def node_set_is_valid(nodes: set[str]) -> bool:
     return nodes is not None and len(nodes) >= 3
 
-def cluster_is_stable(nworkers: int, old_nodes) -> bool:
+def compare_sets(old: set[str], new: set[str]) -> str:
+    keep = old & new
+    lose = old - keep
+    gain = new - keep
+    msgs = []
+    if lose:
+        msgs.append(f'{lose} left')
+    if gain:
+        msgs.append(f'{gain} joined')
+    if keep:
+        msgs.append(f'{keep} stayed')
+    return "; ".join(msgs)
+
+def cluster_is_stable(nworkers: int,
+                      old_nodes: set[str],
+                      old_pods: set[str]) -> bool:
     new_nodes: set[str] = set()
+    new_pods: set[str] = set()
 
     if not node_set_is_valid(old_nodes):
         print('Snapshot of node state looks corrupt!')
         return False
 
     if (new_nodes := get_ready_nodes()) != old_nodes:
-        print('Nodes have changed. Did we lose a spot instance?')
+        print('Nodes changed: {}. Lost a spot '
+              'instance?'.format(compare_sets(old_nodes, new_nodes)))
         return False
 
     exp_nnodes = nworkers + 1
@@ -219,29 +236,42 @@ def cluster_is_stable(nworkers: int, old_nodes) -> bool:
                                                            n=len(new_nodes)))
         return False
 
-    goodpods = get_ready_pods()
-    if len(goodpods) != exp_nnodes:
+    if (new_pods := get_ready_pods()) != old_pods:
+        print('Pods changed: {}. Lost a '
+              'pod?'.format(compare_sets(old_pods, new_pods)))
+        return False
+
+    if len(new_pods) != exp_nnodes:
         print('Expected {p} ready pods but see {n}'.format(p=exp_nnodes,
-                                                           n=len(goodpods)))
+                                                           n=len(new_pods)))
         return False
 
     return True
 
 # We are unstable. Wait until we are stabilised
-def wait_until_cluster_stable(nworkers: int) -> set[str]:
+def wait_until_cluster_stable(nworkers: int) -> tuple[set[str], set[str]]:
     print("Waiting for cluster to stabilise")
+    exp_goodruns = 4
+    timenow = time.time()
     exp_nnodes = nworkers + 1
-    goodnodes = get_ready_nodes()
 
     goodruns = 0
     while True:
+        goodnodes = get_ready_nodes()
+        goodpods = get_ready_pods()
         time.sleep(30)
-        if cluster_is_stable(nworkers, goodnodes):
-            goodruns += 1
-        if goodruns >= 4:
+        if not cluster_is_stable(nworkers, goodnodes, goodpods):
+            print(f'Cluster unstable; awaiting {exp_goodruns} more runs...')
+            goodruns = 0 # nodes and pods changed _again_
+            continue
+        goodruns += 1
+        if goodruns >= exp_goodruns:
             break
+        print('Cluster seems stable after {} seconds; awaiting {} more '
+              'runs...'.format(round(time.time() - timenow, 1),
+                               exp_goodruns - goodruns))
     print("Cluster seems to have stabilised")
-    return goodnodes
+    return goodnodes, goodpods
 
 def send_email(address, body):
     rc = subprocess.run(['/usr/bin/mail', '-s', 'test_battery status',
@@ -298,12 +328,14 @@ def main():
         tests_to_run.append((testcount, cmd))
 
     nodes: set[str] = set()
+    pods: set[str] = set()
 
     if not ns.analyse_only:
         nodes = get_ready_nodes() # invariant, while cluster is stable
-        if not cluster_is_stable(nworkers, nodes):
+        pods = get_ready_pods() # invariant, while cluster is stable
+        if not cluster_is_stable(nworkers, nodes, pods):
             out.announceLoud(['Cluster lost stability', 'finding it again'])
-            nodes = wait_until_cluster_stable(nworkers)
+            nodes, pods = wait_until_cluster_stable(nworkers)
             out.announce(f'Cluster restabilised at {nworkers} workers')
 
     for s in ('sf1', 'sf10', 'sf100', 'sf200', 'sf400'):
@@ -342,7 +374,7 @@ def main():
     heartbeat_timer = time.time()
     heartbeat_timeout = 3600.0 # every hour
     cluster_stable_timer = time.time()
-    cluster_stable_timeout = 60.0 # every two minutes
+    cluster_stable_timeout = 60.0 # every minute
     creds_timer = time.time()
     creds_timeout = 3600.0*4
     sent_email = False
@@ -408,12 +440,13 @@ def main():
                     creds_timer = time.time() # reset timer
                     creds.renew_creds_async()
 
-                if time.time() - cluster_stable_timer >= cluster_stable_timeout:
+                if (time.time() - cluster_stable_timer >=
+                    cluster_stable_timeout):
                     # Cluster stability timer expired. See if cluster is still
                     # stable. If not, we need to suspend the process.
                     cluster_stable_timer = time.time() # reset timer
 
-                    if not cluster_is_stable(nworkers, nodes):
+                    if not cluster_is_stable(nworkers, nodes, pods):
                         unstable_time = time.time()
 
                         # suspend the jmeter process for now
@@ -422,17 +455,15 @@ def main():
                         out.announce(msg)
                         email_status_update(msg, cmd_output)
 
-                        out.announceLoud(['Cluster lost stability',
-                            'temporarily pausing jmeter'])
-                        nodes = wait_until_cluster_stable(nworkers)
-                        elapsed_time = time.time() - unstable_time
-                        msg1 = (f'Cluster restabilised at {nworkers} workers'
+                        nodes, pods = wait_until_cluster_stable(nworkers)
+                        elapsed_time = round(time.time() - unstable_time)
+                        msg1 = (f'Cluster restabilised at {nworkers} workers '
                                 f'after {elapsed_time}s')
                         out.announce(msg1)
 
                         # restart jmeter process
                         p.send_signal(signal.SIGCONT) 
-                        msg2 = f'Continuing test {cmd}'
+                        msg2 = f'Resuming test {cmd}'
                         out.announce(msg2)
                         email_status_update(f'{msg1}\n{msg2}', cmd_output)
                         continue

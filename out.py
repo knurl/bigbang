@@ -9,16 +9,16 @@ from shutil import get_terminal_size
 
 sqlstr = "Issued 🢩 "
 
-def announceSqlStart(s):
+def announceSqlStart(s: str) -> None:
     print(f"{sqlstr}⟦{s}⟧")
 
-def announceSqlEnd(s):
+def announceSqlEnd(s: str) -> None:
     print(" " * len(sqlstr) + f"⟦{s}⟧ 🢨 Done!")
 
-def announce(s):
+def announce(s: str) -> None:
     cprint(f"==> {s}", 'blue', attrs = ['bold'])
 
-def announceLoud(lines: list) -> None:
+def announceLoud(lines: list[str]) -> None:
     maxl = max(map(len, lines))
     lt = "┃⮚ "
     rt = " ⮘┃"
@@ -30,7 +30,7 @@ def announceLoud(lines: list) -> None:
         cp(i)
     cp('┗' + '━' * (pmaxl - 2) + '┛')
 
-def announceBox(s):
+def announceBox(s: str) -> None:
     boundary = 80 # maximum length to wrap to
     bl = '║ '
     br = ' ║'
