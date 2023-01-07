@@ -6,7 +6,6 @@ sys.path.append('..')
 sys.path.append('../..')
 from functools import reduce
 import run, out, tpc, creds
-import pyjq # type: ignore
 import csv
 from collections import Counter
 from typing import IO
@@ -33,29 +32,88 @@ def filename_re(nworkers: int):
 testrun_re = re.compile(r'^(summary\s+=\s+)(\d+)(.*)$')
 testrun_add_re = re.compile(r'^(summary\s+\+\s+)(\d+)(.*)$')
 
-def get_nodes():
-    ready_nodes = []
+def get_ready_nodes() -> set[str]:
+    ready: set[str] = set()
 
     r = run.runTry(f"kubectl get nodes -ojson".split())
-    if r.returncode == 0:
-        nodes = json.loads(r.stdout)
-        if nodes and len(nodes) > 0:
-            ready_nodes = pyjq.all('.items[] | select(.spec.taints|not) | '
-                    'select(.status.conditions[]?.reason=="KubeletReady" and '
-                    '.status.conditions[]?.status=="True") | .metadata.name',
-                    nodes)
-    return ready_nodes
+    if r.returncode != 0:
+        return ready
 
-def get_ready_pods():
-    pods = []
+    j = json.loads(r.stdout)
+    if j is None or len(j) == 0:
+        return ready
+
+    if not (items := j.get('items')):
+        return ready
+
+    for item in items:
+        # if we can't find a valid name, skip this item
+        if (not (metadata := item.get('metadata')) or
+            not (name := metadata.get('name')) or
+            len(name) < 1):
+            continue
+        assert metadata and name and len(name) > 0
+
+        # If this node is tainted, don't count it
+        if (spec := item.get('spec')) and spec.get('taints'):
+            print(f'Node {name} is tainted; excluding')
+            continue
+
+        # If this node's Kubelet is ready, count it; otherwise skip
+        if ((status := item.get('status')) and
+            (conditions := status.get('conditions'))):
+            for condition in conditions:
+                if ((reason := condition.get('reason')) and 
+                    (condstatus := condition.get('status')) and
+                    reason == 'KubeletReady' and
+                    condstatus == 'True'):
+                    ready.add(name)
+                    break
+
+    return ready
+
+def get_ready_pods() -> set[str]:
+    ready: set[str] = set()
+
     r = run.runTry(f'kubectl get pods -ojson'.split())
-    if r.returncode == 0:
-        podsjson = json.loads(r.stdout)
-        if podsjson and len(podsjson) > 0:
-            pods = pyjq.all('.items[] | '
-            'select(.status.containerStatuses[]?.ready==true) |'
-            '.metadata.name', podsjson)
-    return pods
+    if r.returncode != 0:
+        return ready
+
+    j = json.loads(r.stdout)
+    if j is None or len(j) == 0:
+        return ready
+
+    if not (items := j.get('items')):
+        return ready
+
+    for item in items:
+        # if we can't find a valid name, skip this item
+        if (not (metadata := item.get('metadata')) or
+            not (name := metadata.get('name')) or
+            len(name) < 1):
+            continue
+        assert metadata and name and len(name) > 0
+
+        # If this isn't a coordinator or worker, don't count it
+        if (not (labels := metadata.get('labels')) or
+            not (app := labels.get('app')) or
+            not (role := labels.get('role')) or
+            app != 'starburst-enterprise' or
+            role not in ('coordinator', 'worker')):
+            continue
+
+        # If this pod's containers are all ready, count it; otherwise skip
+        if ((status := item.get('status')) and
+            (conditions := status.get('conditions'))):
+            for condition in conditions:
+                if ((condtype := condition.get('type')) and 
+                    (condstatus := condition.get('status')) and
+                    condtype == 'ContainersReady' and
+                    condstatus == 'True'):
+                    ready.add(name)
+                    break
+
+    return ready
 
 def build_logfile_dict(nworkers: int) -> dict[str, list[str]]:
     logfile_dict = {}
@@ -140,18 +198,21 @@ def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:
 
     return best_logfiles
 
-# Returns the new 
-def cluster_is_stable(nworkers: int, old_nodes):
-    exp_nnodes = nworkers + 1
+def node_set_is_valid(nodes: set[str]) -> bool:
+    return nodes is not None and len(nodes) >= 3
 
-    if not old_nodes or len(old_nodes) < 3:
+def cluster_is_stable(nworkers: int, old_nodes) -> bool:
+    new_nodes: set[str] = set()
+
+    if not node_set_is_valid(old_nodes):
         print('Snapshot of node state looks corrupt!')
         return False
 
-    new_nodes = get_nodes()
-    if old_nodes != new_nodes:
+    if (new_nodes := get_ready_nodes()) != old_nodes:
         print('Nodes have changed. Did we lose a spot instance?')
         return False
+
+    exp_nnodes = nworkers + 1
 
     if len(new_nodes) != exp_nnodes:
         print('Expected {x} nodes but only see {n}'.format(x=exp_nnodes,
@@ -167,18 +228,20 @@ def cluster_is_stable(nworkers: int, old_nodes):
     return True
 
 # We are unstable. Wait until we are stabilised
-def wait_until_cluster_stable(nworkers: int):
+def wait_until_cluster_stable(nworkers: int) -> set[str]:
     print("Waiting for cluster to stabilise")
     exp_nnodes = nworkers + 1
+    goodnodes = get_ready_nodes()
+
     goodruns = 0
     while True:
         time.sleep(30)
-        goodpods = get_ready_pods()
-        if len(goodpods) == exp_nnodes and len(get_nodes()) == exp_nnodes:
+        if cluster_is_stable(nworkers, goodnodes):
             goodruns += 1
         if goodruns >= 4:
             break
     print("Cluster seems to have stabilised")
+    return goodnodes
 
 def send_email(address, body):
     rc = subprocess.run(['/usr/bin/mail', '-s', 'test_battery status',
@@ -234,14 +297,13 @@ def main():
         cmd = generate_cmd(t=threads, s=scaleset, nl=numloops)
         tests_to_run.append((testcount, cmd))
 
-    nodes = []
+    nodes: set[str] = set()
 
     if not ns.analyse_only:
-        nodes = get_nodes() # Shouldn't change as long as we remain stable
+        nodes = get_ready_nodes() # invariant, while cluster is stable
         if not cluster_is_stable(nworkers, nodes):
             out.announceLoud(['Cluster lost stability', 'finding it again'])
-            wait_until_cluster_stable(nworkers)
-            nodes = get_nodes()
+            nodes = wait_until_cluster_stable(nworkers)
             out.announce(f'Cluster restabilised at {nworkers} workers')
 
     for s in ('sf1', 'sf10', 'sf100', 'sf200', 'sf400'):
@@ -348,7 +410,7 @@ def main():
 
                 if time.time() - cluster_stable_timer >= cluster_stable_timeout:
                     # Cluster stability timer expired. See if cluster is still
-                    # stable. If not, we need to kill the process.
+                    # stable. If not, we need to suspend the process.
                     cluster_stable_timer = time.time() # reset timer
 
                     if not cluster_is_stable(nworkers, nodes):
@@ -362,8 +424,7 @@ def main():
 
                         out.announceLoud(['Cluster lost stability',
                             'temporarily pausing jmeter'])
-                        wait_until_cluster_stable(nworkers)
-                        nodes = get_nodes()
+                        nodes = wait_until_cluster_stable(nworkers)
                         elapsed_time = time.time() - unstable_time
                         msg1 = (f'Cluster restabilised at {nworkers} workers'
                                 f'after {elapsed_time}s')

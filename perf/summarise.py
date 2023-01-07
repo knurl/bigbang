@@ -8,7 +8,6 @@ from test_harness import build_logfile_dict, get_best_existing_logfile, \
         average_latency
 import test_harness
 import run, out, tpc
-import pyjq # type: ignore
 from collections import Counter
 
 numloops=1

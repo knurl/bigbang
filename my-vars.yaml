@@ -25,10 +25,10 @@ Zone: eu-west-2 # AWS - London, UK, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 393.7.0
+ChartVersion: 402.2.0
 
 # Number of nodes in K8S cluster.
-NodeCount: 9
+NodeCount: 3
 
 # Use an external load balancer as ingress
 IngressLoadBalancer: False

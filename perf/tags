@@ -9,7 +9,7 @@ QueryErrorException	test_harness.py	/^class QueryErrorException(Exception):$/;"	
 __init__	loadgen.py	/^    def __init__(self):$/;"	m	class:Counter
 average_latency	test_harness.py	/^def average_latency(filenames: list[str]) -> float:$/;"	f
 build_logfile_dict	test_harness.py	/^def build_logfile_dict(nworkers: int) -> dict[str, list[str]]:$/;"	f
-cluster_is_stable	test_harness.py	/^def cluster_is_stable(nworkers: int, old_nodes):$/;"	f
+cluster_is_stable	test_harness.py	/^def cluster_is_stable(nworkers: int, old_nodes) -> bool:$/;"	f
 concur_l	summarise.py	/^concur_l = 'Concurrency'$/;"	v
 dec	loadgen.py	/^    def dec(self):$/;"	m	class:Counter
 email_status_update	test_harness.py	/^    def email_status_update(msg: str, results: list[str]) -> None:$/;"	f	function:main
@@ -19,8 +19,8 @@ generate_cmd	test_harness.py	/^    def generate_cmd(t, s, nl) -> str:$/;"	f	func
 getCount	loadgen.py	/^    def getCount(self):$/;"	m	class:Counter
 get_best_existing_logfile	test_harness.py	/^def get_best_existing_logfile(logfile_dict, prefix, numthreads) -> list[str]:$/;"	f
 get_most_recent	summarise.py	/^def get_most_recent(filenames: list[str]) -> str:$/;"	f
-get_nodes	test_harness.py	/^def get_nodes():$/;"	f
-get_unready_pods	test_harness.py	/^def get_unready_pods():$/;"	f
+get_ready_nodes	test_harness.py	/^def get_ready_nodes() -> set[str]:$/;"	f
+get_ready_pods	test_harness.py	/^def get_ready_pods() -> set[str]:$/;"	f
 inc	loadgen.py	/^    def inc(self):$/;"	m	class:Counter
 last	loadgen.py	/^        last = now$/;"	v
 last	loadgen.py	/^last = time.time()$/;"	v
@@ -30,6 +30,7 @@ main	summarise.py	/^def main() -> None:$/;"	f
 main	test_harness.py	/^def main():$/;"	f
 newconnectionpause	loadgen.py	/^newconnectionpause = 0.1$/;"	v
 newquerypause	loadgen.py	/^newquerypause = 0.0$/;"	v
+node_set_is_valid	test_harness.py	/^def node_set_is_valid(nodes: set[str]) -> bool:$/;"	f
 nq	loadgen.py	/^nq = Counter()$/;"	v
 numloops	summarise.py	/^numloops=1$/;"	v
 numloops	test_harness.py	/^numloops = 1$/;"	v
@@ -48,4 +49,4 @@ testrun_add_re	test_harness.py	/^testrun_add_re = re.compile(r'^(summary\\s+\\+\
 testrun_re	test_harness.py	/^testrun_re = re.compile(r'^(summary\\s+=\\s+)(\\d+)(.*)$')$/;"	v
 threadpoolsize	loadgen.py	/^threadpoolsize = 200$/;"	v
 threads	summarise.py	/^threads = list(map(lambda x: 2**x, range(numthreadcount)))$/;"	v
-wait_until_cluster_stable	test_harness.py	/^def wait_until_cluster_stable(nworkers: int):$/;"	f
+wait_until_cluster_stable	test_harness.py	/^def wait_until_cluster_stable(nworkers: int) -> set[str]:$/;"	f
