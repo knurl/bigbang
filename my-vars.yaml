@@ -34,11 +34,11 @@ NodeCount: 3
 IngressLoadBalancer: False
 
 # Require TLS on client <-> coordinator connection.
-RequireCoordTls: False
+RequireCoordTls: True
 
 # Authenticate using LDAP. Needs a secured connection, and therefore requires
 # either RequireCoordTls, IngressLoadBalancer or RequireTlsToLb.
-AuthNLdap: False
+AuthNLdap: True
 
 # Disable bastion firewall—don't use unless you know the risks!
 DisableBastionFw: False
@@ -50,7 +50,7 @@ DisableSlowSources: True
 SalesforceEnabled: False
 
 # Set up for performance testing
-PerformanceTesting: True
+PerformanceTesting: False
 
 # node pool capacity type, for non-performance mode only
 CapacityType: OnDemand
