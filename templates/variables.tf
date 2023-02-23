@@ -6,7 +6,6 @@ variable "tags" {
     org         = "sales"
     team        = "sa"
     project     = "sizing"
-    LIFECYCLE   = "PERSISTENT"
     user        = "{{UserName}}"
     info        = "{{Zone}}"
   }
@@ -83,10 +82,6 @@ variable "node_count" {
 
 variable "max_pods_per_node" {
   default = "{{MaxPodsPerNode}}"
-}
-
-variable "disable_slow_sources" {
-  default = "{{DisableSlowSources}}" == "True" ? 0 : 1
 }
 
 variable "evtlog_server_name" {

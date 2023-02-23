@@ -1,3 +1,10 @@
+resource "google_compute_network" "vpc" {
+  project                 = data.google_project.project.project_id
+  name                    = var.network_name
+  auto_create_subnetworks = false
+  routing_mode            = "REGIONAL"
+}
+
 locals {
   # bigbang will submit a CIDR in the 172.16.x/20 range
   cidrs             = cidrsubnets(var.my_cidr, 2, 2, 2, 4, 4, 4, 8)
@@ -7,7 +14,7 @@ locals {
   googserv_cidr     = local.cidrs[3] # 12.1 - 12.254, 24 b = 254 hosts
   proxy_ntwk_cidr   = local.cidrs[4] # 13.1 - 13.254, 24 b = 254 hosts
   ilb_cidr          = local.cidrs[5] # 14.1 - 14.254, 24 b = 254 hosts
-  master_ntwk_cidr  = local.cidrs[6] # 15.1 - 15.16, 28 b = 16 hosts
+  master_ntwk_cidr  = local.cidrs[6] # 15.1 - 15.14, 28 b = 14 hosts
   bastion_address   = cidrhost(local.subnetwork_cidr, 101)
   ldap_address      = cidrhost(local.subnetwork_cidr, 102)
   starburst_address = cidrhost(local.subnetwork_cidr, 103)
@@ -34,6 +41,24 @@ resource "google_compute_subnetwork" "snet" {
   }
 
   private_ip_google_access = true
+}
+
+# For SQL instances and other Google services to be accessed privately, we need
+# to create a peering connection ourselves between our VPC and the Google VPC
+resource "google_compute_global_address" "googserv_gaddrs" {
+  project       = data.google_project.project.project_id
+  name          = "${var.cluster_name}-googserv-gaddrs"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  network       = resource.google_compute_network.vpc.id
+  address       = split("/", local.googserv_cidr)[0]
+  prefix_length = split("/", local.googserv_cidr)[1]
+}
+
+resource "google_service_networking_connection" "pvpc_peering" {
+  network                 = resource.google_compute_network.vpc.id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.googserv_gaddrs.name]
 }
 
 /*

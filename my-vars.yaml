@@ -9,23 +9,25 @@ Target: aws
 #Target: az
 #Target: gcp
 
-#
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
 # This value can be overridden with -z flag on commandline
-#
-Zone: eu-west-2 # AWS - London, UK, EU
-#Zone: us-east-1 # AWS - Northern Virginia, USA
-#Zone: us-east-2 # AWS - Columbus, OH, USA
-#Zone: uksouth # Azure - London, UK, EU
-#Zone: eastus # Azure - Virginia, USA
-#Zone: francecentral # Azure - Paris, France, EU
-#Zone: europe-west2-b # GCP - London, UK, EU
-#Zone: europe-west1-b # GCP - St. Ghislain, Belgium, EU
+PreferredZones:
+  aws:
+    - eu-west-2 # AWS - London, UK, EU
+    - us-east-2 # AWS - Columbus, OH, USA
+    - us-east-1 # AWS - Northern Virginia, USA
+  az:
+    - uksouth # Azure - London, UK, EU
+    - eastus # Azure - Virginia, USA
+    - francecentral # Azure - Paris, France, EU
+  gcp:
+    - europe-west2-b # GCP - London, UK, EU
+    - europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 402.2.0
+ChartVersion: 406.0.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 3
@@ -43,14 +45,20 @@ AuthNLdap: True
 # Disable bastion firewall—don't use unless you know the risks!
 DisableBastionFw: False
 
-# Disable sources that run slowly with Starburst
-DisableSlowSources: True
-
 # Do we want to use the Salesforce connector?
 SalesforceEnabled: False
 
+# MySQL and PostgreSQL enable/disable. These databases are the instances used
+# for demoing Starburst functionality, not for internal use (e.g. HMS).
+MySqlEnabled: False
+PostgreSqlEnabled: False
+
 # Set up for performance testing
 PerformanceTesting: False
+
+#
+# You probably don't want to modify any configuration below this line.
+#
 
 # node pool capacity type, for non-performance mode only
 CapacityType: OnDemand
@@ -88,11 +96,6 @@ GcpSmallMachineType: e2-standard-2
 AwsDbInstanceType: db.m5.xlarge
 AzureDbVmType: GP_Gen5_4
 GcpDbMachineType: db-custom-4-15360
-
-# MySQL and PostgreSQL enable/disable. These databases are the instances used
-# for demoing Starburst functionality, not for internal use (e.g. HMS).
-MySqlEnabled: False
-PostgreSqlEnabled: False
 
 #
 # Helm repo information

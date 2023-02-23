@@ -40,10 +40,10 @@ resource "google_sql_database_instance" "sql_postgres" {
 }
 
 resource "google_sql_database_instance" "sql_mysql" {
+  count   = var.mysql_enabled ? 1 : 0
   name    = "${var.mysql_server_name}-${random_id.db_name_suffix.hex}"
   region  = var.region
   project = data.google_project.project.project_id
-  count   = var.mysql_enabled ? 1 : 0
 
   database_version = join("_", concat(["MYSQL"], split(".", var.mysql_version)))
   # depends_on is required here per the docs
@@ -70,72 +70,69 @@ resource "google_sql_database_instance" "sql_mysql" {
 /*
  * Create the users who will access the databases.
  */
-
 resource "google_sql_user" "user_postgres" {
-  project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_postgres.name
-  name       = var.db_user
-  password   = var.db_password
-  depends_on = [google_sql_database_instance.sql_postgres]
+  project  = data.google_project.project.project_id
+  instance = google_sql_database_instance.sql_postgres.name
+  name     = var.db_user
+  password = var.db_password
 }
 
 resource "google_sql_user" "user_mysql" {
-  project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_mysql.name
-  count      = var.mysql_enabled ? 1 : 0
-  name       = var.db_user
-  password   = var.db_password
-  depends_on = [google_sql_database_instance.sql_mysql]
+  count    = var.mysql_enabled ? 1 : 0
+  project  = data.google_project.project.project_id
+  instance = var.mysql_enabled ? google_sql_database_instance.sql_mysql.0.name : null
+  name     = var.db_user
+  password = var.db_password
 }
 
 /*
  * Create all of the databases in the servers.
  */
 
-resource "google_sql_database" "db_evtlog" {
-  name       = var.db_name_evtlog
-  project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_postgres.name
-  charset    = var.postgres_charset
-  collation  = var.postgres_collation
-  depends_on = [google_sql_user.user_postgres]
+resource "google_sql_database" "db_postgres_evtlog" {
+  name            = var.db_name_evtlog
+  project         = data.google_project.project.project_id
+  instance        = google_sql_database_instance.sql_postgres.name
+  charset         = var.postgres_charset
+  collation       = var.postgres_collation
+  deletion_policy = "ABANDON"
 }
 
-resource "google_sql_database" "db_hms" {
-  name       = var.db_name_hms
-  project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_postgres.name
-  charset    = var.postgres_charset
-  collation  = var.postgres_collation
-  depends_on = [google_sql_user.user_postgres]
+resource "google_sql_database" "db_postgres_hms" {
+  name            = var.db_name_hms
+  project         = data.google_project.project.project_id
+  instance        = google_sql_database_instance.sql_postgres.name
+  charset         = var.postgres_charset
+  collation       = var.postgres_collation
+  deletion_policy = "ABANDON"
 }
 
-resource "google_sql_database" "db_cachesrv" {
-  name       = var.db_name_cachesrv
-  count      = var.cache_service_enabled ? 1 : 0
-  project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_postgres.name
-  charset    = var.postgres_charset
-  collation  = var.postgres_collation
-  depends_on = [google_sql_user.user_postgres]
+resource "google_sql_database" "db_postgres_cachesrv" {
+  count     = var.cache_service_enabled ? 1 : 0
+  name      = var.db_name_cachesrv
+  project   = data.google_project.project.project_id
+  instance  = google_sql_database_instance.sql_postgres.name
+  charset   = var.postgres_charset
+  collation = var.postgres_collation
 }
 
 resource "google_sql_database" "db_postgres" {
-  name       = var.db_name
-  count      = var.postgres_enabled ? 1 : 0
-  project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_postgres.name
-  charset    = var.postgres_charset
-  collation  = var.postgres_collation
-  depends_on = [google_sql_user.user_postgres]
+  count           = var.postgres_enabled ? 1 : 0
+  name            = var.db_name
+  project         = data.google_project.project.project_id
+  instance        = google_sql_database_instance.sql_postgres.name
+  charset         = var.postgres_charset
+  collation       = var.postgres_collation
+  deletion_policy = "ABANDON"
+  #  depends_on      = [google_sql_user.user_postgres]
 }
 
 resource "google_sql_database" "db_mysql" {
-  name       = var.db_name
-  count      = var.mysql_enabled ? 1 : 0
-  project    = data.google_project.project.project_id
-  instance   = google_sql_database_instance.sql_mysql.name
-  charset    = var.mysql_charset
-  collation  = var.mysql_collation
-  depends_on = [google_sql_user.user_mysql]
+  count     = var.mysql_enabled ? 1 : 0
+  name      = var.db_name
+  project   = data.google_project.project.project_id
+  instance  = var.mysql_enabled ? google_sql_database_instance.sql_mysql.0.name : null
+  charset   = var.mysql_charset
+  collation = var.mysql_collation
+  #  depends_on = [google_sql_user.user_mysql]
 }

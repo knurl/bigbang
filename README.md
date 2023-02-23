@@ -114,12 +114,15 @@ for the full instructions.
 
 After the installation of the `google-cloud-sdk` cask, you'll need to configure
 it by running `gcloud init`. Once that is completed you'll have a
-`~/.config/gcloud` directory with all of the configuration inside of it.
+`~/.config/gcloud` directory with all of the configuration inside of it. You
+will then need to run a `gcloud auth application-default login`.
+
+Following this you will need to install a kubectl plugin as follows:
+
+`gcloud components install gke-gcloud-auth-plugin`
 
 See [this link](https://blog.petehouston.com/install-and-configure-google-cloud-sdk-using-homebrew/)
 for the full instructions.
-
-NB: For GCP you will also need to set your project name in my-vars.html.
 
 ### Python
 

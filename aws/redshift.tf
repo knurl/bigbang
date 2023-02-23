@@ -4,7 +4,6 @@ resource "aws_security_group" "redshift_sg" {
   name                   = "redshift_sg"
   vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
-  count                  = var.disable_slow_sources
 
   # Any protocol or port, as long as it comes from one of the worker nodes in
   # our Kubernetes cluster, where we'll be running Starburst.
@@ -24,9 +23,8 @@ resource "aws_redshift_cluster" "redshift" {
   master_username    = var.db_user
   master_password    = var.db_password
   node_type          = "dc2.large"
-  cluster_type       = "multi-node"
+  cluster_type       = "single-node"
   number_of_nodes    = 1
-  count              = var.disable_slow_sources
 
   automated_snapshot_retention_period = 1
   skip_final_snapshot                 = true

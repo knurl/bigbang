@@ -36,6 +36,6 @@ resource "google_dns_record_set" "starburst_a_record" {
   managed_zone = google_dns_managed_zone.private_zone.name
   name         = "starburst.az.starburstdata.net."
   type         = "A"
-  rrdatas      = [var.upstream_stargate ? local.bastion_ip : local.starburst_address]
+  rrdatas      = [var.upstream_stargate ? local.bastion_address : local.starburst_address]
   ttl          = 3600
 }

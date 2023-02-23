@@ -1,9 +1,10 @@
 # bigbang-specific
-import sql, cmdgrp
+import sql
+from cmdgrp import SqlCommandGroup
 from out import *
 
 # other
-import os, sys, pdb, requests, time, threading, io
+import os, sys, pdb, time, threading, io
 from typing import Any, Set, List
 
 tpchcat  = "tpch"
@@ -134,10 +135,8 @@ class TpcCatInfo:
                 }
             }
 
-    def __init__(self,
-			url: str, tls: bool, user: str, pwd: str,
-            tpc_cat_name: str,
-            scale_sets: set[str]):
+    def __init__(self, conn: sql.TrinoConnection, tpc_cat_name: str,
+                 scale_sets: set[str]):
         assert tpc_cat_name in tpccats
         self.cat_name = tpc_cat_name
 
@@ -147,8 +146,7 @@ class TpcCatInfo:
             assert len(scale_sets) > 0
             announce(f"Getting {self.cat_name} table names")
             scale_set = next(iter(scale_sets))
-            tabs = sql.sendSql(url, tls, user, pwd,
-                    f"show tables in {self.cat_name}.{scale_set}")
+            tabs = conn.send_sql(f"show tables in {self.cat_name}.{scale_set}")
             self.table_names = {t[0] for t in tabs}
             # FIXME This is a horrible hack, but right now the tpcds table
             # dbgen_version contains a column dv_create_time of type time(3),
@@ -163,31 +161,33 @@ class TpcCatInfo:
 
             # Next, fill in the sizes of each of the tables for each scale
             #
-            cg = cmdgrp.CommandGroup(url, tls, user, pwd)
+            cg = SqlCommandGroup(conn)
             for scale_set in scale_sets:
                 self.scale_sets[scale_set] = {}
                 b = self.scale_sets[scale_set]
                 lock = threading.Lock()
-                for table_name in self.table_names:
-                    if table_name not in b:
-                        # callback will make a closure with b[table_name],
+                for table in self.table_names:
+                    if table not in b:
+                        # callback will make a closure with b[table],
                         # storing the results there that come back from the SQL
                         # call. We have to use an odd construction here because
                         # Python performs late-binding with closures; to force
                         # early binding we'll use a function-factory.
                         # https://tinyurl.com/4x3t2wux
-                        def make_cbs(b, scale_set, table_name):
-                            def cbs(stats):
-                                numrows = int(stats[0][0])
+                        def make_cbs(b, table):
+                            def cbs(stats) -> str:
+                                numrows = stats[0][0]
                                 with lock:
-                                    b[table_name] = numrows
+                                    b[table] = int(numrows)
+                                return numrows
                             return cbs
-                        cmd = "select count(*) from " \
-                                f"{self.cat_name}.{scale_set}.{table_name}"
-                        cg.addSqlCommand(cmd, callback = make_cbs(b, scale_set,
-                            table_name))
-            spinWait(cg.ratioDone)
-            cg.waitOnAllCopies() # Should be a no-op
+                        sql_cmd = (f'SELECT COUNT(*) FROM '
+                                   f'{self.cat_name}.{scale_set}.{table}')
+                        cg.add_sql_command(sql_cmd,
+										   callback=make_cbs(b, table))
+            cg.run_commands()
+            spinWait(cg.ratio_done)
+            cg.wait_until_done() # Should be a no-op
 
     def get_cat_name(self) -> str:
         return self.cat_name

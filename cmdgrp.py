@@ -1,97 +1,104 @@
 # bigbang-specific
-import sql, tpc
+import sql, tpc, out
 
 # other
 import os, sys, pdb, requests, time, threading, io
+from typing import List, Tuple, Iterable, Callable, \
+        Optional, Any, Dict, Set
 
 class CommandGroup:
-    def __init__(self, url: str, ssl: bool, user: str, pwd: str):
-        self.url = url
-        self.ssl = ssl
-        self.user = user
-        self.pwd = pwd
-        self.cv = threading.Condition()
-        self.workToDo = 0
-        self.workDone = 0
+    def __init__(self):
+        self.cv = threading.Condition() # producer-consumer lock
+        self.work_to_do: int = 0
+        self.work_done: int = 0
+        self.cmds_queued: list[Callable[[], None]] = []
+        self.cmds_running: list[Callable[[], None]] = []
 
-    # Methods modifying state protected by cv (condition variable) lock
+    def check_not_running(self) -> None:
+        assert (n := len(self.cmds_running)) < 1, \
+                f'{n} threads already running'
+
+    def add_command(self, f: Callable[[], None],
+                    new_work: int) -> None:
+        def make_cb_work_done(f: Callable[[], None],
+                              new_work: int) -> Callable[[], None]:
+            def cb_work_done():
+                f()
+                with self.cv:
+                    self.work_done += new_work
+                    self.cv.notify_all()
+            return cb_work_done
+
+        with self.cv:
+            self.check_not_running()
+            self.cmds_queued.append(make_cb_work_done(f, new_work))
+            self.work_to_do += new_work
+
+    def check_running(self) -> None:
+        assert len(self.cmds_running) > 0, 'No threads running'
+
+    def move_to_running_mode(self) -> None:
+        with self.cv:
+            self.check_not_running()
+            self.cmds_running = self.cmds_queued
+            self.cmds_queued = []
+            self.check_running()
+
+    def run_commands(self) -> None:
+        self.move_to_running_mode()
+        for cmd in self.cmds_running:
+            t = threading.Thread(target = cmd)
+            t.start()
+
+    def run_commands_seq(self) -> None:
+        self.move_to_running_mode()
+        for cmd in self.cmds_running:
+            cmd()
 
     # Must be called with lock held--and this is only called by wait_for on the
     # condition variable, which always guarantees the lock is held
-    def allCommandsDone(self) -> bool:
-        assert self.workDone <= self.workToDo
-        return self.workDone == self.workToDo
+    def all_commands_done(self) -> bool:
+        assert self.work_done <= self.work_to_do
+        return self.work_done == self.work_to_do
 
-    def ratioDone(self) -> float:
+    def wait_until_done(self) -> None:
         with self.cv:
-            assert self.workDone <= self.workToDo, \
-                    f"{self.workDone} should be <= {self.workToDo}"
+            self.check_running()
+            self.cv.wait_for(self.all_commands_done)
+
+    def ratio_done(self) -> float:
+        with self.cv:
+            self.check_running()
+            assert self.work_done <= self.work_to_do, \
+                    f"{self.work_done} should be <= {self.work_to_do}"
             # It's possible that no commands were processed, in which case
             # avoid doing a division-by-zero by saying we're finished.
-            ratio = float(self.workDone) / self.workToDo \
-                    if self.workToDo > 0 else 1.0
-            return ratio
+            return float(self.work_done) / self.work_to_do \
+                    if self.work_to_do > 0 else 1.0
 
-    def processSqlCommand(self, cmd: str, callback = None) -> None:
-        x = sql.sendSql(self.url, self.ssl, self.user, self.pwd, cmd)
-        if callback:
-            callback(x)
-        with self.cv:
-            self.workDone += 1
-            self.cv.notify_all()
+class SqlCommandGroup(CommandGroup):
+    def __init__(self, conn: sql.TrinoConnection):
+        self.conn = conn
+        self.callback_results: list[Any] = []
+        self.sql_cmds_debug: list[str] = [] # only for debug!
+        super().__init__()
 
-    def addSqlCommand(self, cmd, callback = None,
-            nothread: bool = False) -> None:
-        if nothread:
-            self.processSqlCommand(cmd, callback)
-        else:
-            t = threading.Thread(target = self.processSqlCommand,
-                    args = (cmd, callback, ))
-        with self.cv:
-            self.workToDo += 1
-        if not nothread:
-            t.start()
+    def add_sql_command(self, sql_cmd: str,
+                        callback: Optional[Callable[[list[list[str]]],
+                                                    Any]] = None) -> None:
+        def cb() -> None:
+            x = self.conn.send_sql(sql_cmd)
+            if callback:
+                rs = callback(x)
+                if rs:
+                    self.callback_results.append(rs)
+        self.sql_cmds_debug.append(sql_cmd)
+        super().add_command(cb, new_work=1)
 
-    def addSqlCommands(self, cmds: list[str]) -> None:
-        for cmd in cmds:
-            self.addSqlCommand(cmd)
+    def wait_and_get_callback_results(self) -> list[Any]:
+        super().wait_until_done()
+        return self.callback_results
 
-    def checkCopiedTable(self, dstCatalog: str, dstSchema: str, dstTable: str,
-            rows: int) -> None:
-            dest = "{dc}.{ds}.{dt}".format(dc = dstCatalog, ds = dstSchema,
-                dt = dstTable)
-            try:
-                copiedRows = sql.sendSql(self.url, self.ssl, self.user,
-                        self.pwd, f"select count(*) from {dest}")[0][0]
-                if copiedRows != rows:
-                    print(f"Expected {rows} rows, but found {copiedRows}")
-            except sql.ApiError as e:
-                print(f"Couldn't read rows from {dest}")
-
-    def processSqlTableCommand(self, srcTable: str, dstCatalog: str,
-            dstSchema: str, rows: int, cmd: str = "",
-            check: bool = False) -> None:
-        if cmd:
-            sql.sendSql(self.url, self.ssl, self.user, self.pwd, cmd)
-
-        if check:
-            self.checkCopiedTable(dstCatalog, dstSchema, srcTable, rows)
-
-        # We get here whether it works or not
-        with self.cv:
-            self.workDone += rows
-            self.cv.notify_all()
-
-    def addSqlTableCommand(self, tpcds_cat_info, tpcdsSchema: str, srcTable:
-            str, dstCatalog: str, dstSchema: str, cmd,
-                           check: bool = False) -> None:
-        rows = tpcds_cat_info.get_table_size(tpcdsSchema, srcTable)
-        t = threading.Thread(target = self.processSqlTableCommand,
-                args = (srcTable, dstCatalog, dstSchema, rows, cmd, check, ))
-        with self.cv:
-            self.workToDo += rows
-        t.start()
-
-    def waitOnAllCopies(self) -> None:
-        with self.cv:
-            self.cv.wait_for(self.allCommandsDone)
+    def debug_dump_commands(self) -> None:
+        for i, cmd in enumerate(self.sql_cmds_debug):
+            out.announceSql(i, cmd)

@@ -15,11 +15,4 @@ resource "google_storage_bucket_iam_binding" "binding" {
   bucket  = google_storage_bucket.gcs_bucket.name
   role    = "roles/storage.admin"
   members = ["serviceAccount:${google_service_account.gke_servacct.email}"]
-  /*
-  depends_on = [
-    google_storage_bucket.gcs_bucket,
-    google_service_account.gke_servacct,
-    google_container_cluster.gke
-  ]
-  */
 }

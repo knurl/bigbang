@@ -41,11 +41,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "secondary" {
   max_pods   = var.max_pods_per_node * var.node_count
 
   # Instrumentation for spot instances
-  priority        = var.capacity_type == "Spot" ? "Spot" : "Regular"
-  eviction_policy = "Delete"
-  spot_max_price  = -1 # allow any price up to 
-  node_labels     = { "kubernetes.azure.com/scalesetpriority" = "spot" }
-  node_taints     = ["kubernetes.azure.com/scalesetpriority=spot:NoSchedule"]
+  priority       = var.capacity_type == "Spot" ? "Spot" : "Regular"
+  spot_max_price = -1 # allow any price up to 
+  node_labels    = { "kubernetes.azure.com/scalesetpriority" = "spot" }
+  node_taints    = ["kubernetes.azure.com/scalesetpriority=spot:NoSchedule"]
 
   #
   # network

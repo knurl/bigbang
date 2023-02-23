@@ -48,9 +48,9 @@ output "object_key" {
 }
 
 output "synapse_sl_address" {
-  value = length(azurerm_synapse_workspace.synapse_ws) > 0 ? azurerm_synapse_workspace.synapse_ws[0].connectivity_endpoints["sqlOnDemand"] : null
+  value = azurerm_synapse_workspace.synapse_ws.connectivity_endpoints["sqlOnDemand"]
 }
 
 output "synapse_pool_address" {
-  value = length(azurerm_synapse_workspace.synapse_ws) > 0 ? azurerm_synapse_workspace.synapse_ws[0].connectivity_endpoints["sql"] : null
+  value = azurerm_synapse_workspace.synapse_ws.connectivity_endpoints["sql"]
 }

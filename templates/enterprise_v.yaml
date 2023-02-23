@@ -38,7 +38,7 @@ expose:
     IP: {{starburst_address | string}}
     {% endif %}
     ports:
-      {% if RequireCoordTls %}
+      {% if TlsEnabled %}
       https:
         port: 8443
       http: null
@@ -63,15 +63,24 @@ sharedSecret: secretRef:{{sharedsec}}:{{sharedsecbf}}
 coordinator:
   additionalProperties: |
     scheduler.http-client.max-requests-queued-per-destination=16384
-    starburst.access-control.enabled=false
-    #    starburst.access-control.authorized-users=carol
+    #
+    # BIAC settings
+    #
+    starburst.access-control.enabled=true
+    starburst.access-control.audit.enabled=true
+    starburst.access-control.authorized-users=starburst_service
+    starburst.access-control.authorized-groups=superusers
+    starburst.audit.access-log.enabled=true
+    #
+    # Data Products settings
+    #
     starburst.data-product.enabled=true
     data-product.starburst-user=starburst_service
-    {% if RequireCoordTls %}
+    {% if TlsEnabled %}
     data-product.starburst-password=test
-    data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true
+    data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true&roles=system:sysadmin
     {% else %}
-    data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8080
+    data-product.starburst-jdbc-url=jdbc:trino://{{StarburstHost}}:8080?roles=system:sysadmin
     {% endif %}
     {% if IngressLoadBalancer %}
     # These two have to be here because (i) we need to accept headers from
@@ -81,7 +90,7 @@ coordinator:
     http-server.process-forwarded=true
     http-server.authentication.allow-insecure-over-http=true
     {% endif %}
-    {% if RequireCoordTls %}
+    {% if TlsEnabled %}
     # TLS for coordinator only
     http-server.https.enabled=true
     http-server.https.keystore.path=secretRef:{{starburstks}}:{{starburstksbf}}
@@ -94,7 +103,6 @@ coordinator:
     insights.jdbc.password={{DBPassword}}
     insights.metrics-collection-interval=15s
     insights.metrics-persistence-interval=60s
-    insights.authorized-users=.*
   {% if PerformanceTesting or AuthNLdap %}
   etcFiles:
     properties:
@@ -112,6 +120,22 @@ coordinator:
         ldap.group-auth-pattern=(&(objectClass=inetOrgPerson)(uid=${USER}))
         ldap.user-base-dn=ou=People,dc=az,dc=starburstdata,dc=net
         ldap.user-bind-pattern=uid=${USER},ou=People,dc=az,dc=starburstdata,dc=net
+      group-provider.properties: |
+        group-provider.name=ldap
+        ldap.ssl=true
+        ldap.ssl.keystore.path=secretRef:{{truststore}}:{{truststorebf}}
+        ldap.ssl.keystore.password=test123
+        ldap.url={{LdapUri}}
+        ldap.user=cn=admin,dc=az,dc=starburstdata,dc=net
+        ldap.password=admin
+        ldap.search-base=ou=People,dc=az,dc=starburstdata,dc=net
+        ldap.group.search-filter=(objectClass=groupOfNames)
+        ldap.group.member-attribute=member
+        ldap.group.name-attribute=cn
+        ldap.user.member-of-attribute=memberOf
+        ldap.user.search-filter=(&(objectClass=inetOrgPerson)(uid={0}))
+        ldap.cache-ttl=10s
+        ldap.negative-cache-ttl=30s
       {% endif %}
     {% endif %}
     {% if PerformanceTesting %}
@@ -181,12 +205,17 @@ userDatabase:
 catalogs:
   {{ HiveCat }}: |
     connector.name=hive
+    hive.delta-lake-catalog-name=delta
+    hive.security=starburst
+    materialized-views.enabled=true
+    materialized-views.namespace={{MvSchema}}
+    materialized-views.storage-schema={{CacheMvSchema}}
+    cache-service.uri=http://cache-service:8180
     {% if Target == "aws" %}
     hive.metastore=glue
     {% else %}
     hive.metastore.uri=thrift://hive:9083
     {% endif %}
-    hive.security=allow-all
     {% if Target == "az" %}
     hive.azure.abfs-storage-account={{StorageAccount}}
     hive.azure.abfs-access-key={{adls_access_key}}
@@ -218,29 +247,26 @@ catalogs:
   {% if Target == "aws" %}
   delta: |
     connector.name=delta-lake
-    hive.metastore=glue
-    hive.security=allow-all
+    delta.hive-catalog-name=hive
+    delta.security=starburst
     delta.hide-non-delta-lake-tables=true
-  {% if not DisableSlowSources %}
-  redshift: |
+    hive.metastore=glue
+  {{ RedshiftCat }}: |
     connector.name=redshift
-    connection-url=jdbc:redshift://{{redshift_endpoint}}/{{DBName}}
+    connection-url=jdbc:redshift://{{redshift_address}}/{{DBName}}
     connection-user={{redshift_user}}
     connection-password={{DBPassword}}
-  {% endif %}
   {% elif Target == "az" %}
-  {% if not DisableSlowSources %}
-  synapse_sl: |
+  {{ SynapseSlCat }}: |
     connector.name=synapse
     connection-url=jdbc:sqlserver://{{synapse_sl_address}}:1433;database=master
     connection-user={{synapse_sl_user}}
     connection-password={{DBPassword}}
-  synapse_pool: |
+  {{ SynapseNpCat }}: |
     connector.name=synapse
     connection-url=jdbc:sqlserver://{{synapse_pool_address}}:1433;database={{DBName}}
     connection-user={{synapse_pool_user}}
     connection-password={{DBPassword}}
-  {% endif %}
   {% elif Target == "gcp" %}
   bq: |
     connector.name=bigquery

@@ -11,12 +11,11 @@ config:
     service-database.user=${ENV:SERVICE_DATABASE_USER}
     service-database.password=${ENV:SERVICE_DATABASE_PASSWORD}
     service-database.jdbc-url=${ENV:SERVICE_DATABASE_JDBC_URL}
+    refresh-initial-delay=30s
     starburst.user=starburst_service
-    starburst.password=test
-    refresh-initial-delay=5s
-    refresh-interval=20m
     {% if TlsEnabled %}
     starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true
+    starburst.password=test
     {% else %}
     starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8080
     {% endif %}
@@ -33,117 +32,43 @@ config:
           "timestamp(1)":     "timestamp(3)",
           "timestamp(2)":     "timestamp(3)",
           "varchar(131072)":  "varchar",
-          "varchar(130000)":  "varchar"
+          "varchar(130000)":  "varchar",
+          "varchar(100000)":  "varchar"
         }
       }
     }
   rules.json: |
     {
-      "defaultGracePeriod": "15m",
-      "defaultMaxImportDuration": "2m",
       "defaultCacheCatalog": "{{HiveCat}}",
-      "defaultCacheSchema": "{{CacheSchema}}",
-      "defaultUnpartitionedImportConfig": {
-          "usePreferredWritePartitioning": false,
-          "preferredWritePartitioningMinNumberOfPartitions": 1,
-          "scaleWriters": false,
-          "writerMinSize": "100MB",
-          "writerCount": "4"
-      },
+      "defaultCacheSchema": "{{CacheTsrSchema}}",
+      "defaultGracePeriod": "10m",
       "rules": [
         {
-          "refreshInterval": "3m",
+          "refreshInterval": "1h",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
-          "tableName": "account",
-          "columns": [
-            "id",
-            "isdeleted",
-            "masterrecordid",
-            "name",
-            "type",
-            "recordtypeid",
-            "parentid",
-            "ownerid",
-            "parent_id__c",
-            "regional_sales_manager__c",
-            "regional_vice_president__c"
-          ]
+          "tableName": "account"
         },
         {
-          "refreshInterval": "3m",
+          "refreshInterval": "1h",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
-          "tableName": "opportunity",
-          "columns": [
-            "id",
-            "isdeleted",
-            "accountid",
-            "recordtypeid",
-            "name",
-            "description",
-            "stagename",
-            "amount",
-            "probability",
-            "expectedrevenue",
-            "closedate",
-            "type",
-            "nextstep",
-            "leadsource",
-            "isclosed",
-            "iswon",
-            "lost_stage__c",
-            "forecastcategory",
-            "forecastcategoryname",
-            "ownerid",
-            "createddate",
-            "createdbyid",
-            "lastmodifieddate",
-            "lastmodifiedbyid",
-            "systemmodstamp",
-            "fiscalquarter",
-            "fiscalyear",
-            "fiscal",
-            "contactid",
-            "acv__c",
-            "competitors__c",
-            "technical_opportunity_owner__c",
-            "arr__c",
-            "pipeline_status__c",
-            "owner_id__c",
-            "csp_marketplace_deal__c",
-            "opportunity_owner_s_manager_id__c",
-            "technical_opportunity_owner_s_manager_id__c",
-            "regional_sales_manager__c",
-            "regional_vice_president__c",
-            "regional_sa_manager__c",
-            "owner__c",
-            "pov__c",
-            "rvp_forecast__c",
-            "rsm_forecast__c",
-            "acv_forecast__c",
-            "trt_region__c",
-            "why_now__c",
-            "why_anything__c",
-            "why_starburst__c",
-            "tech_validation_complete_month__c",
-            "mutual_close_plan_agreed__c",
-            "mutual_close_plan_agreement_date__c",
-            "product_delivery_blockers__c",
-            "champion_strength__c",
-            "tech_advocate_strength__c",
-            "partner_advocate_strength__c",
-            "tech_advocate_name__c"
-          ]
+          "tableName": "opportunity"
         },
         {
-          "refreshInterval": "3m",
+          "refreshInterval": "1h",
+          "catalogName": "{{SfdcCat}}",
+          "schemaName": "salesforce",
+          "tableName": "user"
+        },
+        {
+          "refreshInterval": "1h",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
           "tableName": "pov__c"
         },
         {
-          "refreshInterval": "3m",
+          "refreshInterval": "1h",
           "catalogName": "{{SfdcCat}}",
           "schemaName": "salesforce",
           "tableName": "onboarding__c"

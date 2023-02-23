@@ -5,7 +5,7 @@ import argparse, statistics
 sys.path.append('..')
 sys.path.append('../..')
 from functools import reduce
-import run, out, tpc, creds
+import run, out, tpc, creds, ready
 import csv
 from collections import Counter
 from typing import IO
@@ -31,89 +31,6 @@ def filename_re(nworkers: int):
 
 testrun_re = re.compile(r'^(summary\s+=\s+)(\d+)(.*)$')
 testrun_add_re = re.compile(r'^(summary\s+\+\s+)(\d+)(.*)$')
-
-def get_ready_nodes() -> set[str]:
-    ready: set[str] = set()
-
-    r = run.runTry(f"kubectl get nodes -ojson".split())
-    if r.returncode != 0:
-        return ready
-
-    j = json.loads(r.stdout)
-    if j is None or len(j) == 0:
-        return ready
-
-    if not (items := j.get('items')):
-        return ready
-
-    for item in items:
-        # if we can't find a valid name, skip this item
-        if (not (metadata := item.get('metadata')) or
-            not (name := metadata.get('name')) or
-            len(name) < 1):
-            continue
-        assert metadata and name and len(name) > 0
-
-        # If this node is tainted, don't count it
-        if (spec := item.get('spec')) and spec.get('taints'):
-            print(f'Node {name} is tainted; excluding')
-            continue
-
-        # If this node's Kubelet is ready, count it; otherwise skip
-        if ((status := item.get('status')) and
-            (conditions := status.get('conditions'))):
-            for condition in conditions:
-                if ((reason := condition.get('reason')) and 
-                    (condstatus := condition.get('status')) and
-                    reason == 'KubeletReady' and
-                    condstatus == 'True'):
-                    ready.add(name)
-                    break
-
-    return ready
-
-def get_ready_pods() -> set[str]:
-    ready: set[str] = set()
-
-    r = run.runTry(f'kubectl get pods -ojson'.split())
-    if r.returncode != 0:
-        return ready
-
-    j = json.loads(r.stdout)
-    if j is None or len(j) == 0:
-        return ready
-
-    if not (items := j.get('items')):
-        return ready
-
-    for item in items:
-        # if we can't find a valid name, skip this item
-        if (not (metadata := item.get('metadata')) or
-            not (name := metadata.get('name')) or
-            len(name) < 1):
-            continue
-        assert metadata and name and len(name) > 0
-
-        # If this isn't a coordinator or worker, don't count it
-        if (not (labels := metadata.get('labels')) or
-            not (app := labels.get('app')) or
-            not (role := labels.get('role')) or
-            app != 'starburst-enterprise' or
-            role not in ('coordinator', 'worker')):
-            continue
-
-        # If this pod's containers are all ready, count it; otherwise skip
-        if ((status := item.get('status')) and
-            (conditions := status.get('conditions'))):
-            for condition in conditions:
-                if ((condtype := condition.get('type')) and 
-                    (condstatus := condition.get('status')) and
-                    condtype == 'ContainersReady' and
-                    condstatus == 'True'):
-                    ready.add(name)
-                    break
-
-    return ready
 
 def build_logfile_dict(nworkers: int) -> dict[str, list[str]]:
     logfile_dict = {}
@@ -224,7 +141,7 @@ def cluster_is_stable(nworkers: int,
         print('Snapshot of node state looks corrupt!')
         return False
 
-    if (new_nodes := get_ready_nodes()) != old_nodes:
+    if (new_nodes := ready.get_ready_nodes()) != old_nodes:
         print('Nodes changed: {}. Lost a spot '
               'instance?'.format(compare_sets(old_nodes, new_nodes)))
         return False
@@ -236,7 +153,7 @@ def cluster_is_stable(nworkers: int,
                                                            n=len(new_nodes)))
         return False
 
-    if (new_pods := get_ready_pods()) != old_pods:
+    if (new_pods := ready.get_ready_pods()) != old_pods:
         print('Pods changed: {}. Lost a '
               'pod?'.format(compare_sets(old_pods, new_pods)))
         return False
@@ -257,8 +174,8 @@ def wait_until_cluster_stable(nworkers: int) -> tuple[set[str], set[str]]:
 
     goodruns = 0
     while True:
-        goodnodes = get_ready_nodes()
-        goodpods = get_ready_pods()
+        goodnodes = ready.get_ready_nodes()
+        goodpods = ready.get_ready_pods()
         time.sleep(30)
         if not cluster_is_stable(nworkers, goodnodes, goodpods):
             print(f'Cluster unstable; awaiting {exp_goodruns} more runs...')
@@ -331,8 +248,8 @@ def main():
     pods: set[str] = set()
 
     if not ns.analyse_only:
-        nodes = get_ready_nodes() # invariant, while cluster is stable
-        pods = get_ready_pods() # invariant, while cluster is stable
+        nodes = ready.get_ready_nodes() # invariant, while cluster is stable
+        pods = ready.get_ready_pods() # invariant, while cluster is stable
         if not cluster_is_stable(nworkers, nodes, pods):
             out.announceLoud(['Cluster lost stability', 'finding it again'])
             nodes, pods = wait_until_cluster_stable(nworkers)

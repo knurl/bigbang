@@ -4,7 +4,7 @@ data "google_project" "project" {
 
 resource "google_project_iam_binding" "bq_data_editor" {
   project = data.google_project.project.project_id
-  role    = "roles/bigquery.dataEditor"
+  role    = "roles/bigquery.dataOwner"
 
   members = [
     "user:${var.gcp_account}",

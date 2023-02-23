@@ -39,8 +39,8 @@ resource "aws_db_instance" "evtlog" {
 
 # Starburst internal - Cache service
 resource "aws_db_instance" "cachesrvdb" {
-  identifier               = var.cachesrv_server_name
   count                    = var.cache_service_enabled ? 1 : 0
+  identifier               = var.cachesrv_server_name
   engine                   = "postgres"
   allocated_storage        = 20
   instance_class           = var.db_instance_type

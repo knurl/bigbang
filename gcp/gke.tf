@@ -52,6 +52,7 @@ resource "google_container_cluster" "gke" {
   }
 
   resource_labels = var.tags
+
 }
 
 resource "google_container_node_pool" "node_pool" {

@@ -30,8 +30,8 @@ output "mysql_address" {
   value = length(aws_db_instance.mysql) > 0 ? aws_db_instance.mysql[0].address : null
 }
 
-output "redshift_endpoint" {
-  value = length(aws_redshift_cluster.redshift) > 0 ? aws_redshift_cluster.redshift[0].endpoint : null
+output "redshift_address" {
+  value = aws_redshift_cluster.redshift.endpoint
 }
 
 output "object_address" {

@@ -5,6 +5,7 @@ import os, sys, pdb, json, argparse
 from collections import namedtuple
 from tabulate import tabulate # type: ignore
 from dataclasses import dataclass
+import ready # local imports
 
 kube = "kubectl"
 tblfmt = "psql"
@@ -36,18 +37,9 @@ def normaliseMem(mem) -> int:
     mem <<= normalise[unit]
     return mem
 
-def nodeIsTainted(node: dict) -> bool:
-    spec = node.get('spec')
-    if not spec:
-        return True
-    if 'taints' in spec:
-        # We can't use this node as it's tainted.
-        return True
-    return False
-
 def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
-    nodes = [n for n in json.loads(runCollect(f"{kube} get nodes -o "
-        "json".split()))["items"] if not nodeIsTainted(n)]
+    nodes = [i for i in json.loads(runCollect(f"{kube} get nodes -o "
+        "json".split()))["items"] if ready.taints_are_ok(i)]
     pods = json.loads(runCollect(f"{kube} get pods -A -o "
         "json".split()))["items"]
     def dumpNodesAndPods() -> None:
@@ -105,7 +97,7 @@ def getMinNodeResources(namespace: str, verbose: bool = False) -> tuple:
     for r in k8creq:
         try:
             an = allocatable[r.node]
-        except:
+        except KeyError:
             print(f"{r.node} should be in {allocatable}")
             dumpNodesAndPods()
             raise

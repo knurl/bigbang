@@ -72,7 +72,7 @@ fi
 
 p "installing dependencies for BigBang"
 brew install gcc awscli azure-cli aws-iam-authenticator helm kubectl libyaml \
-    terraform gimme-aws-creds pyenv $OPENSSL jmeter
+    terraform gimme-aws-creds pyenv $OPENSSL jmeter universal-ctags
 
 p "getting trino JDBC jarfile"
 TRINOROOTVERSION=393
@@ -113,6 +113,7 @@ p "setting up pyenv"
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
+ensure_in_profile '# pyenv'
 ensure_in_profile 'export PYENV_ROOT="$HOME/.pyenv"'
 ensure_in_profile 'export PATH="$PYENV_ROOT/bin:$PATH"'
 ensure_in_profile 'eval "$(pyenv init -)"'
@@ -135,7 +136,7 @@ python -m ensurepip --upgrade
 pip install --upgrade pip
 
 p "installing python dependencies for BigBang"
-pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor
+pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor mypy types-requests
 
 p "installing BigBang"
 if [ ! -d bigbang ]; then
@@ -164,4 +165,7 @@ if ! $(is_ubuntu); then
     if [[ ! -d $HOME/.config/gcloud ]]; then
 	gcloud init
     fi
+    gcloud auth login
+    gcloud auth application-default login
+    gcloud components install gke-gcloud-auth-plugin
 fi

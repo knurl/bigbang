@@ -51,10 +51,11 @@ resource "azurerm_postgresql_server" "postgres" {
   auto_grow_enabled            = false
 
   public_network_access_enabled = false
-  ssl_enforcement_enabled       = false
+  ssl_enforcement_enabled       = true
 
   tags = var.tags
 }
+
 
 resource "azurerm_mysql_server" "mysql" {
   name                = var.mysql_server_name
@@ -73,7 +74,7 @@ resource "azurerm_mysql_server" "mysql" {
   auto_grow_enabled            = false
 
   public_network_access_enabled = false
-  ssl_enforcement_enabled       = false
+  ssl_enforcement_enabled       = true
 
   tags = var.tags
 }
@@ -114,7 +115,7 @@ resource "azurerm_private_endpoint" "pe_mysql" {
   private_service_connection {
     name                           = "${var.mysql_server_name}-psc"
     is_manual_connection           = false
-    private_connection_resource_id = azurerm_mysql_server.mysql.id
+    private_connection_resource_id = var.mysql_enabled ? azurerm_mysql_server.mysql.0.id : null
     subresource_names              = ["mysqlServer"]
   }
 
@@ -147,29 +148,30 @@ resource "azurerm_postgresql_database" "hmsdb_db" {
 }
 
 resource "azurerm_postgresql_database" "cachesrv_db" {
-  name                = var.db_name_cachesrv
   count               = var.cache_service_enabled ? 1 : 0
+  name                = var.db_name_cachesrv
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_postgresql_server.postgres.name
   charset             = var.postgres_charset
   collation           = var.azure_postgres_collation
 }
 
-
 resource "azurerm_postgresql_database" "postgres_db" {
-  name                = var.db_name
-  count               = var.postgres_enabled ? 1 : 0
   resource_group_name = azurerm_resource_group.rg.name
-  server_name         = azurerm_postgresql_server.postgres.name
-  charset             = var.postgres_charset
-  collation           = var.azure_postgres_collation
+
+  name        = var.db_name
+  count       = var.postgres_enabled ? 1 : 0
+  server_name = azurerm_postgresql_server.postgres.name
+  charset     = var.postgres_charset
+  collation   = var.azure_postgres_collation
 }
 
 resource "azurerm_mysql_database" "mysql_db" {
-  name                = var.db_name
-  count               = var.mysql_enabled ? 1 : 0
   resource_group_name = azurerm_resource_group.rg.name
-  server_name         = azurerm_mysql_server.mysql.name
-  charset             = var.mysql_charset
-  collation           = var.mysql_collation
+
+  name        = var.db_name
+  count       = var.mysql_enabled ? 1 : 0
+  server_name = var.mysql_enabled ? azurerm_mysql_server.mysql.0.name : null
+  charset     = var.mysql_charset
+  collation   = var.mysql_collation
 }

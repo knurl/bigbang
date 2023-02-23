@@ -9,6 +9,9 @@ from shutil import get_terminal_size
 
 sqlstr = "Issued 🢩 "
 
+def announceSql(i: int, s: str) -> None:
+    print(f'Stored Cmd {i} 🢩 ⟦{s}⟧')
+
 def announceSqlStart(s: str) -> None:
     print(f"{sqlstr}⟦{s}⟧")
 
@@ -97,20 +100,6 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
             return
         i += 1
         time.sleep(0.25)
-
-def spinWaitTest():
-    count = 0.0
-    def countUp(maxinc: float) -> float:
-        nonlocal count
-        count += random.uniform(0.0, maxinc)
-        if count > 1.0:
-            count = 1.0
-        return count
-    maxinc = 0.01
-    for i in range(1,6):
-        spinWait(lambda: countUp(maxinc))
-        count = 0.0
-        maxinc *= 1.5
 
 # TODO: This shouldn't be in this module. This is a hack.
 def randomString(length: int) -> str:
