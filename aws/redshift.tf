@@ -1,7 +1,7 @@
 # Create a security group for our Redshift cluster. It should allow any
 # of the worker nodes in our Kubernetes cluster to connect in.
 resource "aws_security_group" "redshift_sg" {
-  name                   = "redshift_sg"
+  name                   = "${var.sg_name}-redshift"
   vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
 
@@ -14,7 +14,9 @@ resource "aws_security_group" "redshift_sg" {
     security_groups = [module.eks.node_security_group_id]
   }
 
-  tags = merge(var.tags, { Name = "redshift_sg" })
+  tags = {
+    Name = "${var.sg_name}-redshift"
+  }
 }
 
 resource "aws_redshift_cluster" "redshift" {
@@ -32,5 +34,7 @@ resource "aws_redshift_cluster" "redshift" {
   vpc_security_group_ids    = aws_security_group.redshift_sg.*.id
   cluster_subnet_group_name = aws_redshift_subnet_group.redshift_sngrp.id
 
-  tags = merge(var.tags, { Name = var.redshift_cluster_name })
+  tags = {
+    Name = var.redshift_cluster_name
+  }
 }

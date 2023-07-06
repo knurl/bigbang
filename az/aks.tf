@@ -15,7 +15,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   default_node_pool {
-    name       = "${var.cluster_name}np"
+    name       = "${var.cluster_name}-np"
     node_count = 1
 
     vm_size  = var.instance_types[0]
@@ -30,7 +30,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "secondary" {
-  name                  = "${var.cluster_name}nps"
+  name                  = "${var.cluster_name}-nps"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
 
   #

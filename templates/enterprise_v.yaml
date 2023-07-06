@@ -60,7 +60,13 @@ expose:
 # Shared secret for internal communication.
 sharedSecret: secretRef:{{sharedsec}}:{{sharedsecbf}}
 
+warpSpeed:
+  enabled: true
+
 coordinator:
+  # The following gives the SEP Pod Permission to access the local K8S worker's SSDs.
+  securityContext:
+    privileged: true
   additionalProperties: |
     scheduler.http-client.max-requests-queued-per-destination=16384
     #
@@ -71,6 +77,13 @@ coordinator:
     starburst.access-control.authorized-users=starburst_service
     starburst.access-control.authorized-groups=superusers
     starburst.audit.access-log.enabled=true
+    #
+    # Needed for Warp
+    #
+    node-scheduler.include-coordinator=false
+    node-scheduler.max-splits-per-node=4096
+    node-scheduler.max-unacknowledged-splits-per-task=1024
+    node-scheduler.max-adjusted-pending-splits-per-task=1024
     #
     # Data Products settings
     #
@@ -166,6 +179,9 @@ coordinator:
       cpu: {{coordinator_cpu}}
 
 worker:
+  # The following gives the SEP Pod Permission to access the local K8S worker's SSDs.
+  securityContext:
+    privileged: true
   replicas: {{workerCount}}
   resources:
     requests:
@@ -204,13 +220,28 @@ userDatabase:
 
 catalogs:
   {{ HiveCat }}: |
-    connector.name=hive
+    connector.name=warp_speed
+    warp-speed.proxied-connector=hive
+    warp-speed.cluster-uuid=example-cluster-567891234567
+    warp-speed.config.internal-communication.shared-secret=secretRef:{{sharedsec}}:{{sharedsecbf}}
     hive.delta-lake-catalog-name=delta
     hive.security=starburst
     materialized-views.enabled=true
     materialized-views.namespace={{MvSchema}}
     materialized-views.storage-schema={{CacheMvSchema}}
     cache-service.uri=http://cache-service:8180
+    #
+    # Required for Warp.
+    #
+    hive.max-outstanding-splits-size=512MB
+    hive.max-initial-splits=0
+    hive.max-outstanding-splits=2000
+    hive.max-split-size=64MB
+    parquet.max-read-block-row-count=1024
+    hive.dynamic-filtering.wait-timeout=1s
+    #
+    # Cloud-specific configuration.
+    #
     {% if Target == "aws" %}
     hive.metastore=glue
     {% else %}
@@ -246,11 +277,22 @@ catalogs:
     connector.name=tpch
   {% if Target == "aws" %}
   delta: |
-    connector.name=delta-lake
+    connector.name=warp_speed
+    warp-speed.proxied-connector=delta-lake
+    warp-speed.cluster-uuid=example-cluster-567891234567
+    warp-speed.config.internal-communication.shared-secret=secretRef:{{sharedsec}}:{{sharedsecbf}}
     delta.hive-catalog-name=hive
     delta.security=starburst
     delta.hide-non-delta-lake-tables=true
     hive.metastore=glue
+    #
+    # Required for Warp.
+    #
+    parquet.max-read-block-row-count=1024
+    delta.dynamic-filtering.wait-timeout=1s
+    #
+    # Cloud-specific configuration.
+    #
   {{ RedshiftCat }}: |
     connector.name=redshift
     connection-url=jdbc:redshift://{{redshift_address}}/{{DBName}}

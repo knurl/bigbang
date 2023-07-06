@@ -1,6 +1,5 @@
 resource "aws_route53_zone" "private_dns" {
   name          = "az.starburstdata.net"
-  tags          = var.tags
   force_destroy = true
 
   vpc {
@@ -19,7 +18,7 @@ resource "aws_route53_record" "ldap_a_record" {
   name    = "ldap"
   type    = "A"
   ttl     = "3600"
-  records = [local.ldap_ip]
+  records = [aws_network_interface.ldap_eni.private_ip]
 }
 
 resource "aws_route53_record" "bastion_a_record" {
@@ -27,5 +26,5 @@ resource "aws_route53_record" "bastion_a_record" {
   name    = "bastion"
   type    = "A"
   ttl     = "3600"
-  records = [local.bastion_ip]
+  records = [aws_network_interface.bastion_eni.private_ip]
 }

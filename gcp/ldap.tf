@@ -31,7 +31,7 @@ resource "google_compute_instance" "ldaps" {
 }
 
 resource "google_compute_firewall" "fw-ldaps" {
-  name    = "fw-${var.ldaps_name}"
+  name    = "${var.ldaps_name}-fw"
   network = resource.google_compute_network.vpc.self_link
   project = data.google_project.project.project_id
   # Restrict to private IPs

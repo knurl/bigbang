@@ -1,12 +1,12 @@
 resource "azurerm_public_ip" "bastion_pip" {
-  name                = "bastion-pip"
+  name                = "${var.network_name}-bastion-pip"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Static"
 }
 
 resource "azurerm_network_interface" "bastion_nic" {
-  name                = "bastion-nic1"
+  name                = "${var.network_name}-bastion-nic1"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -22,7 +22,7 @@ resource "azurerm_network_interface" "bastion_nic" {
 }
 
 resource "azurerm_linux_virtual_machine" "bastion" {
-  name                            = "bastion"
+  name                            = var.bastion_name
   location                        = azurerm_resource_group.rg.location
   resource_group_name             = azurerm_resource_group.rg.name
   size                            = var.small_instance_type
@@ -56,7 +56,7 @@ resource "azurerm_linux_virtual_machine" "bastion" {
 }
 
 resource "azurerm_network_security_group" "sg_bastion" {
-  name                = "sg-bastion"
+  name                = "${var.network_name}-nsg-bastion"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   security_rule {

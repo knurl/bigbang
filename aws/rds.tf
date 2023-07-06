@@ -4,7 +4,7 @@
 # allow connecting in from the VPN subnet (this way we can use the psql or
 # mysql client to connect).
 resource "aws_security_group" "rds_sg" {
-  name                   = "rds_sg"
+  name                   = "${var.sg_name}-rds"
   vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
 
@@ -17,7 +17,9 @@ resource "aws_security_group" "rds_sg" {
     security_groups = [module.eks.node_security_group_id]
   }
 
-  tags = merge(var.tags, { Name = "rds_sg" })
+  tags = {
+    Name = "${var.sg_name}-rds"
+  }
 }
 
 # Starburst internal - event logger
@@ -34,7 +36,10 @@ resource "aws_db_instance" "evtlog" {
   db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
-  tags                     = merge(var.tags, { Name = var.evtlog_server_name })
+
+  tags = {
+    Name = var.evtlog_server_name
+  }
 }
 
 # Starburst internal - Cache service
@@ -52,7 +57,10 @@ resource "aws_db_instance" "cachesrvdb" {
   db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
-  tags                     = merge(var.tags, { Name = var.cachesrv_server_name })
+
+  tags = {
+    Name = var.cachesrv_server_name
+  }
 }
 
 resource "aws_db_instance" "postgres" {
@@ -70,7 +78,10 @@ resource "aws_db_instance" "postgres" {
   db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
-  tags                     = merge(var.tags, { Name = var.postgres_server_name })
+
+  tags = {
+    Name = var.postgres_server_name
+  }
 }
 
 resource "aws_db_instance" "mysql" {
@@ -88,5 +99,7 @@ resource "aws_db_instance" "mysql" {
   db_subnet_group_name     = data.aws_db_subnet_group.database_sngrp.id
   vpc_security_group_ids   = [aws_security_group.rds_sg.id]
   apply_immediately        = true
-  tags                     = merge(var.tags, { Name = var.mysql_server_name })
+  tags = {
+    Name = var.mysql_server_name
+  }
 }

@@ -87,6 +87,7 @@ cachetsrsch = 'cache_tsr'
 cachemvsch  = 'cache_mv'
 mvsch       = 'mv'
 cachesch    = {cachetsrsch, cachemvsch, mvsch}
+tsrsch      = {cachetsrsch}
 dbevtlog    = "evtlog" # event logger PostgreSQL database
 dbhms       = "hms" # Hive metastore persistent database
 dbcachesrv  = "cachesrv" # cache service persistent database
@@ -101,10 +102,10 @@ maxpodpnode = 32
 
 # TPC-H, -DS and scale sets
 minbucketsize  = 1 << 12
-tpchbigschema  = tpc.scale_sets.smallest()
-tpchsmlschema  = tpchbigschema
-tpcdsbigschema = tpc.scale_sets.smallest()
-tpcdssmlschema = tpcdsbigschema
+tpchbigsch  = tpc.scale_sets.smallest()
+tpchsmlsch  = tpchbigsch
+tpcdsbigsch = tpc.scale_sets.smallest()
+tpcdssmlsch = tpcdsbigsch
 
 #
 # Secrets
@@ -245,7 +246,7 @@ try:
     # Only disable if it we are running in performance mode, where we want to
     # reserve the full memory for performance testing (and not the cache
     # service helm chart)
-    cachesrv_enabled = not sfdcenabled
+    cachesrv_enabled = not perftest
 
     capacityType = myvars[captypelabel]
 
@@ -326,8 +327,6 @@ if target in ("aws", "az"):
     validchars += r"._/=+\-"
 invalidchars = r'[^' + validchars + r']'
 username = re.sub(invalidchars, "-", emailparts[0]).lower()
-codelen = min(3, len(username))
-code = username[:codelen]
 
 #
 # Target, Zone
@@ -404,9 +403,13 @@ if target == "gcp":
 
 # Generate a unique octet for our subnet. Use that octet with the 'code' we
 # generated above as part of a short name we can use to mark our resources
+codelen = min(3, len(username))
+nameprefix = username[:codelen]
 s = username + zone
 octet = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 256
-shortname = code + str(octet).zfill(3)
+code = str(octet).zfill(3)
+shortname = nameprefix + code
+longname = username.replace('.', '-') + '-' + code
 
 #
 # Generate the main CIDR we will use in our cloud
@@ -512,10 +515,11 @@ assert capacityType == "Spot" or len(instanceTypes) == 1
 #
 # Create some names for some cloud resources we'll need
 #
-clustname = shortname + "cl"
-bucket = shortname + "bk"
-storageacct = shortname + "sa"
-resourcegrp = shortname + "rg"
+clustname = longname + "-cl"
+bucket = longname + "-bk"
+storageacct = longname + "-sa"
+resourcegrp = longname + "-rg"
+netwkname = longname + '-net'
 
 templates = {}
 releases = {}
@@ -1036,16 +1040,17 @@ def ensureClusterIsStarted(skipClusterStart: bool) -> \
            "MyCIDR":              mySubnetCidr,
            "MyPublicIP":          getMyPublicIp(),
            'MySqlEnabled':        mysql_enabled,
+           'NetwkName':           netwkname,
            "NodeCount":           nodeCount,
            'PostgreSqlEnabled':   postgres_enabled,
            "SmallInstanceType":   smallInstanceType,
            "SshPublicKey":        getSshPublicKey(),
            "Region":              region,
-           "ShortName":           shortname,
            "Target":              target,
            "UpstrBastion":        upstrBastion,
            "UpstreamSG":          upstreamSG,
            "UserName":            username,
+           "LongName":            longname,
            "Zone":                zone}
 
     assert target in clouds
@@ -1186,15 +1191,11 @@ def dontLoadCat(cat: str) -> bool:
     # TODO Synapse node pools and Redshift are writeable but extremely slow. So
     # don't write to them for now. We'll have to do the same with Redshift
     # below too, as it's also painfully slow for writes.
-    # TODO We can't write to BigQuery because of transient write errors. Seems
-    # to work sometimes and not others.
     if target == 'az':
         avoidcat.add(synapseslcat)
         avoidcat.add(synapsenpcat)
     elif target == 'aws':
         avoidcat.add(redshiftcat)
-#    elif target == 'gcp':
-#        avoidcat.add(bqcat)
 
     return cat in avoidcat or cat.startswith("sg_")
 
@@ -1235,6 +1236,9 @@ def uniqify(catalog: str, schema: str) -> str:
 
     return uniqschema
 
+def uniqify_for_hive(schema: str) -> str:
+    return uniqify(hivecat, schema)
+
 def get_matching_bq_schemas(schema_pfx: str) -> list[str]:
     q = f"show schemas in {bqcat} like '{schema_pfx}%'"
     conn = sql.TrinoConnection(getStarburstHttpUrl(), trinouser, trinopass)
@@ -1242,22 +1246,22 @@ def get_matching_bq_schemas(schema_pfx: str) -> list[str]:
     return [s[0] for s in stab]
 
 # Generate all the commands needed to drop any existing schemas
-def get_drop_schema_commands(dstCatalogs: set[str],
+def get_drop_schema_commands(catalogs: set[str],
                              schemas: set[str]) -> tuple[list[str],
                                                          SqlCommandGroup]:
     drop_schema_names: list[str] = []
     scg = get_sql_command_group()
 
-    for dstCatalog in dstCatalogs:
+    for catalog in catalogs:
         for schema in schemas:
             # If the destination schema is used by the cache service for
             # storage, then that can *only* happen for hivecat
-            if schema in cachesch and dstCatalog != hivecat:
+            if schema in cachesch and catalog != hivecat:
                 continue
 
-            uniq_dst_schema = uniqify(dstCatalog, schema)
+            uniq_dst_schema = uniqify(catalog, schema)
             def add_drop_schema_cmd(schema: str) -> None:
-                old_fq_schema = f'{dstCatalog}.{schema}'
+                old_fq_schema = f'{catalog}.{schema}'
                 drop_schema_names.append(old_fq_schema)
                 scg.add_sql_command(f'DROP SCHEMA IF EXISTS {old_fq_schema}')
 
@@ -1267,7 +1271,7 @@ def get_drop_schema_commands(dstCatalogs: set[str],
             # schema even "more" unique by adding a random number in the name,
             # which means on cleanup of old schemas, we have to manually look
             # for all the old ones.
-            if dstCatalog == bqcat:
+            if catalog == bqcat:
                 bqschemas = get_matching_bq_schemas(schema_pfx=uniq_dst_schema)
                 for bqschema in bqschemas:
                     add_drop_schema_cmd(bqschema)
@@ -1313,10 +1317,11 @@ def get_create_schema_table_commands(dst_catalogs: set[str],
                                      hiveTarget: str,
                                      src_catalog: str,
                                      tpc_cat_info: tpc.TpcCatInfo) -> \
-                                             tuple[list[str],
+                                             tuple[list[str], list[str],
                                                    SqlCommandGroup,
                                                    SqlCommandGroup]:
     create_schema_names: list[str] = []
+    schemas_with_tables: list[str] = []
     scg_sch = get_sql_command_group()
     scg_tab = get_sql_command_group()
 
@@ -1325,11 +1330,15 @@ def get_create_schema_table_commands(dst_catalogs: set[str],
 
         # NOTE If we are writing to hivecat, then add in the cache schemas
         # automatically here so we create them at the same time
-        allschemas |= cachesch
+        # FIXME This is a horrible hack. We should hand in the schemas
+        # explicitly. Maybe hand in a copy vector that explicitly lists the
+        # schemas mapped to the catalogs?
+        if dst_catalog == hivecat:
+            allschemas |= cachesch
 
         for schema in allschemas:
             # For cache schemas, only write those to hivecat
-            if dst_catalog != hivecat and schema in cachesch:
+            if schema in cachesch and dst_catalog != hivecat:
                 continue
 
             uniq_dst_schema = uniqify(dst_catalog, schema)
@@ -1356,9 +1365,12 @@ def get_create_schema_table_commands(dst_catalogs: set[str],
                        f'{new_fq_schema_name}{clause}')
             scg_sch.add_sql_command(sql_cmd)
 
-            # For cache schemas in hivecat, we don't create new tables
-            if dst_catalog == hivecat and schema in cachesch:
+            # For cache schemas, we don't create new tables
+            if schema in cachesch:
                 continue
+
+            # For anything after this point, we are creating tables
+            schemas_with_tables.append(new_fq_schema_name)
 
             # Determine the name of the uniqified source schema. It might be
             # the base schema name, or might include additional elements to
@@ -1399,46 +1411,71 @@ def get_create_schema_table_commands(dst_catalogs: set[str],
                 for src_table, sql_cmd_casted in rs:
                     scg_tab.add_sql_command(sql_cmd_casted)
 
-    return create_schema_names, scg_sch, scg_tab
+    return create_schema_names, schemas_with_tables, scg_sch, scg_tab
 
-def get_cache_schema_tables(fq_schema_name: str) -> list[str]:
+def get_cache_schema_tables(fq_schema_name: str) -> set[str]:
     try:
-        q = f'show tables in {fq_schema_name}'
+        q = f'SHOW TABLES IN {fq_schema_name}'
         conn = sql.TrinoConnection(getStarburstHttpUrl(), trinouser, trinopass)
         stab = conn.send_sql(q)
-        return [s[0] for s in stab]
+        return {s[0] for s in stab}
     except sql.TrinoConnection.ApiError as e:
         # We might get an ApiError because the cache schema doesn't exist. In
         # that case, just return an empty set
-        return []
+        return set()
 
-def drop_tables_and_schemas(env: dict, tpc_cat_info: tpc.TpcCatInfo,
-                            schemas: set[str], dstCatalogs: set[str]) -> None:
-    hiveTarget = getObjectStoreUrl(env)
-    drop_schema_names, scg_sch = \
-			get_drop_schema_commands(dstCatalogs, schemas)
+def get_view_names(catalog: str, schema: str) -> set[str]:
+    try:
+        q = (f"SELECT table_name FROM {catalog}.information_schema.views "
+             f"WHERE table_schema = '{schema}'")
+        conn = sql.TrinoConnection(getStarburstHttpUrl(), trinouser, trinopass)
+        stab = conn.send_sql(q)
+        return {s[0] for s in stab}
+    except sql.TrinoConnection.ApiError as e:
+        # We might get an ApiError because the cache schema doesn't exist. In
+        # that case, just return an empty set
+        return set()
+
+def drop_tables_schemas(env: dict, tpc_cat_info: tpc.TpcCatInfo,
+                        catalogs: set[str], schemas: set[str]) -> None:
+    drop_schema_names, scg_sch = get_drop_schema_commands(catalogs, schemas)
 
     # Using the returned schema names, create a list of drop table commands,
     # and queue these in a separate command queue which we'll run first, before
     # we drop the schemas.
     if drop_schema_names:
         scg_tab = get_sql_command_group()
+
         for fq_schema in drop_schema_names:
-            def add_drop_table(fq_schema, table_name):
+            def add_drop_command(obj, fq_schema, table_name):
                 def make_dt_cb():
-                    scg_tab.add_sql_command(f'DROP TABLE IF EXISTS '
+                    scg_tab.add_sql_command(f'DROP {obj} IF EXISTS '
                                             f'{fq_schema}.{table_name}')
                 return make_dt_cb
+
             # If this schema is used for cache storage (table-scan redirection,
             # or materialised views) then we need to get rid of all the tables
             # we find inside it first.
-            if fq_schema.split('.')[1] in cachesch:
-                cached_tables = get_cache_schema_tables(fq_schema)
-                for table in cached_tables:
-                    add_drop_table(fq_schema, table)()
-            else:
-                for srctable in tpc_cat_info.get_table_names():
-                    add_drop_table(fq_schema, srctable)()
+            catalog, schema = tuple(fq_schema.split('.'))
+            csmatches = any(map(lambda x: schema.startswith(x), cachesch))
+
+            views = get_view_names(catalog, schema)
+
+            # If this is not a cache schema, then the only tables will be the
+            # ones copied over from TPC; so just drop those table names.
+            # Otherwise find out the list of tables with a query.
+            tables = tpc_cat_info.get_table_names() if not csmatches \
+                    else get_cache_schema_tables(fq_schema)
+                    
+            for table in tables:
+                obj = 'TABLE'
+
+                if views and table in views:
+                    obj = 'VIEW'
+                elif schema.startswith(mvsch):
+                    obj = 'MATERIALIZED VIEW'
+
+                add_drop_command(obj, fq_schema, table)()
 
         s = ', '.join(drop_schema_names)
         announce(f'dropping tables for schemas: {s}')
@@ -1447,23 +1484,17 @@ def drop_tables_and_schemas(env: dict, tpc_cat_info: tpc.TpcCatInfo,
         announce(f'dropping schemas: {s}')
         run_cmds_and_spinwait(scg_sch)
 
-    if hivecat in dstCatalogs:
-        eraseBucketContents(env)
-
 def copy_schemas_with_tables(env: dict, tpc_cat_info: tpc.TpcCatInfo,
                              srcCatalog: str, srcSchemas: set[str],
-                             dstCatalogs: set[str], dropFirst: bool) -> None:
+                             dstCatalogs: set[str]) -> None:
     # Never write to the source, or to unwritable catalogs
     dstCatalogs = {c for c in dstCatalogs
                    if not dontLoadCat(c) or c == srcCatalog}
     if len(dstCatalogs) < 1:
         return
 
-    if dropFirst:
-        drop_tables_and_schemas(env, tpc_cat_info, srcSchemas, dstCatalogs)
-
     hiveTarget = getObjectStoreUrl(env)
-    create_schema_names, scg_sch, scg_tab = \
+    create_schema_names, schemas_with_tables, scg_sch, scg_tab = \
             get_create_schema_table_commands(dstCatalogs, srcSchemas,
                                              hiveTarget, srcCatalog,
                                              tpc_cat_info)
@@ -1482,7 +1513,7 @@ def copy_schemas_with_tables(env: dict, tpc_cat_info: tpc.TpcCatInfo,
     #
     announce('creating tables in {}; '
              'schemas: {}'.format(", ".join(dstCatalogs),
-                                  ", ".join(create_schema_names)))
+                                  ", ".join(schemas_with_tables)))
     run_cmds_and_spinwait(scg_tab)
 
 # Incredibly, Azure doesn't currently provide a simple way of doing an rm -rf
@@ -1535,11 +1566,11 @@ def eraseBucketContents(env: dict) -> None:
     except CalledProcessError as e:
         print(f"Unable to erase bucket {bucket} (already empty?)")
 
-def getCatalogs(avoid: set[str] = set()) -> set[str]:
+def getCatalogs() -> set[str]:
     conn = sql.TrinoConnection(getStarburstHttpUrl(), trinouser, trinopass)
     ctab = conn.send_sql("show catalogs")
     allcat = {c[0] for c in ctab if not dontLoadCat(c[0])}
-    return allcat - avoid
+    return allcat
 
 def getSchemasInCatalog(catalog: str) -> list[str]:
     conn = sql.TrinoConnection(getStarburstHttpUrl(), trinouser, trinopass)
@@ -1554,32 +1585,38 @@ def getTablesForSchemaCatalog(schema: str, catalog: str) -> list[str]:
 def loadDatabases(env: dict, perftest: bool, tpcds_cat_info: tpc.TpcCatInfo,
                   drop_first: bool) -> None:
     # First copy tpcds large scale set to hive...
-    scale_sets = {tpcdsbigschema}
+    scale_sets = {tpcdsbigsch}
     if perftest:
         scale_sets = tpc.scale_sets.range(tpc.scale_sets.smallest(),
                 tpc.scale_sets.largest())
 
-    # Copy from the TPC-DS catalog to Hive. Note that this function will erase
-    # the bucket associated with hivecat, so the cache schema (which is also
-    # created in hivecat) has to be created _after_ this statement!
+    dst_catalogs = getCatalogs()
+
+    if drop_first:
+        drop_tables_schemas(env, tpcds_cat_info, dst_catalogs,
+                            scale_sets|{tpcdssmlsch}|cachesch - tsrsch)
+        # Don't erase bucket after dropping tables, as we want to preserve the
+        # tables stored for table scan redirection.
+
+    # Copy from the TPC-DS catalog to Hive.
     copy_schemas_with_tables(env, tpcds_cat_info, tpc.tpcdscat, scale_sets,
-                             {hivecat}, drop_first)
+                             {hivecat})
 
-    dstCatalogs = getCatalogs(avoid = {hivecat}) # already done hivecat
-    assert hivecat not in dstCatalogs
+    assert hivecat in dst_catalogs
+    dst_catalogs.remove(hivecat) # already done hivecat
 
-    if tpcdsbigschema != tpcdssmlschema:
+    if tpcdsbigsch != tpcdssmlsch:
         # Where we have a large schema in Hive, we'll copy from TPC-DS directly
         # to all the other catalogs as they would be too slow to take the
         # larger scale sets
         copy_schemas_with_tables(env, tpcds_cat_info, tpc.tpcdscat,
-                                 {tpcdssmlschema}, dstCatalogs, drop_first)
+                                 {tpcdssmlsch}, dst_catalogs)
     else:
         # Where we have a small schema in Hive, we'll copy from Hive (which
         # we've already populated) to all the other catalogs since it's more
         # efficient than re-generating the TPC-H/DS data
         copy_schemas_with_tables(env, tpcds_cat_info, hivecat,
-                                 {tpcdssmlschema}, dstCatalogs, drop_first)
+                                 {tpcdssmlsch}, dst_catalogs)
 
 def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
     env = {}
@@ -1703,9 +1740,9 @@ def helmWhichChartInstalled(module: str) -> Optional[str]:
 def helmInstallRelease(module: str, env: dict = {}) -> None:
     env |= {'AuthNLdap':           authnldap,
             "BucketName":          bucket,
-            "CacheMvSchema":       cachemvsch,
+            "CacheMvSchema":       uniqify_for_hive(cachemvsch),
             "CacheServiceEnabled": cachesrv_enabled,
-            "CacheTsrSchema":      cachetsrsch,
+            "CacheTsrSchema":      uniqify_for_hive(cachetsrsch),
             "DBName":              dbschema,
             "DBNameEventLogger":   dbevtlog,
             "DBNameCacheSrv":      dbcachesrv,
@@ -1719,7 +1756,7 @@ def helmInstallRelease(module: str, env: dict = {}) -> None:
             'IngressLoadBalancer': ingresslb,
             "IngressName":         ingressname,
             "KeystorePass":        keystorepass,
-            'MvSchema':            mvsch,
+            'MvSchema':            uniqify_for_hive(mvsch),
             'PerformanceTesting':  perftest,
             "RedshiftCat":         redshiftcat,
             "Region":              region,
@@ -1873,10 +1910,10 @@ def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,
     helmInstallAll(env)
     tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
 
-    tpcds_scale_sets: set[str] = {tpcdssmlschema, tpcdsbigschema}
+    tpcds_scale_sets: set[str] = {tpcdssmlsch, tpcdsbigsch}
     tpch_scale_sets = tpcds_scale_sets
     if perftest:
-        tpcds_scale_sets = tpc.scale_sets.range(tpcdssmlschema, tpcdsbigschema)
+        tpcds_scale_sets = tpc.scale_sets.range(tpcdssmlsch, tpcdsbigsch)
 
     tpcds_cat_info = tpc.TpcCatInfo(sql.TrinoConnection(getStarburstHttpUrl(),
             trinouser, trinopass), tpc.tpcdscat, tpcds_scale_sets)
@@ -1905,7 +1942,7 @@ def svcStop(perf_test: bool, onlyEmptyNodes: bool = False) -> None:
             t = time.time()
             zid = env["route53_zone_id"] if target == "aws" else None
             tuns.extend(startPortForwardToLBs(env["bastion_address"], zid))
-            scale_sets: set[str] = {tpcdssmlschema, tpcdsbigschema}
+            scale_sets: set[str] = {tpcdssmlsch, tpcdsbigsch}
             if perf_test:
                 scale_sets = tpc.scale_sets.range(tpc.scale_sets.smallest(),
                                                   tpc.scale_sets.largest())
@@ -1913,8 +1950,9 @@ def svcStop(perf_test: bool, onlyEmptyNodes: bool = False) -> None:
                     tpc.TpcCatInfo(sql.TrinoConnection(getStarburstHttpUrl(),
                                                        trinouser, trinopass),
                                    tpc.tpcdscat, scale_sets)
-            drop_tables_and_schemas(env, tpc_cat_info, scale_sets,
-                                    getCatalogs())
+            drop_tables_schemas(env, tpc_cat_info, getCatalogs(),
+                                scale_sets|cachesch)
+            eraseBucketContents(env)
             lbs = deleteAllServices()
             # TODO AWS has to be handled differently because of its inability
             # to support specification of static IPs for load balancers.

@@ -1,5 +1,5 @@
 resource "aws_security_group" "bastion_sg" {
-  name                   = "bastion_sg"
+  name                   = "${var.bastion_name}-sg"
   vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
 
@@ -47,7 +47,18 @@ resource "aws_security_group" "bastion_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "bastion_sg" })
+  tags = {
+    Name = "${var.bastion_name}-sg"
+  }
+}
+
+resource "aws_network_interface" "bastion_eni" {
+  subnet_id       = data.aws_subnet.public_subnet[0].id
+  security_groups = [aws_security_group.bastion_sg.id]
+
+  tags = {
+    Name = "${var.bastion_name}-eni"
+  }
 }
 
 /*
@@ -56,14 +67,19 @@ resource "aws_security_group" "bastion_sg" {
  * will change after the EIP is attached.
  */
 resource "aws_instance" "bastion" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = var.small_instance_type
-  subnet_id              = data.aws_subnet.public_subnet[0].id
-  private_ip             = local.bastion_ip
-  key_name               = aws_key_pair.key_pair.key_name
-  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
-  user_data              = file(var.bastion_launch_script)
-  tags                   = merge(var.tags, { Name = "${var.bastion_name}" })
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = var.small_instance_type
+  key_name      = aws_key_pair.key_pair.key_name
+  user_data     = file(var.bastion_launch_script)
+
+  network_interface {
+    network_interface_id = aws_network_interface.bastion_eni.id
+    device_index         = 0
+  }
+
+  tags = {
+    Name = "${var.bastion_name}"
+  }
 
   /* We have a dependency on DNS so that certificates can be validated. */
   depends_on = [aws_route53_record.bastion_a_record]
@@ -74,4 +90,8 @@ resource "aws_eip" "bastion_eip" {
   instance                  = aws_instance.bastion.id
   associate_with_private_ip = aws_instance.bastion.private_ip
   depends_on                = [aws_instance.bastion]
+
+  tags = {
+    Name = "${var.network_name}-bastion-eip"
+  }
 }

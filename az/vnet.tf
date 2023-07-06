@@ -20,7 +20,7 @@ resource "azurerm_subnet" "private_sub_servers" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
 
-  name             = "prv_aks_srv"
+  name             = "${var.network_name}-prv_aks_srv"
   address_prefixes = [local.subnets[0]]
 }
 
@@ -28,7 +28,7 @@ resource "azurerm_subnet" "private_sub_aks_regular" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
 
-  name             = "prv_aks_reg"
+  name             = "${var.network_name}-prv_aks_reg"
   address_prefixes = [local.subnets[1]]
 }
 
@@ -36,7 +36,7 @@ resource "azurerm_subnet" "private_sub_aks_spot" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
 
-  name             = "prv_aks_spot"
+  name             = "${var.network_name}-prv_aks_spot"
   address_prefixes = [local.subnets[2]]
 }
 
@@ -44,7 +44,7 @@ resource "azurerm_subnet" "db_sub" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
 
-  name              = "db_sub"
+  name              = "${var.network_name}-db_sub"
   address_prefixes  = [local.subnets[3]]
   service_endpoints = ["Microsoft.Sql"]
 }
@@ -53,7 +53,7 @@ resource "azurerm_subnet" "obj_sub" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
 
-  name              = "obj_sub"
+  name              = "${var.network_name}-obj_sub"
   address_prefixes  = [local.subnets[4]]
   service_endpoints = ["Microsoft.Storage"]
 }

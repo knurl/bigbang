@@ -1,12 +1,6 @@
 resource "aws_s3_bucket" "s3_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
-  tags          = var.tags
-}
-
-resource "aws_s3_bucket_acl" "s3_bucket_acl" {
-  bucket = aws_s3_bucket.s3_bucket.id
-  acl    = "private"
 }
 
 data "aws_iam_policy_document" "bucket_access_policy_doc" {

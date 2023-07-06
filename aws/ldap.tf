@@ -1,5 +1,5 @@
 resource "aws_security_group" "ldaps_sg" {
-  name                   = "ldaps_sg"
+  name                   = "${var.ldaps_name}-sg"
   vpc_id                 = data.aws_vpc.sb_vpc.id
   revoke_rules_on_delete = true
 
@@ -32,18 +32,34 @@ resource "aws_security_group" "ldaps_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "ldaps_sg" })
+  tags = {
+    Name = "${var.ldaps_name}-sg"
+  }
+}
+
+resource "aws_network_interface" "ldap_eni" {
+  subnet_id       = data.aws_subnet.private_subnet[0].id
+  security_groups = [aws_security_group.ldaps_sg.id]
+
+  tags = {
+    Name = "${var.ldaps_name}-eni"
+  }
 }
 
 resource "aws_instance" "ldaps" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = var.small_instance_type
-  subnet_id              = data.aws_subnet.private_subnet[0].id
-  private_ip             = local.ldap_ip
-  key_name               = aws_key_pair.key_pair.key_name
-  vpc_security_group_ids = [aws_security_group.ldaps_sg.id]
-  user_data              = file(var.ldaps_launch_script)
-  tags                   = merge(var.tags, { Name = "${var.ldaps_name}" })
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = var.small_instance_type
+  key_name      = aws_key_pair.key_pair.key_name
+  user_data     = file(var.ldaps_launch_script)
+
+  network_interface {
+    network_interface_id = aws_network_interface.ldap_eni.id
+    device_index         = 0
+  }
+
+  tags = {
+    Name = "${var.ldaps_name}"
+  }
 
   /* We have a dependency on DNS so that certificates can be validated. */
   depends_on = [aws_route53_record.ldap_a_record]

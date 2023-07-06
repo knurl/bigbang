@@ -68,7 +68,7 @@ resource "google_service_networking_connection" "pvpc_peering" {
 # Starburst
 resource "google_compute_address" "starburst_static_ip" {
   project      = data.google_project.project.project_id
-  name         = "starburst-static-ip"
+  name         = "${var.network_name}-starburst-static-ip"
   subnetwork   = google_compute_subnetwork.snet.id
   address_type = "INTERNAL"
   address      = local.starburst_address
@@ -108,7 +108,7 @@ resource "google_compute_subnetwork" "ilb_subnet" {
 # allow all access from IAP and health check ranges
 resource "google_compute_firewall" "fw-iap" {
   project       = data.google_project.project.project_id
-  name          = "l7-ilb-fw-allow-iap-hc"
+  name          = "${var.network_name}-l7-ilb-fw-allow-iap-hc"
   direction     = "INGRESS"
   network       = google_compute_network.vpc.name
   source_ranges = ["130.211.0.0/22", "35.191.0.0/16", "35.235.240.0/20"]
@@ -121,7 +121,7 @@ resource "google_compute_firewall" "fw-iap" {
 # allow http from proxy subnet to backends
 resource "google_compute_firewall" "fw-ilb-to-backends" {
   project       = data.google_project.project.project_id
-  name          = "l7-ilb-fw-allow-ilb-to-backends"
+  name          = "${var.network_name}-l7-ilb-fw-allow-ilb-to-backends"
   direction     = "INGRESS"
   network       = google_compute_network.vpc.name
   source_ranges = [google_compute_subnetwork.proxy_subnet.ip_cidr_range]

@@ -16,7 +16,7 @@ resource "azurerm_storage_container" "container" {
 }
 
 resource "azurerm_storage_data_lake_gen2_filesystem" "adls_gen2_fs" {
-  name               = "adls-gen2-fs"
+  name               = "${var.bucket_name}-adls-gen2-fs"
   storage_account_id = azurerm_storage_account.storacct.id
 }
 

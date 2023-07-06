@@ -59,8 +59,8 @@ accountSbCpu	capcalc.py	/^    def accountSbCpu(nn: str, cn: str, cpu: int):$/;"	
 accountSbMem	capcalc.py	/^    def accountSbMem(nn: str, cn: str, mem: int):$/;"	f	function:getMinNodeResources	file:
 addCont	capcalc.py	/^    def addCont(self, podname, contname, cpu, mem):$/;"	m	class:NodeResource
 add_command	cmdgrp.py	/^    def add_command(self, f: Callable[[], None],$/;"	m	class:CommandGroup	typeref:typename:None
+add_drop_command	bigbang.py	/^            def add_drop_command(obj, fq_schema, table_name):$/;"	f	function:drop_tables_schemas	file:
 add_drop_schema_cmd	bigbang.py	/^            def add_drop_schema_cmd(schema: str) -> None:$/;"	f	function:get_drop_schema_commands	typeref:typename:None	file:
-add_drop_table	bigbang.py	/^            def add_drop_table(fq_schema, table_name):$/;"	f	function:drop_tables_and_schemas	file:
 add_sql_command	cmdgrp.py	/^    def add_sql_command(self, sql_cmd: str,$/;"	m	class:SqlCommandGroup	typeref:typename:None
 adlscat	bigbang.py	/^adlscat      = 'adls'$/;"	v
 all_commands_done	cmdgrp.py	/^    def all_commands_done(self) -> bool:$/;"	m	class:CommandGroup	typeref:typename:bool
@@ -86,12 +86,12 @@ azaddrs	bigbang.py	/^azaddrs = None$/;"	v
 bastionfqdn	bigbang.py	/^bastionfqdn   = "bastion." + domain$/;"	v
 bastlaunchf	bigbang.py	/^bastlaunchf = bbio.where("bastlaunch.sh")$/;"	v
 bqcat	bigbang.py	/^bqcat        = 'bq'$/;"	v
-bucket	bigbang.py	/^bucket = shortname + "bk"$/;"	v
+bucket	bigbang.py	/^bucket = longname + "-bk"$/;"	v
 buildBastionLauncher	bigbang.py	/^def buildBastionLauncher() -> None:$/;"	f	typeref:typename:None
 buildLdapLauncher	bigbang.py	/^def buildLdapLauncher(fqdn: str) -> None:$/;"	f	typeref:typename:None
 cachemvsch	bigbang.py	/^cachemvsch  = 'cache_mv'$/;"	v
 cachesch	bigbang.py	/^cachesch    = {cachetsrsch, cachemvsch, mvsch}$/;"	v
-cachesrv_enabled	bigbang.py	/^    cachesrv_enabled = not sfdcenabled$/;"	v
+cachesrv_enabled	bigbang.py	/^    cachesrv_enabled = not perftest$/;"	v
 cachetsrsch	bigbang.py	/^cachetsrsch = 'cache_tsr'$/;"	v
 canFit	capcalc.py	/^    def canFit(self, cpu, mem):$/;"	m	class:NodeResource
 capacityType	bigbang.py	/^    capacityType = myvars[captypelabel]$/;"	v
@@ -111,15 +111,14 @@ check_not_running	cmdgrp.py	/^    def check_not_running(self) -> None:$/;"	m	cla
 check_running	cmdgrp.py	/^    def check_running(self) -> None:$/;"	m	class:CommandGroup	typeref:typename:None
 cleanOldTunnels	bigbang.py	/^def cleanOldTunnels() -> None:$/;"	f	typeref:typename:None
 clouds	bigbang.py	/^clouds = ("aws", "az", "gcp")$/;"	v
-clustname	bigbang.py	/^clustname = shortname + "cl"$/;"	v
-code	bigbang.py	/^code = username[:codelen]$/;"	v
+clustname	bigbang.py	/^clustname = longname + "-cl"$/;"	v
+code	bigbang.py	/^code = str(octet).zfill(3)$/;"	v
 codelen	bigbang.py	/^codelen = min(3, len(username))$/;"	v
 components	bigbang.py	/^components = chartversion.split('.')$/;"	v
 contsForPod	capcalc.py	/^contsForPod: dict[str, list[str]] = {$/;"	v	typeref:typename:dict[str, list[str]]
 copy_schemas_with_tables	bigbang.py	/^def copy_schemas_with_tables(env: dict, tpc_cat_info: tpc.TpcCatInfo,$/;"	f	typeref:typename:None
 cp	out.py	/^    cp = lambda x: cprint(x, 'green', attrs = ['bold'])$/;"	f	function:announceLoud	file:
 cp	out.py	/^    cp = lambda x: cprint(x, 'magenta', attrs = ['bold'])$/;"	f	function:announceBox	file:
-create_multipliers	mult.py	/^def create_multipliers():$/;"	f
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AwsDbInstanceType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["AzureDbVmType"]$/;"	v
 dbInstanceType	bigbang.py	/^    dbInstanceType    = myvars["GcpDbMachineType"]$/;"	v
@@ -140,7 +139,7 @@ domain	bigbang.py	/^domain        = "az.starburstdata.net"$/;"	v
 dontLoadCat	bigbang.py	/^def dontLoadCat(cat: str) -> bool:$/;"	f	typeref:typename:bool
 downstreamSG	bigbang.py	/^        downstreamSG = True$/;"	v
 downstreamSG	bigbang.py	/^downstreamSG = False$/;"	v
-drop_tables_and_schemas	bigbang.py	/^def drop_tables_and_schemas(env: dict, tpc_cat_info: tpc.TpcCatInfo,$/;"	f	typeref:typename:None
+drop_tables_schemas	bigbang.py	/^def drop_tables_schemas(env: dict, tpc_cat_info: tpc.TpcCatInfo,$/;"	f	typeref:typename:None
 dumpNodesAndPods	capcalc.py	/^    def dumpNodesAndPods() -> None:$/;"	f	function:getMinNodeResources	typeref:typename:None	file:
 email	bigbang.py	/^    email = myvars['Email']$/;"	v
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
@@ -165,7 +164,7 @@ gcscat	bigbang.py	/^gcscat       = 'gcs'$/;"	v
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
 getAccessKeyName	creds.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:AwsCreds	typeref:typename:str
 getAccessKeyName	creds.py	/^    def getAccessKeyName(self) -> str:$/;"	m	class:Creds	typeref:typename:str
-getCatalogs	bigbang.py	/^def getCatalogs(avoid: set[str] = set()) -> set[str]:$/;"	f	typeref:typename:set[str]
+getCatalogs	bigbang.py	/^def getCatalogs() -> set[str]:$/;"	f	typeref:typename:set[str]
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f	typeref:typename:List[str]
 getCreds	creds.py	/^def getCreds(target: str) -> Optional[Creds]:$/;"	f	typeref:typename:Optional[Creds]
 getGroup	bigbang.py	/^def getGroup(name: str, gidNum: int, dcs: str, members: list[str]) -> str:$/;"	f	typeref:typename:str
@@ -188,11 +187,11 @@ getStarburstHttpUrl	bigbang.py	/^def getStarburstHttpUrl() -> str:$/;"	f	typeref
 getStarburstUrl	bigbang.py	/^def getStarburstUrl() -> str:$/;"	f	typeref:typename:str
 getTablesForSchemaCatalog	bigbang.py	/^def getTablesForSchemaCatalog(schema: str, catalog: str) -> list[str]:$/;"	f	typeref:typename:list[str]
 getUser	bigbang.py	/^def getUser(user: str, uid: int, gid: int, dcs: str) -> str:$/;"	f	typeref:typename:str
-get_cache_schema_tables	bigbang.py	/^def get_cache_schema_tables(fq_schema_name: str) -> list[str]:$/;"	f	typeref:typename:list[str]
+get_cache_schema_tables	bigbang.py	/^def get_cache_schema_tables(fq_schema_name: str) -> set[str]:$/;"	f	typeref:typename:set[str]
 get_casted_columns	bigbang.py	/^def get_casted_columns(cg: SqlCommandGroup,$/;"	f	typeref:typename:None
 get_cat_name	tpc.py	/^    def get_cat_name(self) -> str:$/;"	m	class:TpcCatInfo	typeref:typename:str
-get_create_schema_table_commands	bigbang.py	/^def get_create_schema_table_commands(dst_catalogs: set[str],$/;"	f	typeref:typename:tuple[list[str],SqlCommandGroup,SqlCommandGroup]
-get_drop_schema_commands	bigbang.py	/^def get_drop_schema_commands(dstCatalogs: set[str],$/;"	f	typeref:typename:tuple[list[str],SqlCommandGroup]
+get_create_schema_table_commands	bigbang.py	/^def get_create_schema_table_commands(dst_catalogs: set[str],$/;"	f	typeref:typename:tuple[list[str],list[str],SqlCommandGroup,SqlCommandGroup]
+get_drop_schema_commands	bigbang.py	/^def get_drop_schema_commands(catalogs: set[str],$/;"	f	typeref:typename:tuple[list[str],SqlCommandGroup]
 get_matching_bq_schemas	bigbang.py	/^def get_matching_bq_schemas(schema_pfx: str) -> list[str]:$/;"	f	typeref:typename:list[str]
 get_nodes	ready.py	/^def get_nodes() -> tuple[set[str], set[str]]:$/;"	f	typeref:typename:tuple[set[str],set[str]]
 get_output_vars	bigbang.py	/^def get_output_vars() -> dict:$/;"	f	typeref:typename:dict
@@ -203,6 +202,7 @@ get_sql_command_group	bigbang.py	/^def get_sql_command_group() -> SqlCommandGrou
 get_table_names	tpc.py	/^    def get_table_names(self) -> Set[str]:$/;"	m	class:TpcCatInfo	typeref:typename:Set[str]
 get_table_size	tpc.py	/^    def get_table_size(self, scale_set: str, table_name: str) -> int:$/;"	m	class:TpcCatInfo	typeref:typename:int
 get_tunnel_procs	bigbang.py	/^    def get_tunnel_procs():$/;"	f	function:cleanOldTunnels	file:
+get_view_names	bigbang.py	/^def get_view_names(catalog: str, schema: str) -> set[str]:$/;"	f	typeref:typename:set[str]
 gluecats	bigbang.py	/^gluecats = { s3cat, deltacat } # > 1 catalogs both using Glue$/;"	v
 helm	bigbang.py	/^def helm(cmd: str) -> None:$/;"	f	typeref:typename:None
 helmCreateNamespace	bigbang.py	/^def helmCreateNamespace() -> None:$/;"	f	typeref:typename:None
@@ -253,13 +253,14 @@ loadBalancerResponding	bigbang.py	/^def loadBalancerResponding(service: str) -> 
 loadDatabases	bigbang.py	/^def loadDatabases(env: dict, perftest: bool, tpcds_cat_info: tpc.TpcCatInfo,$/;"	f	typeref:typename:None
 localhost	bigbang.py	/^localhost     = "localhost"$/;"	v
 localhostip	bigbang.py	/^localhostip   = "127.0.0.1"$/;"	v
+longname	bigbang.py	/^longname = username.replace('.', '-') + '-' + code$/;"	v
 main	bigbang.py	/^def main() -> None:$/;"	f	typeref:typename:None
 makeTable	capcalc.py	/^        def makeTable(d, key):$/;"	f	function:getMinNodeResources	file:
 makeTable	capcalc.py	/^        def makeTable(nodeResources, getleaf):$/;"	f	function:planWorkerSize	file:
 make_cb	bigbang.py	/^        def make_cb(w: int) -> Callable[[], None]:$/;"	f	function:spinWaitCGTest	typeref:typename:Callable[[],None]	file:
 make_cb_work_done	cmdgrp.py	/^        def make_cb_work_done(f: Callable[[], None],$/;"	f	member:CommandGroup.add_command	typeref:typename:Callable[[],None]	file:
 make_cbs	tpc.py	/^                        def make_cbs(b, table):$/;"	f	member:TpcCatInfo.__init__	file:
-make_dt_cb	bigbang.py	/^                def make_dt_cb():$/;"	f	function:drop_tables_and_schemas.add_drop_table	file:
+make_dt_cb	bigbang.py	/^                def make_dt_cb():$/;"	f	function:drop_tables_schemas.add_drop_command	file:
 maxpodpnode	bigbang.py	/^maxpodpnode = 32$/;"	v
 minCpuPerPod	capcalc.py	/^minCpuPerPod: dict[str, int] = {$/;"	v	typeref:typename:dict[str, int]
 minMemPerPod	capcalc.py	/^minMemPerPod: dict[str, int] = {$/;"	v	typeref:typename:dict[str, int]
@@ -267,7 +268,6 @@ minNodes	bigbang.py	/^minNodes    = 3 # See getMinNodeResources(); allows rollin
 minbucketsize	bigbang.py	/^minbucketsize  = 1 << 12$/;"	v
 modules	bigbang.py	/^modules = ['enterprise']$/;"	v
 move_to_running_mode	cmdgrp.py	/^    def move_to_running_mode(self) -> None:$/;"	m	class:CommandGroup	typeref:typename:None
-multiplier	mult.py	/^        def multiplier(x):$/;"	f	function:create_multipliers	file:
 mvsch	bigbang.py	/^mvsch       = 'mv'$/;"	v
 myDir	bbio.py	/^def myDir():$/;"	f
 mySubnetCidr	bigbang.py	/^mySubnetCidr = genmask(target, octet)$/;"	v
@@ -276,7 +276,9 @@ mysqlenlabel	bigbang.py	/^mysqlenlabel    = 'MySqlEnabled'$/;"	v
 myvars	bigbang.py	/^        myvars = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
 myvarsbf	bigbang.py	/^myvarsbf    = 'my-vars.yaml'$/;"	v
 myvarsf	bigbang.py	/^myvarsf     = bbio.where(myvarsbf)$/;"	v
+nameprefix	bigbang.py	/^nameprefix = username[:codelen]$/;"	v
 namespace	bigbang.py	/^namespace   = "starburst"$/;"	v
+netwkname	bigbang.py	/^netwkname = longname + '-net'$/;"	v
 nobastionfw	bigbang.py	/^    nobastionfw  = myvars["DisableBastionFw"] or ns.disable_bastion_fw$/;"	v
 nodeCount	bigbang.py	/^    nodeCount    = myvars[nodecountlabel] # NodeCount$/;"	v
 nodecountlabel	bigbang.py	/^nodecountlabel  = "NodeCount"$/;"	v
@@ -316,7 +318,7 @@ repoloc	bigbang.py	/^    repoloc      = myvars["HelmRepoLocation"]$/;"	v
 repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
 repouser	bigbang.py	/^    repouser     = helmcreds["HelmRepoUser"]$/;"	v
 requireKey	bigbang.py	/^def requireKey(key: str, d: dict[str, Any]):$/;"	f
-resourcegrp	bigbang.py	/^resourcegrp = shortname + "rg"$/;"	v
+resourcegrp	bigbang.py	/^resourcegrp = longname + "-rg"$/;"	v
 retryRun	run.py	/^def retryRun(f: Callable[[], subprocess.CompletedProcess], maxretries: int,$/;"	f	typeref:typename:subprocess.CompletedProcess
 retry_http	sql.py	/^    def retry_http(self, f: Callable, maxretries: int,$/;"	m	class:TrinoConnection	typeref:typename:requests.Response
 rsa	bigbang.py	/^rsa         = os.path.expanduser("~\/.ssh\/id_rsa")$/;"	v
@@ -349,7 +351,7 @@ sfdcpass	bigbang.py	/^        sfdcpass  = sfdccreds['SalesforcePassword']$/;"	v
 sfdctoken	bigbang.py	/^        sfdctoken = sfdccreds['SalesforceSecurityToken']$/;"	v
 sfdcuser	bigbang.py	/^        sfdcuser  = sfdccreds['SalesforceUser']$/;"	v
 sharedcats	bigbang.py	/^sharedcats = gluecats | {bqcat} # Catalogs shared by > 1 user$/;"	v
-shortname	bigbang.py	/^shortname = code + str(octet).zfill(3)$/;"	v
+shortname	bigbang.py	/^shortname = nameprefix + code$/;"	v
 sleep_x	bigbang.py	/^            def sleep_x() -> None:$/;"	f	function:spinWaitCGTest.make_cb	typeref:typename:None	file:
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AwsSmallInstanceType"]$/;"	v
 smallInstanceType	bigbang.py	/^    smallInstanceType = myvars["AzureSmallVmType"]$/;"	v
@@ -362,7 +364,7 @@ sqlstr	out.py	/^sqlstr = "Issued 🢩 "$/;"	v
 ss_list	tpc.py	/^    ss_list: List[str] = [$/;"	v	class:ScaleSets	typeref:typename:List[str]
 starburstfqdn	bigbang.py	/^starburstfqdn = "starburst." + domain$/;"	v
 startPortForwardToLBs	bigbang.py	/^def startPortForwardToLBs(bastionIp: str, route53ZoneId: str) -> list[Tunnel]:$/;"	f	typeref:typename:list[Tunnel]
-storageacct	bigbang.py	/^storageacct = shortname + "sa"$/;"	v
+storageacct	bigbang.py	/^storageacct = longname + "-sa"$/;"	v
 svcStart	bigbang.py	/^def svcStart(perftest: bool, credobj: Optional[creds.Creds] = None,$/;"	f	typeref:typename:tuple[list[Tunnel],list[str]]
 svcStop	bigbang.py	/^def svcStop(perf_test: bool, onlyEmptyNodes: bool = False) -> None:$/;"	f	typeref:typename:None
 svcports	bigbang.py	/^svcports    = {$/;"	v
@@ -387,15 +389,17 @@ toDict	creds.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:AwsCreds	t
 toDict	creds.py	/^    def toDict(self) -> dict[str, str]:$/;"	m	class:Creds	typeref:typename:dict[str,str]
 tpccats	tpc.py	/^tpccats  = {tpchcat, tpcdscat}$/;"	v
 tpcds_queries	tpc.py	/^tpcds_queries = { 'q01.sql', 'q02.sql', 'q03.sql', 'q04.sql', 'q05.sql',$/;"	v
-tpcdsbigschema	bigbang.py	/^tpcdsbigschema = tpc.scale_sets.smallest()$/;"	v
+tpcdsbigsch	bigbang.py	/^tpcdsbigsch = tpc.scale_sets.smallest()$/;"	v
 tpcdscat	tpc.py	/^tpcdscat = "tpcds"$/;"	v
-tpcdssmlschema	bigbang.py	/^tpcdssmlschema = tpcdsbigschema$/;"	v
-tpchbigschema	bigbang.py	/^tpchbigschema  = tpc.scale_sets.smallest()$/;"	v
+tpcdssmlsch	bigbang.py	/^tpcdssmlsch = tpcdsbigsch$/;"	v
+tpchbigsch	bigbang.py	/^tpchbigsch  = tpc.scale_sets.smallest()$/;"	v
 tpchcat	tpc.py	/^tpchcat  = "tpch"$/;"	v
-tpchsmlschema	bigbang.py	/^tpchsmlschema  = tpchbigschema$/;"	v
+tpchsmlsch	bigbang.py	/^tpchsmlsch  = tpchbigsch$/;"	v
 trinopass	bigbang.py	/^trinopass     = "test"$/;"	v
 trinouser	bigbang.py	/^trinouser     = "starburst_service"$/;"	v
+tsrsch	bigbang.py	/^tsrsch      = {cachetsrsch}$/;"	v
 uniqify	bigbang.py	/^def uniqify(catalog: str, schema: str) -> str:$/;"	f	typeref:typename:str
+uniqify_for_hive	bigbang.py	/^def uniqify_for_hive(schema: str) -> str:$/;"	f	typeref:typename:str
 unsupported_types	bigbang.py	/^unsupported_types = {bqcat: [('char(%)', 'varchar'),$/;"	v
 updateKubeConfig	bigbang.py	/^def updateKubeConfig() -> None:$/;"	f	typeref:typename:None
 upstrBastion	bigbang.py	/^        upstrBastion = ipaddress.IPv4Address(ns.bastion)$/;"	v

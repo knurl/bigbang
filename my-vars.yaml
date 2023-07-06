@@ -27,7 +27,7 @@ PreferredZones:
 
 # Version of Starburst you want to install. This must match across
 # starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 406.0.0
+ChartVersion: 413.2.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 3
@@ -46,7 +46,7 @@ AuthNLdap: True
 DisableBastionFw: False
 
 # Do we want to use the Salesforce connector?
-SalesforceEnabled: False
+SalesforceEnabled: True
 
 # MySQL and PostgreSQL enable/disable. These databases are the instances used
 # for demoing Starburst functionality, not for internal use (e.g. HMS).
@@ -71,17 +71,17 @@ AwsInstanceTypes:
     - m6i.4xlarge
     - m4.4xlarge
   OnDemand:
-    - m5.4xlarge  # 16 vCPU / 64 GB
+    - r5d.4xlarge # 16 vCPU, 128 GB, 2 x 300 NVMe SSD
 AzureVmTypes:
   Spot:
     - Standard_D16_v5 
   OnDemand:
-    - Standard_D16_v5 
+    - Standard_L16s_v2 # 16 vCPU, 128 GB, optional SSD
 GcpMachineTypes:
   Spot:
     - e2-standard-16
   OnDemand:
-    - e2-standard-16
+    - n2-highmem-16 # 16 vCPU, 128 GB, optional SSD
 
 # performance testing nodes (always AWS, on-demand)
 AwsPerfInstanceTypes:

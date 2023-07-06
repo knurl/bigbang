@@ -11,19 +11,19 @@ config:
     service-database.user=${ENV:SERVICE_DATABASE_USER}
     service-database.password=${ENV:SERVICE_DATABASE_PASSWORD}
     service-database.jdbc-url=${ENV:SERVICE_DATABASE_JDBC_URL}
-    refresh-initial-delay=30s
     starburst.user=starburst_service
     {% if TlsEnabled %}
-    starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true
+    starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8443?SSL=true&roles=system:sysadmin
     starburst.password=test
     {% else %}
-    starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8080
+    starburst.jdbc-url=jdbc:trino://{{StarburstHost}}:8080&roles=system:sysadmin
+    starburst.password=
     {% endif %}
-  {% if SalesforceEnabled %}
+    refresh-initial-delay=1m
+    {% if SalesforceEnabled %}
+    rules.file=etc/rules.json
     type-mapping=FILE
     type-mapping.file=etc/type-mapping.json
-    rules.file=etc/rules.json
-    rules.refresh-period=1m
   type-mapping.json: |
     {
       "rules": {

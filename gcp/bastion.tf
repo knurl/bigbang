@@ -1,7 +1,7 @@
 resource "google_compute_address" "bastion_ip" {
   project      = data.google_project.project.project_id
   region       = var.region
-  name         = "bastion-ip"
+  name         = "${var.network_name}-bastion-eip"
   address_type = "EXTERNAL"
 }
 
@@ -41,7 +41,7 @@ resource "google_compute_instance" "bastion" {
 }
 
 resource "google_compute_firewall" "fw-bastion" {
-  name    = "fw-${var.bastion_name}"
+  name    = "${var.bastion_name}-fw"
   network = resource.google_compute_network.vpc.self_link
   project = data.google_project.project.project_id
   /* Restrict to home IP only normally. For Stargate mode, also allow connects

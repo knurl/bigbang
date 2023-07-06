@@ -2,10 +2,6 @@ helm-creds.yaml
 sfdc-creds.yaml
 starburstdata.license
 kubeconfig_*
-.demosvc.swp
-.commit.swp
-.demosvc.py.swp
-.gitignore.swp
 *terraform.tfstate*
 __pycache__
 aws/.terraform*

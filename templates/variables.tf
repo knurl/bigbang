@@ -24,7 +24,11 @@ variable "cluster_name" {
 }
 
 variable "network_name" {
-  default = "{{ClusterName}}-net"
+  default = "{{NetwkName}}"
+}
+
+variable "policy_name" {
+  default = "{{LongName}}-policy"
 }
 
 variable "capacity_type" {
@@ -45,7 +49,7 @@ variable "db_instance_type" {
 }
 
 variable "bastion_name" {
-  default = "bastion-{{ShortName}}"
+  default = "{{LongName}}-bastion"
 }
 
 variable "bastion_fw_ingress" {
@@ -65,7 +69,7 @@ variable "upstream_stargate" {
 }
 
 variable "ldaps_name" {
-  default = "ldaps-{{ShortName}}"
+  default = "{{LongName}}-ldaps"
 }
 
 variable "ldaps_launch_script" {
@@ -85,7 +89,7 @@ variable "max_pods_per_node" {
 }
 
 variable "evtlog_server_name" {
-  default = "evtlog-server-{{ShortName}}"
+  default = "{{LongName}}-evtlog"
 }
 
 variable "cache_service_enabled" {
@@ -93,15 +97,15 @@ variable "cache_service_enabled" {
 }
 
 variable "cachesrv_server_name" {
-  default = "cachesrv-server-{{ShortName}}"
+  default = "{{LongName}}-cachesrv"
 }
 
 variable "hmsdb_server_name" {
-  default = "hmsdb-server-{{ShortName}}"
+  default = "{{LongName}}-hmsdb"
 }
 
 variable "postgres_server_name" {
-  default = "postgres-server-{{ShortName}}"
+  default = "{{LongName}}-postgres"
 }
 
 variable "postgresql_version" {
@@ -121,7 +125,7 @@ variable "postgres_enabled" {
 }
 
 variable "mysql_server_name" {
-  default = "mysql-server-{{ShortName}}"
+  default = "{{LongName}}-mysql"
 }
 
 variable "mysql_version" {
@@ -180,7 +184,11 @@ variable "ssh_public_key" {
 
 {% if Target == "aws" %}
 variable "redshift_cluster_name" {
-  default = "redshift-cluster-{{ShortName}}"
+  default = "{{LongName}}-redshift"
+}
+
+variable "sg_name" {
+  default = "{{LongName}}-sg"
 }
 {% elif Target == "az" %}
 variable "my_cidr" {
@@ -200,7 +208,7 @@ variable "resource_group_name" {
 }
 
 variable "synapse_ws_name" {
-  default = "synapse-ws-{{ShortName}}"
+  default = "{{LongName}}-synapse-ws"
 }
 {% elif Target == "gcp" %}
 variable "my_cidr" {

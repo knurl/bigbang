@@ -44,7 +44,8 @@ class TrinoConnection:
             retries += 1
             stime <<= 1
 
-    def send_sql(self, sql_cmd: str, verbose = False) -> list[list[str]]:
+    def send_sql(self, sql_cmd: str, verbose = False,
+                 include_hdr = False) -> list[list[str]]:
         httpmaxretries = 10
         if verbose:
             announceSqlStart(sql_cmd)
@@ -62,11 +63,14 @@ class TrinoConnection:
         r = self.retry_http(f, maxretries=httpmaxretries,
                             descr=f"POST [{sql_cmd}]")
 
+        cols = None
         data = []
         while True:
             r.raise_for_status()
             assert r.status_code == 200
             j = r.json()
+            if include_hdr and not cols and "columns" in j and j['columns']:
+                cols = [[x['name'] for x in j['columns']]]
             if "data" in j:
                 data += j["data"]
             if "nextUri" not in j:
@@ -77,6 +81,8 @@ class TrinoConnection:
 
                 if verbose:
                     announceSqlEnd(sql_cmd)
+                if cols:
+                    data = cols + data
                 return data # the only way out is success, or an exception
             f = lambda: requests.get(j["nextUri"], headers=hdr, verify=ssl)
             r = self.retry_http(f, maxretries=httpmaxretries,

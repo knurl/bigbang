@@ -1,5 +1,5 @@
 resource "azurerm_network_interface" "ldaps_nic" {
-  name                = "ldaps-nic1"
+  name                = "${var.network_name}-ldaps-nic1"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -14,7 +14,7 @@ resource "azurerm_network_interface" "ldaps_nic" {
 }
 
 resource "azurerm_linux_virtual_machine" "ldaps" {
-  name                            = "ldaps"
+  name                            = var.ldaps_name
   location                        = azurerm_resource_group.rg.location
   resource_group_name             = azurerm_resource_group.rg.name
   size                            = var.small_instance_type
@@ -48,7 +48,7 @@ resource "azurerm_linux_virtual_machine" "ldaps" {
 }
 
 resource "azurerm_network_security_group" "sg_ldaps" {
-  name                = "sg-ldaps"
+  name                = "${var.network_name}-nsg-ldaps"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   security_rule {
@@ -94,7 +94,7 @@ resource "azurerm_network_interface_security_group_association" "ldaps_sga" {
 }
 
 resource "azurerm_virtual_machine_extension" "ldaps_setup" {
-  name                 = "ldaps-setup"
+  name                 = "${var.ldaps_name}-ldaps-setup"
   virtual_machine_id   = azurerm_linux_virtual_machine.ldaps.id
   publisher            = "Microsoft.Azure.Extensions"
   type                 = "CustomScript"

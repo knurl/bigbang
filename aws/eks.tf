@@ -1,8 +1,8 @@
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
-  cluster_version = "1.24"
-  version         = "18.31.2"
+  cluster_version = "1.27"
+  version         = "19.15.2"
 
   # Where to place the EKS cluster and workers.
   vpc_id                          = data.aws_vpc.sb_vpc.id
@@ -75,16 +75,16 @@ module "eks" {
         "http_tokens" : "optional",
         "http_put_response_hop_limit" : 64
       }
-
-      tags = var.tags
     }
   }
 
-  tags = merge(var.tags, { Name = var.cluster_name })
+  tags = {
+    Name = var.cluster_name
+  }
 }
 
 resource "aws_iam_policy" "eks_trino_worker_policy" {
-  name_prefix = "eks-trino-worker-policy"
+  name_prefix = "${var.policy_name}-eks-trino-worker"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -104,7 +104,6 @@ resource "aws_iam_policy" "eks_trino_worker_policy" {
       }
     ]
   })
-  tags = var.tags
 }
 
 # Attach policies separately due to Terraform bug https://tinyurl.com/2zj7a42r

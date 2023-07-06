@@ -68,15 +68,11 @@ data "aws_db_subnet_group" "database_sngrp" {
 }
 
 resource "aws_redshift_subnet_group" "redshift_sngrp" {
-  name       = "${var.network_name}-sg-red"
+  name       = "${var.network_name}-subng-red"
   subnet_ids = local.prv_subnet_ids
-  tags       = var.tags
 }
 
 locals {
-  bastion_ip          = cidrhost(data.aws_subnet.public_subnet[0].cidr_block, 101)
-  ldap_ip             = cidrhost(data.aws_subnet.private_subnet[0].cidr_block, 102)
-  starburst_ip        = cidrhost(data.aws_subnet.private_subnet[0].cidr_block, 103)
   prv_subnet_ids      = data.aws_subnet.private_subnet.*.id
   pub_subnet_ids      = data.aws_subnet.public_subnet.*.id
   prv_subnet_cidrs    = data.aws_subnet.private_subnet.*.cidr_block
@@ -87,5 +83,4 @@ locals {
 resource "aws_key_pair" "key_pair" {
   key_name_prefix = "${var.cluster_name}-bastion-key"
   public_key      = var.ssh_public_key
-  tags            = var.tags
 }
