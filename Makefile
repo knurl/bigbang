@@ -1,9 +1,10 @@
 PYFILES = $(wildcard *.py) $(wildcard ../*.py)
 
-ALL: mypy ./tags
+ALL: ./tags lint
 
-mypy: $(PYFILES)
+lint: $(PYFILES)
 	mypy --check-untyped-defs $^
+	ruff check $^
 
 ./tags: $(PYFILES)
 	ctags --languages=python --python-kinds=-i -f $@ $^

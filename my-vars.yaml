@@ -1,13 +1,13 @@
 # Your email. Used to generate a unique code to mark your resources.
-Email: rob.anderson@starburst.io
+Email: rob.anderson@hazelcast.com
 
 # Cloud target.
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-Target: aws
+#Target: aws
 #Target: az
-#Target: gcp
+Target: gcp
 
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
@@ -25,36 +25,19 @@ PreferredZones:
     - europe-west2-b # GCP - London, UK, EU
     - europe-west1-b # GCP - St. Ghislain, Belgium, EU
 
-# Version of Starburst you want to install. This must match across
-# starburst-enterprise, starburst-ranger, and starburst-hive.
-ChartVersion: 413.2.0
+# Chart version you want to install. This must match across all charts.
+AppChartVersion: 5.10.13 # Chart for Hazelcast 5.3.6
+OperatorChartVersion: 5.10.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 3
 
-# Use an external load balancer as ingress
-IngressLoadBalancer: False
-
 # Require TLS on client <-> coordinator connection.
-RequireCoordTls: True
+RequireCoordTls: False
 
 # Authenticate using LDAP. Needs a secured connection, and therefore requires
-# either RequireCoordTls, IngressLoadBalancer or RequireTlsToLb.
-AuthNLdap: True
-
-# Disable bastion firewall—don't use unless you know the risks!
-DisableBastionFw: False
-
-# Do we want to use the Salesforce connector?
-SalesforceEnabled: True
-
-# MySQL and PostgreSQL enable/disable. These databases are the instances used
-# for demoing Starburst functionality, not for internal use (e.g. HMS).
-MySqlEnabled: False
-PostgreSqlEnabled: False
-
-# Set up for performance testing
-PerformanceTesting: False
+# either RequireCoordTls or RequireTlsToLb.
+AuthNLdap: False
 
 #
 # You probably don't want to modify any configuration below this line.
@@ -79,9 +62,9 @@ AzureVmTypes:
     - Standard_L16s_v2 # 16 vCPU, 128 GB, optional SSD
 GcpMachineTypes:
   Spot:
-    - e2-standard-16
+    - e2-standard-8
   OnDemand:
-    - n2-highmem-16 # 16 vCPU, 128 GB, optional SSD
+    - e2-standard-8 # 16 vCPU, 128 GB, optional SSD
 
 # performance testing nodes (always AWS, on-demand)
 AwsPerfInstanceTypes:
@@ -92,17 +75,11 @@ AwsSmallInstanceType: m5.large
 AzureSmallVmType: Standard_B2ms
 GcpSmallMachineType: e2-standard-2
 
-# DB instance types - 4 vCPU, 16 GB
-AwsDbInstanceType: db.m5.xlarge
-AzureDbVmType: GP_Gen5_4
-GcpDbMachineType: db-custom-4-15360
-
 #
 # Helm repo information
 #
-HelmRepo: starburstdata
-HelmRegistry: harbor.starburstdata.net/starburstdata
-HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
+HelmRepo: hazelcast
+HelmRepoLocation: https://hazelcast-charts.s3.amazonaws.com/
 
 #####################
 # XXX IMPORTANT XXX #
@@ -111,9 +88,3 @@ HelmRepoLocation: https://harbor.starburstdata.net/chartrepo/starburstdata
 # ./helm-creds.yaml. You must create and fill out that file in this format:
 # HelmRepoUser: username
 # HelmRepoPassword: password
-#
-# Your Salesforce credentials are stored in a separate file called
-# ./sfdc-creds.yaml. You must create and fill out that file in this format:
-# SalesforceUser: username
-# SalesforcePassword: password
-# SalesforceSecurityToken: token

@@ -1,3 +1,4 @@
+#import pdb
 import json
 
 # local imports
@@ -22,7 +23,7 @@ def get_nodes() -> tuple[set[str], set[str]]:
     ready_nodes: set[str] = set()
     all_nodes: set[str] = set()
 
-    r = run.runTry(f"kubectl get nodes -ojson".split())
+    r = run.runTry("kubectl get nodes -ojson".split())
     if r.returncode != 0:
         return ready_nodes, all_nodes
 
@@ -63,45 +64,34 @@ def get_nodes() -> tuple[set[str], set[str]]:
 def get_ready_nodes() -> set[str]:
     return get_nodes()[0]
 
-def get_pods(namespace: str = "") -> tuple[set[str], set[str]]:
+def summarize_containers(namespace: str = "") -> tuple[set[str], set[str]]:
     namesp = f" --namespace {namespace}" if namespace else ""
-    ready_pods: set[str] = set()
-    all_pods: set[str] = set()
+    readyc: set[str] = set()
+    allc: set[str] = set()
 
-    r = run.runTry(f'kubectl{namesp} get pods -ojson'.split())
-    if r.returncode != 0:
-        return ready_pods, all_pods
+    try:
+        j = json.loads(run.runCollect(f'kubectl{namesp} '
+                                      'get pods -ojson'.split()))
 
-    j = json.loads(r.stdout)
-    if j is None or len(j) == 0:
-        return ready_pods, all_pods
+        for item in j['items']:
+            metadata = item['metadata']
 
-    if not (items := j.get('items')):
-        return ready_pods, all_pods
+            podname = metadata['name']
+            assert len(podname) > 0
 
-    for item in items:
-        metadata = item['metadata']
-        name = metadata['name']
-        assert len(name) > 0
+            # If we've asked for a specific ns, verify we've got that ns
+            if (ns := metadata['namespace']) and namespace:
+                assert ns == namespace
 
-        # If we've asked for a specific ns, verify we've got that ns
-        if (ns := metadata['namespace']) and namespace:
-            assert ns == namespace
+            # If this pod's containers are all ready, count it; otherwise skip
+            css = item['status']['containerStatuses']
 
-        all_pods.add(name)
+            for cs in css:
+                cname = podname + '/' + cs['name']
+                allc.add(cname)
+                if cs['ready']:
+                    readyc.add(cname)
+    except Exception:
+        pass
 
-        # If this pod's containers are all ready, count it; otherwise skip
-        if ((status := item.get('status')) and
-            (conditions := status.get('conditions'))):
-            for condition in conditions:
-                if ((condtype := condition.get('type')) and 
-                    (condstatus := condition.get('status')) and
-                    condtype == 'ContainersReady' and
-                    condstatus == 'True'):
-                    ready_pods.add(name)
-                    break
-
-    return ready_pods, all_pods
-
-def get_ready_pods(namespace: str = "") -> set[str]:
-    return get_pods(namespace)[0]
+    return readyc, allc

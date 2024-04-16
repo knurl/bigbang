@@ -16,8 +16,6 @@ locals {
   ilb_cidr          = local.cidrs[5] # 14.1 - 14.254, 24 b = 254 hosts
   master_ntwk_cidr  = local.cidrs[6] # 15.1 - 15.14, 28 b = 14 hosts
   bastion_address   = cidrhost(local.subnetwork_cidr, 101)
-  ldap_address      = cidrhost(local.subnetwork_cidr, 102)
-  starburst_address = cidrhost(local.subnetwork_cidr, 103)
 }
 
 #
@@ -59,20 +57,6 @@ resource "google_service_networking_connection" "pvpc_peering" {
   network                 = resource.google_compute_network.vpc.id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.googserv_gaddrs.name]
-}
-
-/*
- * Preserve the static internal IP for Starburst.
- */
-
-# Starburst
-resource "google_compute_address" "starburst_static_ip" {
-  project      = data.google_project.project.project_id
-  name         = "${var.network_name}-starburst-static-ip"
-  subnetwork   = google_compute_subnetwork.snet.id
-  address_type = "INTERNAL"
-  address      = local.starburst_address
-  region       = var.region
 }
 
 /*

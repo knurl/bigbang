@@ -1,0 +1,17 @@
+apiVersion: hazelcast.com/v1alpha1
+kind: Hazelcast
+metadata:
+  name: cluster
+spec:
+  licenseKeySecretName: license
+  version: '5.3.6'
+  repository: 'docker.io/hazelcast/hazelcast-enterprise'
+  clusterSize: {{NodeCount}}
+    #  version: {{AppChartVersion}}
+    #  persistence:
+    #    baseDir: "/data"
+    #    clusterDataRecoveryPolicy: "FullRecoveryOnly"
+    #    pvc:
+    #      accessModes: ["ReadWriteOnce"]
+    #      requestStorage: 50Gi
+    #    startupAction: ForceStart

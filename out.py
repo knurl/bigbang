@@ -1,4 +1,7 @@
-import time, random, textwrap, string
+import time
+import random
+import textwrap
+import string
 from termcolor import cprint, colored # type: ignore
 from typing import Callable
 from shutil import get_terminal_size
@@ -10,16 +13,21 @@ from shutil import get_terminal_size
 sqlstr = "Issued 🢩 "
 
 def announceSql(i: int, s: str) -> None:
-    print(f'Stored Cmd {i} 🢩 ⟦{s}⟧')
+    print(f'Stored Cmd {i}  ')
 
-def announceSqlStart(s: str) -> None:
-    print(f"{sqlstr}⟦{s}⟧")
 
 def announceSqlEnd(s: str) -> None:
-    print(" " * len(sqlstr) + f"⟦{s}⟧ 🢨 Done!")
+    print(' ' * len(sqlstr) + f"⟦{s}⟧ 🢨 Done!")
 
 def announce(s: str) -> None:
-    cprint(f"==> {s}", 'blue', attrs = ['bold'])
+    cprint(f'==> {s}', 'blue', attrs = ['bold'])
+
+def announceStart(s: str) -> None:
+    cprint(f'==> 👇 ⟦{s}⟧ START', 'cyan', attrs = ['bold'])
+
+def announceEnd(s: str, tinterv: float) -> None:
+    ts = time.strftime("%Mm%Ss", time.gmtime(tinterv))
+    cprint(f'==> 👆 ⟦{s}⟧ ENDED in {ts}', 'cyan', attrs = ['bold'])
 
 def announceLoud(lines: list[str]) -> None:
     maxl = max(map(len, lines))
@@ -27,7 +35,8 @@ def announceLoud(lines: list[str]) -> None:
     rt = " ⮘┃"
     p = ["{l}{t}{r}".format(l = lt, t = i.center(maxl), r = rt) for i in lines]
     pmaxl = maxl + len(lt) + len(rt)
-    cp = lambda x: cprint(x, 'green', attrs = ['bold'])
+    def cp(x):
+        return cprint(x, 'green', attrs = ['bold'])
     cp('┏' + '━' * (pmaxl - 2) + '┓')
     for i in p:
         cp(i)
@@ -47,10 +56,11 @@ def announceBox(s: str) -> None:
     maxl = max(map(len, lines))
     topbord = ul + hz * (maxl + 2) + ur
     botbord = ll + hz * (maxl + 2) + lr
-    cp = lambda x: cprint(x, 'magenta', attrs = ['bold'])
+    def cp(x):
+        return cprint(x, 'magenta', attrs = ['bold'])
     cp(topbord)
-    for l in lines:
-        cp(bl + l.ljust(maxl) + br)
+    for line in lines:
+        cp(bl + line.ljust(maxl) + br)
     cp(botbord)
 
 def spinWait(waitFunc: Callable[[], float]) -> None:
@@ -64,7 +74,8 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
     f = min(len(anim1), len(anim2))
     barlength = None
     minpctsz = len("─1%─┤")
-    cd = lambda x: colored(x, 'red')
+    def cd(x):
+        return colored(x, 'red')
     def eraseLine(flush: bool = False):
         cprint(cd(' ' * maxlen), end = '\r', flush = flush)
 

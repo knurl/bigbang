@@ -1,12 +1,5 @@
 # bigbang
 
-## Disclaimer
-
-**_NB:_** *This release does not form any part of the Starburst product. It is
-not officially released by Starburst, nor is it supported by Starburst,
-including by any of Starburst's Enterprise Support Agreements. It is made
-publicly and freely available purely for educational purposes.*
-
 ## Important
 
 **NB: Before you run bigbang.py:** Make sure you do the following:
@@ -14,43 +7,9 @@ publicly and freely available purely for educational purposes.*
 - update my-vars.yaml, to specify your new setup
 - write helm-creds.yaml, to provide your login credentials for the helm
   repo—see my-vars.yaml file for description of what to put in there
-- add a Starburst license file, which you can get from your friendly local
-  Starburst Solutions Architect!
+- add a license file
 - go through the requirements section below to make sure you have all the
   dependencies before starting
-
-## Instructions on use
-
-### What BigBang does
-
-In the cloud of your choice, BigBang stands up some object storage (as a data
-lake) and some databases, as well as a K8S cluster into which it installs
-Starburst. You can optionally secure connections with TLS, and you can
-optionally stand up LDAP to use as an identity source. You can configure with a
-cluster size and machine type of your choice. AWS, Azure and GCP are all
-supported.
-
-BigBang uses Terraform to deploy the infrastructure required, and kubectl and
-helm to deploy the helm charts. Both of these technologies are _declarative_
-and _idempotent_, and fortunately BigBang is too. This means that:
-
-- you declare the objective in my-vars.html, and BigBang attempts to achieve
-  that objective every time you run it.
-
-- If you change any configuration, you can simply re-run BigBang to achieve
-  your new objective. You do _not_ need to stop BigBang and re-start it, just
-  because you change some yaml; just run start again.
-
-### General command-line usage
-
-run bigbang.py -h to see how to use it.
-
-### Logging into Starburst
-
-For the Starburst UI, you will log in with the user _starburst_service_. If you
-enable LDAP, then in addition to _starburst_service_, you will also have
-_alice_, _bob_, and _carol_, all with password _test_. All users have the
-password _test_.
 
 ## How to install it
 

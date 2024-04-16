@@ -1,10 +1,8 @@
 # bigbang-specific
-import sql, tpc, out
 
 # other
-import os, sys, pdb, requests, time, threading, io
-from typing import List, Tuple, Iterable, Callable, \
-        Optional, Any, Dict, Set
+import threading
+from typing import Callable
 
 class CommandGroup:
     def __init__(self):
@@ -75,30 +73,3 @@ class CommandGroup:
             # avoid doing a division-by-zero by saying we're finished.
             return float(self.work_done) / self.work_to_do \
                     if self.work_to_do > 0 else 1.0
-
-class SqlCommandGroup(CommandGroup):
-    def __init__(self, conn: sql.TrinoConnection):
-        self.conn = conn
-        self.callback_results: list[Any] = []
-        self.sql_cmds_debug: list[str] = [] # only for debug!
-        super().__init__()
-
-    def add_sql_command(self, sql_cmd: str,
-                        callback: Optional[Callable[[list[list[str]]],
-                                                    Any]] = None) -> None:
-        def cb() -> None:
-            x = self.conn.send_sql(sql_cmd)
-            if callback:
-                rs = callback(x)
-                if rs:
-                    self.callback_results.append(rs)
-        self.sql_cmds_debug.append(sql_cmd)
-        super().add_command(cb, new_work=1)
-
-    def wait_and_get_callback_results(self) -> list[Any]:
-        super().wait_until_done()
-        return self.callback_results
-
-    def debug_dump_commands(self) -> None:
-        for i, cmd in enumerate(self.sql_cmds_debug):
-            out.announceSql(i, cmd)

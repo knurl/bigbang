@@ -1,21 +1,26 @@
-import sys, subprocess, time
+import sys
+import subprocess
+import time
 from subprocess import CalledProcessError
-from typing import Callable, Any
 
 #
 # Some handy functions for running commands and collecting results
 #
+
+# if the user specifies verbose, print the results to the screen as they come,
+# otherwise capture the results to an internal buffer
 def run(args, check = True, verbose = True) -> subprocess.CompletedProcess:
     if len(args) < 1:
         sys.exit("Not enough arguments were specified to tryrun")
 
     command = " ".join(args)
-    if verbose: print(command)
+    if verbose:
+        print(command)
 
-    # if the user specifies verbose, print the results to the screen as they
-    # come, otherwise capture the results to an internal buffer
-    return subprocess.run(args, capture_output = (not verbose), check = check,
-            text = True)
+    return subprocess.run(args,
+                          capture_output = (not verbose),
+                          check = check,
+                          text = True)
 
 # Run a command string in a shell
 def runShell(cmd: str) -> int:
@@ -37,33 +42,26 @@ def runStdout(args):
 def runCollect(args) -> str:
     return run(args, check = True, verbose = False).stdout.strip()
 
-def retryRun(f: Callable[[], subprocess.CompletedProcess], maxretries: int,
-        descr: str) -> subprocess.CompletedProcess:
-    retries = 0
+def retryRun(args, maxattempts: int) -> subprocess.CompletedProcess:
+    attempts = 1
     stime = 1
-    e: Any[None, Exception] = None
+    cmd = ' '.join(args)
+    assert(maxattempts >= attempts)
     while True:
         try:
-            cp: subprocess.CompletedProcess = f()
-
-            if cp.returncode == 0:
-                # All good -- we exit here.
-                if retries > 0:
-                    print(f"Succeeded on \"{descr}\" after {retries} retries")
-                return cp
-        except CalledProcessError as e0:
-            e = e0
-            pass
-
-        print(f"Encountered error with \"{descr}\"; retries={retries}; "
-                    f"sleep={stime}")
-        if retries > maxretries:
-            print(f"{maxretries} retries exceeded!")
-            if e != None:
-                raise e
-            assert cp.returncode != 0
+            # verbose = False, so capture stdout to cp.stdout
+            cp = run(args, check = True, verbose = False)
+            assert(cp.returncode == 0) # check = True ensures this
             return cp
+        except CalledProcessError:
+            print(f'Nonzero RC, att={attempts}, sl={stime}: [{cmd}]')
+            if attempts >= maxattempts:
+                print(f"{maxattempts} attempts exhausted!")
+
+                # If we previously muted a CalldedProcessError exception, raise
+                # that exception now
+                raise
 
         time.sleep(stime)
-        retries += 1
+        attempts += 1
         stime <<= 1

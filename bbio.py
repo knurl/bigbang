@@ -1,4 +1,4 @@
-import io, os
+import os
 
 def myDir():
     return os.path.dirname(os.path.abspath(__file__))

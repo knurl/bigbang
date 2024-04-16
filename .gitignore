@@ -1,6 +1,5 @@
 helm-creds.yaml
-sfdc-creds.yaml
-starburstdata.license
+license.secret
 kubeconfig_*
 *terraform.tfstate*
 __pycache__
@@ -15,6 +14,5 @@ gcp/key.json
 *.swp
 *.info
 commit
-ldaplaunch.sh
 *.csv
 *.log

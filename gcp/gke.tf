@@ -13,9 +13,10 @@ resource "google_service_account_key" "gke_servacct_key" {
 }
 
 resource "google_container_cluster" "gke" {
-  project  = data.google_project.project.project_id
-  name     = var.cluster_name
-  location = var.zone
+  project             = data.google_project.project.project_id
+  name                = var.cluster_name
+  location            = var.zone
+  deletion_protection = false
 
   # We can't create a cluster with no node pool defined, but we want to only
   # use separately managed node pools. So we create the smallest possible

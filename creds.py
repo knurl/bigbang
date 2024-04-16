@@ -1,7 +1,12 @@
-import os, sys, subprocess, threading, re
+import os
+import sys
+import subprocess
+import threading
+import re
 from abc import ABC, abstractmethod
 from typing import Optional
-import run, bbio
+import run
+import bbio
 
 awsdir         = os.path.expanduser("~/.aws")
 awsconfig      = os.path.expanduser("~/.aws/config")
