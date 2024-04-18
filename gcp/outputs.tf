@@ -6,6 +6,10 @@ output "bastion_address" {
   value = google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip
 }
 
+output "zone_id" {
+  value = google_dns_managed_zone.private_zone.name
+}
+
 output "object_key" {
   value     = base64decode(google_service_account_key.gke_servacct_key.private_key)
   sensitive = true

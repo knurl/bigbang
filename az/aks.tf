@@ -15,42 +15,20 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   default_node_pool {
-    name       = "${var.cluster_name}-np"
-    node_count = 1
+    name       = "${var.cluster_name}1"
+    node_count = var.node_count
 
     vm_size  = var.instance_types[0]
     max_pods = var.max_pods_per_node
 
+    upgrade_settings {
+      max_surge = "10%"
+    }
+
     enable_node_public_ip = false
-    vnet_subnet_id        = azurerm_subnet.private_sub_aks_regular.id
+    vnet_subnet_id        = azurerm_subnet.private_sub_aks.id
     tags                  = var.tags
   }
-
-  tags = var.tags
-}
-
-resource "azurerm_kubernetes_cluster_node_pool" "secondary" {
-  name                  = "${var.cluster_name}-nps"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-
-  #
-  # compute
-  #
-  node_count = var.node_count - 1 # we have 1 in default node group
-  vm_size    = var.instance_types[0]
-  max_pods   = var.max_pods_per_node * var.node_count
-
-  # Instrumentation for spot instances
-  priority       = var.capacity_type == "Spot" ? "Spot" : "Regular"
-  spot_max_price = -1 # allow any price up to 
-  node_labels    = { "kubernetes.azure.com/scalesetpriority" = "spot" }
-  node_taints    = ["kubernetes.azure.com/scalesetpriority=spot:NoSchedule"]
-
-  #
-  # network
-  #
-  enable_node_public_ip = false
-  vnet_subnet_id        = azurerm_subnet.private_sub_aks_spot.id
 
   tags = var.tags
 }

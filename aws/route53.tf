@@ -13,14 +13,6 @@ resource "aws_route53_zone" "private_dns" {
  * get set up now, since we know their IP addresses in advance.
  */
 
-resource "aws_route53_record" "ldap_a_record" {
-  zone_id = aws_route53_zone.private_dns.zone_id
-  name    = "ldap"
-  type    = "A"
-  ttl     = "3600"
-  records = [aws_network_interface.ldap_eni.private_ip]
-}
-
 resource "aws_route53_record" "bastion_a_record" {
   zone_id = aws_route53_zone.private_dns.zone_id
   name    = "bastion"

@@ -19,6 +19,10 @@ variable "zone" {
   default = "{{Zone}}"
 }
 
+variable "domain" {
+  default = "{{Domain}}"
+}
+
 variable "cluster_name" {
   default = "{{ClusterName}}"
 }
@@ -28,11 +32,7 @@ variable "network_name" {
 }
 
 variable "policy_name" {
-  default = "{{LongName}}-policy"
-}
-
-variable "capacity_type" {
-  default = "{{CapacityType}}"
+  default = "{{ShortName}}-policy"
 }
 
 variable "instance_types" {
@@ -45,7 +45,7 @@ variable "small_instance_type" {
 }
 
 variable "bastion_name" {
-  default = "{{LongName}}-bastion"
+  default = "{{ShortName}}-bastion"
 }
 
 variable "bastion_fw_ingress" {
@@ -72,7 +72,7 @@ variable "ssh_public_key" {
 
 {% if Target == "aws" %}
 variable "sg_name" {
-  default = "{{LongName}}-sg"
+  default = "{{ShortName}}-sg"
 }
 {% elif Target == "az" %}
 variable "my_cidr" {

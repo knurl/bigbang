@@ -29,7 +29,6 @@ from urllib3 import disable_warnings # type: ignore
 
 # local imports
 import out
-import creds
 import bbio
 import ready # local imports
 from cmdgrp import CommandGroup
@@ -62,7 +61,6 @@ helmcredsf  = bbio.where(helmcredsbf)
 sfdccredsbf = 'sfdc-creds.yaml' # don't find FQP yet as SFDC is optional
 tfvars      = "variables.tf" # basename only, no path!
 hostsf      = "/etc/hosts"
-bastlaunchf = bbio.where("bastlaunch.sh")
 
 # Different cloud targets
 clouds = ("aws", "az", "gcp")
@@ -71,7 +69,7 @@ clouds = ("aws", "az", "gcp")
 dbports       = { "mysql": 3306, "postgres": 5432 }
 localhost     = "localhost"
 localhostip   = "127.0.0.1"
-domain        = "hazelcast.net"
+domain        = "hazelcast.net" # cannot terminate with .; Azure will reject
 webfqdn       = "mgmt." + domain
 
 # K8S / Helm
@@ -135,7 +133,6 @@ nodecountlabel  = 'NodeCount'
 appchartvlabel  = 'AppChartVersion'
 oprchartvlabel  = 'OperatorChartVersion'
 tlscoordlabel   = 'RequireCoordTls'
-captypelabel    = 'CapacityType'
 
 try:
     with open(myvarsf) as mypf:
@@ -162,10 +159,7 @@ try:
     nodeCount    = myvars[nodecountlabel] # NodeCount
     tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
 
-    capacityType = myvars[captypelabel]
-
     requireKey("AwsInstanceTypes", myvars)
-    requireKey("AwsPerfInstanceTypes", myvars)
     requireKey("AwsSmallInstanceType", myvars)
     requireKey("AzureVmTypes", myvars)
     requireKey("AzureSmallVmType", myvars)
@@ -213,10 +207,9 @@ def getRegionFromZone(zone: str) -> str:
         awsregion = runCollect("aws configure get region".split())
         if awsregion != region:
             sys.exit(textwrap.dedent(f"""\
-                    Region {awsregion} specified in your {creds.awsconfig} "
-                    "doesn't match region {region} set in your {myvarsf} file."
-                    "Cannot continue. Please ensure these match and
-                    re-run."""))
+                    Region {awsregion} specified in your config doesn't match
+                    region {region} set in your {myvarsf} file. Cannot
+                    continue. Please ensure these match and re-run."""))
 
     return region
 
@@ -247,7 +240,7 @@ check_chart_version(oprchartvlabel, oprchartversion)
 # different nodes, so we need a 2-node cluster at minimum.
 if nodeCount < minNodes:
     sys.exit(f"Must have at least {minNodes} nodes; {nodeCount} set for "
-            f"{nodecountlabel} in {myvarsf}.")
+             f"{nodecountlabel} in {myvarsf}.")
 
 def tlsenabled() -> bool: return tlscoord
 
@@ -258,9 +251,9 @@ gcpproject = ""
 gcpaccount = ""
 if target == "gcp":
     gcpproject = runCollect("gcloud config list --format "
-            "value(core.project)".split())
+                            "value(core.project)".split())
     gcpaccount = runCollect("gcloud config list --format "
-            "value(core.account)".split())
+                            "value(core.account)".split())
 
 # Generate a unique octet for our subnet. Use that octet with the 'code' we
 # generated above as part of a short name we can use to mark our resources
@@ -315,29 +308,27 @@ smallInstanceType = ""
 dbInstanceType = ""
 
 if target == "aws":
-    instanceTypes = myvars["AwsInstanceTypes"][capacityType]
+    instanceTypes = myvars["AwsInstanceTypes"]
     smallInstanceType = myvars["AwsSmallInstanceType"]
 elif target == "az":
-    instanceTypes     = myvars["AzureVmTypes"][capacityType]
+    instanceTypes     = myvars["AzureVmTypes"]
     smallInstanceType = myvars["AzureSmallVmType"]
 elif target == "gcp":
-    instanceTypes     = myvars["GcpMachineTypes"][capacityType]
+    instanceTypes     = myvars["GcpMachineTypes"]
     smallInstanceType = myvars["GcpSmallMachineType"]
 else:
     sys.exit("Cloud target '{t}' specified for '{tl}' in '{m}' not one of "
-            "{c}".format(t = target, tl = targetlabel, m = myvarsf,
-                c = ", ".join(clouds)))
+             "{c}".format(t = target, tl = targetlabel, m = myvarsf,
+                          c = ", ".join(clouds)))
 
-assert capacityType in ("OnDemand", "Spot")
-assert len(instanceTypes) > 0
-assert capacityType == "Spot" or len(instanceTypes) == 1
+assert len(instanceTypes) == 1
 
 #
 # Create some names for some cloud resources we'll need
 #
-clustname = longname + "-cl"
-resourcegrp = longname + "-rg"
-netwkname = longname + '-net'
+clustname = shortname + "cl"
+resourcegrp = shortname + "rg"
+netwkname = shortname + 'net'
 
 templates = {}
 releases = {}
@@ -381,6 +372,9 @@ def appendToFile(filepath, contents) -> None:
 def replaceFile(filepath, contents) -> bool:
     newmd5 = hashlib.md5(contents.encode('utf-8')).hexdigest()
     root, ext = os.path.splitext(filepath)
+    formats = {'.yaml': '#',
+               '.tf': '#',
+               '.zone': ';'}
 
     if os.path.exists(filepath):
         if not os.path.isfile(filepath):
@@ -388,11 +382,12 @@ def replaceFile(filepath, contents) -> bool:
         # We have an old file by the same name. Check the extension, as we only
         # embed the md5 and version in file formats that take comments, and
         # .json files don't take comments.
-        if ext in (".yaml", ".tf"):
+        if ext in formats:
             with open(filepath) as fh:
                 fl = fh.readline()
                 if len(fl) > 0:
-                    if match := re.match(r"# md5 ([\da-f]{32})", fl):
+                    matchexpr = formats[ext] + r" md5 ([\da-f]{32})"
+                    if match := re.match(matchexpr, fl):
                         if newmd5 == match.group(1):
                             # It's the same file. Don't bother writing it.
                             return False # didn't write
@@ -406,8 +401,8 @@ def replaceFile(filepath, contents) -> bool:
     flags = os.O_CREAT | os.O_WRONLY | os.O_EXCL # we are writing new one
     try:
         with open(os.open(path=filepath, flags=flags, mode=0o600), 'w') as fh:
-            if ext in (".yaml", ".tf"):
-                fh.write(f"# md5 {newmd5}\n")
+            if ext in formats:
+                fh.write(formats[ext] + f' md5 {newmd5}\n')
             fh.write(contents)
     except IOError as e:
         print(f"Couldn't write file {filepath} due to {e}")
@@ -423,7 +418,7 @@ def removeOldVersions(yamltmp: str, similar: str) -> None:
         os.remove(f)
 
 def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,
-        undefinedOk: set[str] = set()) -> tuple[bool, str]:
+                         undefinedOk: set[str] = set()) -> tuple[bool, str]:
     assert os.path.basename(template) == template, \
             f"YAML template {template} should be in basename form (no path)"
     root, ext = os.path.splitext(template)
@@ -442,14 +437,14 @@ def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,
     try:
         file_loader = jinja2.FileSystemLoader(templatedir)
         env = jinja2.Environment(loader = file_loader, trim_blocks = True,
-                lstrip_blocks = True, undefined = jinja2.DebugUndefined)
+                                 lstrip_blocks = True, undefined = jinja2.DebugUndefined)
         t = env.get_template(template)
         output = t.render(varsDict)
         ast = env.parse(output)
         undefined = find_undeclared_variables(ast)
         if len(undefined - undefinedOk) > 0:
             raise jinja2.UndefinedError(f"Undefined vars in {template}: "
-                    f"{undefined}; undefinedOK = {undefinedOk}")
+                                        f"{undefined}; undefinedOK = {undefinedOk}")
     except jinja2.TemplateNotFound as e:
         print(f"Couldn't read {template} from {templatedir} due to {e}")
         raise
@@ -482,25 +477,25 @@ def updateKubeConfig() -> None:
         runStdout(f"aws eks update-kubeconfig --name {clustname}".split())
     elif target == "az":
         runStdout(f"az aks get-credentials --resource-group {resourcegrp} "
-                f"--name {clustname} --overwrite-existing".split())
+                  f"--name {clustname} --overwrite-existing".split())
     elif target == "gcp":
         runStdout(f"gcloud container clusters get-credentials {clustname} "
-                f"--region {zone} --internal-ip".split())
+                  f"--region {zone} --internal-ip".split())
 
     # Phase II: Modify the config so that we use the proxy address and so that
     # we ignore the subject alternative names in the api-server certificate
     c = runCollect(f"{kube} config get-contexts "
-            "--no-headers".split()).splitlines()
+                   "--no-headers".split()).splitlines()
     for line in c:
         columns = line.split()
         if columns[0] == "*":
             # get the cluster name
             cluster = columns[2]
             runStdout("kubectl config set clusters.{c}.server "
-                    "https://{h}:{p}".format(c = cluster, h = localhost, p =
-                        getLclPort("apiserv")).split())
+                      "https://{h}:{p}".format(c = cluster, h = localhost, p =
+                                               getLclPort("apiserv")).split())
             runStdout(f"kubectl config set-cluster {cluster} "
-                    "--insecure-skip-tls-verify=true".split())
+                      "--insecure-skip-tls-verify=true".split())
             return
     raise KubeContextError(f"No active {kube} context within:\n{c}")
 
@@ -510,13 +505,13 @@ def getMyPublicIp() -> ipaddress.IPv4Address:
         i = runCollect("dig +short myip.opendns.com @resolver1.opendns.com".split())
     except CalledProcessError:
         sys.exit("Unable to reach the internet. Are your DNS resolvers set "
-                "correctly?")
+                 "correctly?")
 
     try:
         myIp = ipaddress.IPv4Address(i)
         out.announceBox(f"Your visible IP address is {myIp}. Ingress to your "
-                "newly-created bastion server will be limited to this address "
-                "exclusively.")
+                        "newly-created bastion server will be limited to this address "
+                        "exclusively.")
         return myIp
     except ValueError:
         print(f"Unable to retrieve my public IP address; got {i}")
@@ -622,7 +617,7 @@ def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:
                 continue
             name = meta["name"]
             assert name == serv, f"Unexpected service {name}"
-            
+
             # Status section - now see if its IP is allocated yet
             if "status" not in s:
                 continue
@@ -636,7 +631,7 @@ def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:
             ingress = lb["ingress"]
             assert len(ingress) == 1
             ingress0 = ingress[0]
-            
+
             # Key could be either ip or hostname, both valid
             if "ip" in ingress0:
                 lbs[name] = ingress0["ip"]
@@ -679,8 +674,8 @@ class Tunnel:
         self.lport = lPort
         self.raddr = rAddr
         self.rport = rPort
-        self.command = "ssh -N -L{p}:{a}:{k} ubuntu@{b}".format(p = lPort, a =
-                rAddr, k = rPort, b = bastionIp)
+        self.command = ("ssh -N -L{p}:{a}:{k} ubuntu@{b}"
+                        .format(p=lPort, a=rAddr, k=rPort, b=bastionIp))
         print(self.command)
         self.p = subprocess.Popen(self.command.split())
         assert self.p is not None
@@ -698,7 +693,7 @@ class Tunnel:
         if len(self.raddr) < 16:
             tgtname = "[{n}]{h}".format(n = self.shortname, h = self.raddr)
         return "{l} -> {ra}:{rp} (PID {p})".format(l = self.lport, ra =
-                tgtname, rp = self.rport, p = self.p.pid if self.p else "?")
+                                                   tgtname, rp = self.rport, p = self.p.pid if self.p else "?")
 
     def __enter__(self):
         print(f'Tunnel OPENED: {self}')
@@ -721,7 +716,7 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
         runStdout(f'ssh-keygen -q -R {bastion_ip}'.split())
     except CalledProcessError:
         print("Unable to remove host key for {b} in {k}. Is file "
-                "missing?".format(b = bastion_ip, k = knownhosts))
+              "missing?".format(b = bastion_ip, k = knownhosts))
     cmd = f'ssh-keyscan -4 -p22 -H {bastion_ip}'
     print(cmd)
     cp = retryRun(cmd.split(), 5)
@@ -744,10 +739,9 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
 
     return tun
 
-def ensure_cluster_is_started(skipClusterStart: bool) -> \
-        tuple[Tunnel, dict]:
-    env = {"CapacityType":        capacityType,
-           "ClusterName":         clustname,
+def ensure_cluster_is_started(skipClusterStart: bool) -> tuple[Tunnel, dict]:
+    env = {"ClusterName":         clustname,
+           "Domain":              domain,
            "InstanceTypes":       instanceTypes,
            "MaxPodsPerNode":      maxpodpnode,
            "MyCIDR":              mySubnetCidr,
@@ -759,7 +753,7 @@ def ensure_cluster_is_started(skipClusterStart: bool) -> \
            "Region":              region,
            "Target":              target,
            "UserName":            username,
-           "LongName":            longname,
+           "ShortName":           shortname,
            "Zone":                zone}
 
     assert target in clouds
@@ -774,16 +768,16 @@ def ensure_cluster_is_started(skipClusterStart: bool) -> \
 
     # The terraform run. Perform an init, then an apply.
     if not skipClusterStart:
-        with Timer('terraform init & apply'):
-            runStdout(f"{tf} init -upgrade -input=false".split())
-            runStdout(f"{tf} apply -auto-approve -input=false".split())
+        out.announce('running terraform init & apply')
+        runStdout(f"{tf} init -upgrade -input=false".split())
+        runStdout(f"{tf} apply -auto-approve -input=false".split())
 
     # Get variables returned from terraform run
     env = get_output_vars()
 
     # Start up ssh tunnels via the bastion, so we can run kubectl locally from
     # the workstation
-    tun = setup_bastion_tunnel(env['bastion_address'], env['k8s_server'])
+    tun = setup_bastion_tunnel(env['bastion_address'], env['k8s_api_server'])
 
     # Don't continue until all nodes are ready
     out.announce("Waiting for nodes to come online")
@@ -804,37 +798,69 @@ def killAllTerminatingPods() -> None:
         status = col[2]
         if status == "Terminating":
             r = runTry(f"{kubens} delete pod {name} --force "
-                    "--grace-period=0".split())
+                       "--grace-period=0".split())
             if r.returncode == 0:
                 print(f"Terminated pod {name}")
 
-# TODO Azure and GCP allow static IPs to be specified for LBs, so we rely on
-# that to set up LDAP during our Terraform run with those IPs. AWS doesn't
-# allow IPs to be explicitly set for load balancers, so we have to take a
-# different approach post-Terraform, which is to create a CNAME in Route 53
-# that references the (classic) LBs that AWS sets up.
-def set_cnames_for_lbs_aws(lbs: dict[str, str],
-                           route53ZoneId: str) -> None:
-    out.announce('Creating route53 entries for ' + ', '.join(services))
-    batchf = f'{tmpdir}/crrs_batch.json'
-    batch: Dict[str, Any] = {
-            'Comment': 'DNS CNAME records',
-            'Changes': []
-            }
-    for name, host in lbs.items():
-        assert name in services
+def set_dns_for_lbs(zid: str, # Zone ID
+                    lbs: dict[str, str],
+                    delete: bool = False) -> None:
+    if not lbs:
+        return
+    assert(zid)
 
-        batch['Changes'].append({
-            'Action': 'UPSERT',
-            'ResourceRecordSet': {
-                'Name': f'{name}.{domain}',
-                'Type': 'CNAME',
-                'TTL': 300,
-                'ResourceRecords': [{ 'Value': host }]}})
-    replaceFile(batchf, json.dumps(batch))
-    cmd = "aws route53 change-resource-record-sets --hosted-zone-id " \
-            f"{route53ZoneId} --change-batch file://{batchf}"
-    runCollect(cmd.split())
+    action = "DELETE" if delete else "UPSERT"
+    out.announce(f'{action} DNS entries for ' + ', '.join(lbs.keys()))
+    ttl = 3600
+
+    if target == 'aws':
+        batch_aws: Dict[str, Any] = {
+                'Comment': 'DNS CNAME records',
+                'Changes': []
+                }
+    # for Azure & GCP, we will run commands as we go
+
+    for name, host in lbs.items():
+        assert name == 'bastion' or name in services
+        fqn = f'{name}.{domain}.'
+
+        if target == 'aws':
+            # AWS uses DNS names for LBs, not IP addresses, so we have to
+            # create a CNAME record here, not an A record
+            batch_aws['Changes'].append({
+                'Action': action,
+                'ResourceRecordSet': {
+                    'Name': fqn,
+                    'Type': 'CNAME',
+                    'TTL': ttl,
+                    'ResourceRecords': [{ 'Value': host }]}})
+        elif target == 'az':
+            # Azure uses IP addresses for LBs, so we use an A record. Azure
+            # wants us to run a command for each update
+            cmd = (f'az network private-dns record-set a delete '
+                   f'-g {resourcegrp} -n {name} -z {zid} -y')
+            runStdout(cmd.split())
+            if not delete:
+                cmd = (f'az network private-dns record-set a create '
+                       f'-g {resourcegrp} -n {name} -z {zid} --ttl {ttl}')
+                cmd = (f'az network private-dns record-set a add-record '
+                       f'-g {resourcegrp} -n {name} -z {zid} -a {host}')
+                runStdout(cmd.split())
+        elif target == 'gcp':
+            # GCP uses IP addresses for LBs, so we use an A record. GCP wants
+            # us to run a command for each update.
+            i = 'delete' if delete else 'update'
+            cmd = (f'gcloud dns record-sets {i} {fqn} --zone={zid} --type=A')
+            if not delete:
+                cmd += f' --rrdatas={host} --ttl={ttl}'
+            runStdout(cmd.split())
+
+    if target == 'aws':
+        batchfn = f'{tmpdir}/crrs_batch_aws.json'
+        replaceFile(batchfn, json.dumps(batch_aws))
+        runStdout(('aws route53 change-resource-record-sets --hosted-zone-id '
+                   f'{zid} --change-batch file://{batchfn}').split())
+    # Nothing more to do for Azure or GCP
 
 def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
     tuns: list[Tunnel] = []
@@ -861,7 +887,7 @@ def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
     for svc in services:
         assert svc in lbs
         tuns.append(Tunnel(svc, ipaddress.IPv4Address(bastionIp),
-            getLclPort(svc), lbs[svc], getRmtPort(svc)))
+                           getLclPort(svc), lbs[svc], getRmtPort(svc)))
 
     # make sure the load balancers are actually responding
     out.announce("Waiting for load-balancers to start responding")
@@ -876,7 +902,7 @@ def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
     installed = []
     if secrets:
         installed = runCollect(f"{kubens} get secrets "
-                f"-o=jsonpath={{.items[*].metadata.name}}".split()).split()
+                               f"-o=jsonpath={{.items[*].metadata.name}}".split()).split()
 
     for name, values in secrets.items():
         # These are needed only for GCP
@@ -932,7 +958,7 @@ def ensureHelmRepoSetUp(repo: str) -> None:
             # it fails. So we actually have to collect the output and look to
             # see if it failed. :-( If it fails, then just remove the repo and
             # re-install it.
-            out.announce('Updating helm repo {repo}')
+            out.announce(f'Updating helm repo {repo}')
             output = helmGet("repo update --fail-on-repo-update-fail")
             if "Update Complete. ⎈Happy Helming!⎈" in output:
                 print("Upgrade of repo succeeded")
@@ -949,14 +975,14 @@ def helmGetNamespaces() -> list:
     n = []
     try:
         nsl = json.loads(runCollect(f"{kube} get namespaces "
-            "--output=json".split()))["items"]
+                                    "--output=json".split()))["items"]
         n = [x["metadata"]["name"] for x in nsl]
     except CalledProcessError:
         print("No namespaces found.")
 
     return n
 
-def helmCreateNamespace() -> None:
+def helm_create_namespace() -> None:
     if namespace not in helmGetNamespaces():
         runStdout(f'{kube} create namespace {namespace}'.split())
     runStdout(f'{kube} config set-context --namespace={namespace} '
@@ -967,7 +993,7 @@ def helm_delete_namespace() -> None:
         out.announce(f"Deleting namespace {namespace}")
         runStdout(f"{kube} delete namespace {namespace}".split())
     runStdout(f"{kube} config set-context --namespace=default "
-            "--current".split())
+              "--current".split())
 
 def helmGetReleases() -> dict:
     rls = {}
@@ -994,10 +1020,10 @@ def helmInstallOperator(module: str, env: dict = {}) -> None:
 
     chart = helmWhichChartInstalled(module)
     newchart = charts[module] + "-" + oprchartversion # which one to install?
-    
+
     if chart is None: # Nothing installed yet, so we need to install
         out.announce("Installing chart {c} as {r}".format(c = newchart, r =
-            releases[module]))
+                                                          releases[module]))
         helm("{h} install {r} {w}/{c} --version {v}"
              .format(h=helmns, r=releases[module], w=repo, c=charts[module],
                      v=oprchartversion))
@@ -1022,7 +1048,7 @@ def KubeApplyCrd(crd: str, env: dict = {}) -> None:
 
     _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
 
-    out.announce(f'Applying CRD {crd}')
+    out.announce(f'Applying CRD "{crd}"')
     runStdout(f'{kubens} apply -f {yamltmp}'.split())
 
 def KubeDeleteCrd(crd: str, env) -> None:
@@ -1033,14 +1059,14 @@ def KubeDeleteCrd(crd: str, env) -> None:
 
     _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
 
-    out.announce(f'Deleting CRD {crd}')
+    out.announce(f'Deleting CRD "{crd}"')
     runStdout(f'{kubens} delete --ignore-not-found=true -f {yamltmp}'.split())
 
 def helmUninstallRelease(release: str) -> None:
     helm(f"{helmns} uninstall {release}")
 
-def helmInstallAll(env):
-    helmCreateNamespace()
+def helm_create_operator_and_crds(env):
+    helm_create_namespace()
     env |= installSecrets(secrets)
     ensureHelmRepoSetUp(repo)
     helmInstallOperator(operator, env)
@@ -1050,14 +1076,13 @@ def helmInstallAll(env):
     # Speed up the deployment of the updated pods by killing the old ones
     killAllTerminatingPods()
 
-def deleteAllServices() -> None:
+def delete_all_services(lbs: dict[str, str]) -> bool:
     # Explicitly deleting services gets rid of load balancers, which eliminates
     # a race condition that Terraform is susceptible to, where the ELBs created
     # by the load balancers endure while the cluster is destroyed, stranding
     # the ENIs and preventing the deletion of the associated subnets
     # https://github.com/kubernetes/kubernetes/issues/93390
     out.announce("Deleting all k8s services")
-    lbs = getLoadBalancers(services, namespace)
     if len(lbs) == 0:
         print("No LBs running.")
     else:
@@ -1066,10 +1091,12 @@ def deleteAllServices() -> None:
     lbs_after = getLoadBalancers(services, namespace)
     if len(lbs_after) == 0:
         print("No load balancers running after service delete.")
+        return True
     else:
         print("# WARN Load balancers running after service delete! " +
-                str(lbs_after))
+              str(lbs_after))
         print("# WARN This may cause dependency problems later!")
+        return False
 
 def helm_delete_crds_and_operator():
     for release, chart in helmGetReleases().items():
@@ -1085,8 +1112,7 @@ def announceReady(bastionIp: str) -> list[str]:
     a.append(f"bastion: {bastionIp}")
     return a
 
-def svcStart(credobj: Optional[creds.Creds] = None,
-             skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
+def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
     tuns: list[Tunnel] = []
     #
     # Infrastructure first. Create the cluster using Terraform.
@@ -1095,22 +1121,16 @@ def svcStart(credobj: Optional[creds.Creds] = None,
         tun, env = ensure_cluster_is_started(skipClusterStart)
         tuns.append(tun)
 
-    if credobj and isinstance(credobj, creds.Creds):
-        env |= credobj.toDict()
-
     bastion = env['bastion_address']
 
-    with Timer('setup of K8S objects'):
-        helmInstallAll(env)
+    with Timer('setup of K8S resources'):
+        helm_create_operator_and_crds(env)
         # Wait for pods & LBs to become ready
         # Set up port forward tunnels for LBs
         new_tuns, lbs = start_tunnel_to_lbs(bastion)
 
-    # Add CNAMES in AWS DNS (Route 53) for new LBs
-    if target == 'aws':
-        zid = env.get('route53_zone_id')
-        assert(zid)
-        set_cnames_for_lbs_aws(lbs, zid)
+    # Add CNAMES or A records for DNS for new LBs
+    set_dns_for_lbs(env['zone_id'], lbs)
 
     tuns.extend(new_tuns)
     return tuns, bastion
@@ -1121,25 +1141,35 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
     out.announce("Re-establishing bastion tunnel")
     env = get_output_vars()
     lbs_cleaned = False
- 
-    try:
-        bastion_ip = env['bastion_address']
-        k8s_server_name = env['k8s_server']
 
-        with setup_bastion_tunnel(env[bastion_ip], env[k8s_server_name]):
-            with Timer('teardown of K8S objects'):
-                # tunnel established. Now delete CRDs and operator.
+    try:
+        zone_id = env['zone_id']
+        bastion_ip = env['bastion_address']
+        k8s_server_name = env['k8s_api_server']
+
+        # DNS entries can be removed first. This can happen without the tunnel
+        # to the bastion host, since none of the changes here affect K8S.
+        # NOTE: DNS *must* be removed since Terraform will complain about any
+        # records it didn't create at the time the zone is destroyed.
+        lbs = getLoadBalancers(services, namespace)
+        set_dns_for_lbs(zone_id, lbs, delete=True)
+
+        with setup_bastion_tunnel(bastion_ip, k8s_server_name):
+            with Timer('teardown of K8S resources'):
+                # tunnel established. Now delete things in reverse order to how
+                # they were created.
+
                 for crd in crds:
                     KubeDeleteCrd(crd, env)
                 helm_delete_crds_and_operator()
 
                 # Make sure to get rid of all services, in case they weren't
                 # already removed. We need to make sure we don't leak LBs.
-                deleteAllServices()
+                lbs_after_helm_uninstall = getLoadBalancers(services, namespace)
+                lbs_cleaned = delete_all_services(lbs_after_helm_uninstall)
                 helm_delete_namespace()
-                lbs_cleaned = True
     except KeyError:
-        out.announce('Terraform objects appear to be destroyed?')
+        out.announce('Terraform objects seem destroyed, ergo no bastion.')
 
     if onlyEmptyNodes:
         return
@@ -1151,7 +1181,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 trouble on the destroy with leaked LBs."""))
 
     out.announce(f"Ensuring cluster {clustname} is deleted")
-    with Timer('terraform destroy'):
+    with Timer('stopping cluster'):
         runStdout(f"{tf} destroy -auto-approve".split())
 
 def fqdnToDc(fqdn: str) -> str:
@@ -1165,15 +1195,11 @@ def getCloudSummary() -> List[str]:
         cloud = "Microsoft Azure"
     else:
         cloud = "Google Cloud Services"
-    if len(instanceTypes) > 1:
-        itype = "[SPOT like {}, {}, &c]".format(instanceTypes[0],
-                instanceTypes[1])
-    else:
-        itype = instanceTypes[0]
+
     return [f"Cloud: {cloud}",
-        f"Region: {region}",
-        # FIXME this should show the instance type actually selected!
-        f"Cluster: {nodeCount} × {itype}"]
+            f"Region: {region}",
+            # FIXME this should show the instance type actually selected!
+            f"Cluster: {nodeCount} × {instanceTypes[0]}"]
 
 def getSecrets() -> None:
     try:
@@ -1194,7 +1220,7 @@ def getSecrets() -> None:
         # a pre-made secret, and it must already be on disk and readable.
         if ("generated" not in values or not values["generated"]) \
                 and not bbio.readableFile(filename):
-            sys.exit(f"Can't find a readable file at {filename} for {name}")
+                    sys.exit(f"Can't find a readable file at {filename} for {name}")
 
         # Certificate groups should be treated specially, and we should add
         # these to the set as a single object. Store them away here and return
@@ -1223,12 +1249,12 @@ def getSecrets() -> None:
             # actually parse the output to see if the certificate is valid
             try:
                 output = runCollect("openssl verify -untrusted {ch} {c}".format(ch
-                    = values["chain"], c = values["cert"]).split()).splitlines()
+                                                                                = values["chain"], c = values["cert"]).split()).splitlines()
                 if output[-1] == values['cert'] + ': OK':
                     print('Verified certificate ' + values["cert"])
             except CalledProcessError:
                 print("Unable to verify cert {c} & chain {ch}".format(c =
-                    values["cert"], ch = values["chain"]))
+                                                                      values["cert"], ch = values["chain"]))
                 sys.exit(-1)
         secrets[groupname] = values
 
@@ -1316,7 +1342,7 @@ def cleanOldTunnels() -> None:
 
         for proc in procs:
             print(str(proc.info['pid']) + ' - ' +
-                    " ".join(proc.info['cmdline']))
+                  " ".join(proc.info['cmdline']))
 
         yn = input('These look like old tunnels. Kill them? [Y/n] -> ')
         if not yn or yn.lower()[0] == 'y':
@@ -1340,7 +1366,33 @@ def spinWaitCGTest():
     cg.run_commands()
     out.spinWait(cg.ratio_done)
     cg.wait_until_done()
-    
+
+def check_creds() -> None:
+    awsdir    = os.path.expanduser("~/.aws")
+    awsconfig = os.path.expanduser("~/.aws/config")
+
+    if target == "aws":
+        badAws = False
+        if not bbio.writeableDir(awsdir):
+            badAws = True
+            err = f"Directory {awsdir} doesn't exist or has bad permissions."
+        elif not bbio.readableFile(awsconfig):
+            badAws = True
+            err = f"File {awsconfig} doesn't exist or isn't readable."
+        if badAws:
+            print(err)
+            sys.exit("Have you run aws configure?")
+    elif target == "az":
+        azuredir = os.path.expanduser("~/.azure")
+        if not bbio.writeableDir(azuredir):
+            print(f"Directory {azuredir} doesn't exist or isn't readable.")
+            sys.exit("Have you run az login and az configure?")
+    elif target == "gcp":
+        gcpdir = os.path.expanduser("~/.config/gcloud")
+        if not bbio.writeableDir(gcpdir):
+            print("Directory {gcpdir} doesn't exist or isn't readable.")
+            sys.exit("Have you run gcloud init?")
+
 def main() -> None:
     if ns.progmeter_test:
         spinWaitCGTest()
@@ -1349,7 +1401,7 @@ def main() -> None:
     out.announce("Verifying environment")
     getSecrets()
     announceSummary()
-    credobj = creds.getCreds(target)
+    check_creds()
     checkRSAKey()
     checkEtcHosts()
     cleanOldTunnels()
@@ -1365,10 +1417,10 @@ def main() -> None:
     tuns: list[Tunnel] = []
     bastion = ''
     if ns.command in ("start", "restart"):
-        tuns, bastion = svcStart(credobj, ns.skip_cluster_start)
+        tuns, bastion = svcStart(ns.skip_cluster_start)
         started = True
         out.announceBox(f"Your {rsaPub} public key has been installed into the "
-                "bastion server, so you can ssh there now (user 'ubuntu').")
+                        "bastion server, so you can ssh there now (user 'ubuntu').")
 
     y = getCloudSummary()
     if started:

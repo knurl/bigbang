@@ -1,7 +1,7 @@
 resource "google_dns_managed_zone" "private_zone" {
   name     = "${var.network_name}-dns"
   project  = data.google_project.project.project_id
-  dns_name = "hazelcast.net."
+  dns_name = var.domain
   labels   = var.tags
 
   visibility = "private"
@@ -21,3 +21,4 @@ resource "google_dns_record_set" "bastion_a_record" {
   rrdatas      = [local.bastion_address]
   ttl          = 3600
 }
+

@@ -67,7 +67,7 @@ resource "google_container_node_pool" "node_pool" {
 
   node_config {
     machine_type = var.instance_types[0]
-    preemptible  = var.capacity_type == "Spot" ? true : false
+    preemptible  = false
 
     # Google recommends custom service accounts that have cloud-platform scope
     # and permissions granted via IAM Roles.

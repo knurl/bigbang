@@ -119,6 +119,8 @@ else
     echo "Bigbang already installed"
 fi
 
+# Configure AWS
+#
 p "configuring AWS profile"
 if [[ ! -f $HOME/.aws/config || ! -f $HOME/.aws/credentials ]]; then
     aws configure
@@ -126,13 +128,25 @@ else
     echo "AWS config and credentials files already exist"
 fi
 
+# Configure Azure
+#
+p "configuring Azure profile"
+if [[ ! -d $HOME/.config/.azure ]]; then
+    az configure
+    az login
+else
+    echo "Azure config already set up"
+fi
+
 pip install google-cloud-bigquery google-cloud-storage
 brew install --cask google-cloud-sdk
+gcloud components install gke-gcloud-auth-plugin
 if [[ ! -d $HOME/.config/gcloud ]]; then
     gcloud init
+    gcloud auth login
+    gcloud auth application-default login
+else
+    echo "GCP config already set up"
 fi
-gcloud auth login
-gcloud auth application-default login
-gcloud components install gke-gcloud-auth-plugin
 
 p "***BIGBANG INSTALLATION COMPLETE***"

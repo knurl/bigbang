@@ -63,15 +63,6 @@ resource "aws_ec2_tag" "stag_for_ilb_2" {
   value       = "1"
 }
 
-data "aws_db_subnet_group" "database_sngrp" {
-  name = "private"
-}
-
-resource "aws_redshift_subnet_group" "redshift_sngrp" {
-  name       = "${var.network_name}-subng-red"
-  subnet_ids = local.prv_subnet_ids
-}
-
 locals {
   prv_subnet_ids      = data.aws_subnet.private_subnet.*.id
   pub_subnet_ids      = data.aws_subnet.public_subnet.*.id

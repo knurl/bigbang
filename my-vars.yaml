@@ -5,9 +5,9 @@ Email: rob.anderson@hazelcast.com
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-#Target: aws
+Target: aws
 #Target: az
-Target: gcp
+#Target: gcp
 
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
@@ -43,36 +43,17 @@ AuthNLdap: False
 # You probably don't want to modify any configuration below this line.
 #
 
-# node pool capacity type, for non-performance mode only
-CapacityType: OnDemand
-
 # non-performance (default) node pool types
 AwsInstanceTypes:
-  Spot: # all with 16 vCPU / 64 GB, provided by Spot Instance Advisor
-    - m5a.4xlarge
-    - m5.4xlarge
-    - m6i.4xlarge
-    - m4.4xlarge
-  OnDemand:
-    - r5d.4xlarge # 16 vCPU, 128 GB, 2 x 300 NVMe SSD
+    - m5.large # 2 vCPU, 8 GB
 AzureVmTypes:
-  Spot:
-    - Standard_D16_v5 
-  OnDemand:
-    - Standard_L16s_v2 # 16 vCPU, 128 GB, optional SSD
+    - Standard_B2s
 GcpMachineTypes:
-  Spot:
-    - e2-standard-8
-  OnDemand:
-    - e2-standard-8 # 16 vCPU, 128 GB, optional SSD
-
-# performance testing nodes (always AWS, on-demand)
-AwsPerfInstanceTypes:
-    - m5.8xlarge
+    - e2-standard-2 # 16 vCPU, 128 GB, optional SSD
 
 # smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM
 AwsSmallInstanceType: m5.large
-AzureSmallVmType: Standard_B2ms
+AzureSmallVmType: Standard_B2s
 GcpSmallMachineType: e2-standard-2
 
 #

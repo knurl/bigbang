@@ -38,7 +38,7 @@ module "eks" {
       }
 
       instance_types = [local.preferred_eks_instance_type]
-      capacity_type  = var.capacity_type == "Spot" ? "SPOT" : "ON_DEMAND"
+      capacity_type  = "ON_DEMAND"
 
       security_group_rules = {
         /* By default, eks module does not allow node-to-node communication.
