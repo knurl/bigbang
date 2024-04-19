@@ -1,14 +1,38 @@
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
-  cluster_version = "1.27"
-  version         = "19.15.2"
+  cluster_version = "1.29"
+  version         = "20.8.5"
 
   # Where to place the EKS cluster and workers.
-  vpc_id                          = data.aws_vpc.sb_vpc.id
-  subnet_ids                      = local.prv_subnet_ids
+  vpc_id                          = module.vpc.vpc_id
+  subnet_ids                      = module.vpc.private_subnets
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = false
+
+  cluster_addons = {
+    coredns = {
+      most_recent = true
+    }
+    kube-proxy = {
+      most_recent = true
+    }
+    vpc-cni = {
+      most_recent = true
+    }
+    # Without the CSI driver, the persistent volume will not become available;
+    # we also need to provide an additional policy, below
+    aws-ebs-csi-driver = {
+      most_recent = true
+    }
+  }
+
+  /* Disabling creation of key in kms, and 'secret cluster encryption', because
+   * it requires the creation and attachment of a policy for which I do not
+   * have permission.
+   * */
+  attach_cluster_encryption_policy = false
+  cluster_encryption_config        = {}
 
   cluster_security_group_additional_rules = {
     admin_access = {
@@ -21,14 +45,18 @@ module "eks" {
     }
   }
 
+  # Cluster access entry
+  # To add the current caller identity as an administrator
+  authentication_mode                      = "API_AND_CONFIG_MAP"
+  enable_cluster_creator_admin_permissions = true
+
   eks_managed_node_groups = {
     ng = {
       name         = "${var.cluster_name}-ng"
       min_size     = 0
       max_size     = var.node_count
       desired_size = var.node_count
-      subnet_ids   = [local.prv_subnet_ids[0]]
-      ami_type     = length(regexall("g", split(".", local.preferred_eks_instance_type)[0])) > 0 ? "AL2_ARM_64" : "AL2_x86_64"
+
       lifecycle = {
         create_before_destroy = false
       }
@@ -37,7 +65,7 @@ module "eks" {
         max_unavailable = var.node_count
       }
 
-      instance_types = [local.preferred_eks_instance_type]
+      instance_types = [var.instance_types[0]]
       capacity_type  = "ON_DEMAND"
 
       security_group_rules = {
@@ -66,6 +94,12 @@ module "eks" {
         }
       }
 
+      # This is related to the CSI driver above. This policy allows the CSI
+      # driver to access services like EC2 on your behalf
+      iam_role_additional_policies = {
+        AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+      }
+
       # TODO: IMDSv2 is the default, but doesn't work with our EKS containers.
       # Note that "http_endpoint" is enabled by default, but for some reason
       # Terraform occasionally crashes with an error message saying it's set to
@@ -81,40 +115,4 @@ module "eks" {
   tags = {
     Name = var.cluster_name
   }
-}
-
-resource "aws_iam_policy" "eks_trino_worker_policy" {
-  name_prefix = "${var.policy_name}-eks-trino-worker"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:*",
-          "cloudformation:*",
-          "glue:*",
-          "sts:AssumeRole",
-          "secretsmanager:GetResourcePolicy",
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret",
-          "secretsmanager:ListSecretVersionIds"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# Attach policies separately due to Terraform bug https://tinyurl.com/2zj7a42r
-resource "aws_iam_role_policy_attachment" "attach_eks_trino_worker" {
-  for_each   = module.eks.eks_managed_node_groups
-  policy_arn = aws_iam_policy.eks_trino_worker_policy.arn
-  role       = each.value.iam_role_name
-}
-
-resource "aws_iam_role_policy_attachment" "attach_elb_full_access" {
-  for_each   = module.eks.eks_managed_node_groups
-  policy_arn = "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess"
-  role       = each.value.iam_role_name
 }

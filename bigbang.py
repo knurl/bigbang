@@ -859,7 +859,8 @@ def set_dns_for_lbs(zid: str, # Zone ID
         batchfn = f'{tmpdir}/crrs_batch_aws.json'
         replaceFile(batchfn, json.dumps(batch_aws))
         runStdout(('aws route53 change-resource-record-sets --hosted-zone-id '
-                   f'{zid} --change-batch file://{batchfn}').split())
+                   f'{zid} --change-batch file://{batchfn} '
+                   '--no-cli-pager').split())
     # Nothing more to do for Azure or GCP
 
 def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:

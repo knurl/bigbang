@@ -1,6 +1,6 @@
 resource "aws_security_group" "bastion_sg" {
   name                   = "${var.bastion_name}-sg"
-  vpc_id                 = data.aws_vpc.sb_vpc.id
+  vpc_id                 = module.vpc.vpc_id
   revoke_rules_on_delete = true
 
   /* Allow communication to port 22 (SSH) from the home IP only, or in the case
@@ -24,7 +24,7 @@ resource "aws_security_group" "bastion_sg" {
     from_port   = 8444
     to_port     = 8445
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.sb_vpc.cidr_block]
+    cidr_blocks = [var.my_cidr]
   }
 
   ingress {
@@ -53,8 +53,9 @@ resource "aws_security_group" "bastion_sg" {
 }
 
 resource "aws_network_interface" "bastion_eni" {
-  subnet_id       = data.aws_subnet.public_subnet[0].id
+  subnet_id       = module.vpc.public_subnets[0]
   security_groups = [aws_security_group.bastion_sg.id]
+  private_ips     = [local.bastion_ip]
 
   tags = {
     Name = "${var.bastion_name}-eni"
@@ -80,15 +81,17 @@ resource "aws_instance" "bastion" {
     Name = "${var.bastion_name}"
   }
 
-  /* We have a dependency on DNS so that certificates can be validated. */
-  depends_on = [aws_route53_record.bastion_a_record]
+  /* We have a dependency on our NAT gateway for outbound connectivity during
+   * our launch script, as well as DNS so that certificates can be validated.
+   */
+  depends_on = [module.vpc, aws_route53_record.bastion_a_record]
 }
 
 resource "aws_eip" "bastion_eip" {
-  vpc                       = true
+  domain                    = "vpc"
   instance                  = aws_instance.bastion.id
   associate_with_private_ip = aws_instance.bastion.private_ip
-  depends_on                = [aws_instance.bastion]
+  depends_on                = [module.vpc, aws_instance.bastion]
 
   tags = {
     Name = "${var.network_name}-bastion-eip"

@@ -23,6 +23,10 @@ variable "domain" {
   default = "{{Domain}}"
 }
 
+variable "my_cidr" {
+  default = "{{MyCIDR}}"
+}
+
 variable "cluster_name" {
   default = "{{ClusterName}}"
 }

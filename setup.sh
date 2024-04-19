@@ -112,20 +112,23 @@ pip install --upgrade pip
 p "installing python dependencies for bigbang"
 pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor mypy types-requests
 
-p "installing bigbang"
-if [ ! -d bigbang ]; then
-    git clone https://github.com/knurl/bigbang
-else
-    echo "Bigbang already installed"
-fi
+#p "installing bigbang"
+#if [ ! -d bigbang ]; then
+#    git clone https://github.com/knurl/bigbang ~/bigbang
+#else
+#    echo "Bigbang already installed"
+#fi
 
 # Configure AWS
 #
 p "configuring AWS profile"
-if [[ ! -f $HOME/.aws/config || ! -f $HOME/.aws/credentials ]]; then
-    aws configure
+if [[ ! -f $HOME/.aws/config ]]; then
+    echo Configuring SSO login. When prompted below...
+    echo --> SSO Start URL as https://hazelcast.awsapps.com/start
+    echo --> When prompted below, specify SSO Region as us-east-1
+    aws configure sso
 else
-    echo "AWS config and credentials files already exist"
+    echo "AWS config file already exists"
 fi
 
 # Configure Azure
