@@ -32,6 +32,7 @@ announceStart	out.py	/^def announceStart(s: str) -> None:$/;"	f
 announceSummary	bigbang.py	/^def announceSummary() -> None:$/;"	f
 appchartvlabel	bigbang.py	/^appchartvlabel  = 'AppChartVersion'$/;"	v
 appendToFile	bigbang.py	/^def appendToFile(filepath, contents) -> None:$/;"	f
+bastionuser	bigbang.py	/^bastionuser   = 'ubuntu'$/;"	v
 c	bigbang.py	/^                          c = ", ".join(clouds)))$/;"	v
 cb_work_done	cmdgrp.py	/^            def cb_work_done():$/;"	f	function:CommandGroup.add_command.make_cb_work_done
 cd	out.py	/^    def cd(x):$/;"	f	function:spinWait
@@ -90,9 +91,6 @@ helm_create_namespace	bigbang.py	/^def helm_create_namespace() -> None:$/;"	f
 helm_create_operator_and_crds	bigbang.py	/^def helm_create_operator_and_crds(env):$/;"	f
 helm_delete_crds_and_operator	bigbang.py	/^def helm_delete_crds_and_operator():$/;"	f
 helm_delete_namespace	bigbang.py	/^def helm_delete_namespace() -> None:$/;"	f
-helmcreds	bigbang.py	/^        helmcreds = yaml.load(mypf, Loader = yaml.FullLoader)$/;"	v
-helmcredsbf	bigbang.py	/^helmcredsbf = 'helm-creds.yaml'$/;"	v
-helmcredsf	bigbang.py	/^helmcredsf  = bbio.where(helmcredsbf)$/;"	v
 helmns	bigbang.py	/^helmns      = f"-n {namespace}"$/;"	v
 help	bigbang.py	/^               help="Force cloud target to specified value.")$/;"	v
 help	bigbang.py	/^               help="Force zone\/region to specified value.")$/;"	v
@@ -147,8 +145,6 @@ releases	bigbang.py	/^releases = {}$/;"	v
 removeOldVersions	bigbang.py	/^def removeOldVersions(yamltmp: str, similar: str) -> None:$/;"	f
 replaceFile	bigbang.py	/^def replaceFile(filepath, contents) -> bool:$/;"	f
 replicasPerPod	capcalc.py	/^def replicasPerPod(podname: str, numNodes: int) -> int:$/;"	f
-repopass	bigbang.py	/^    repopass     = helmcreds["HelmRepoPassword"]$/;"	v
-repouser	bigbang.py	/^    repouser     = helmcreds["HelmRepoUser"]$/;"	v
 requireKey	bigbang.py	/^def requireKey(key: str, d: dict[str, Any]):$/;"	f
 resourcegrp	bigbang.py	/^resourcegrp = shortname + "rg"$/;"	v
 retryRun	run.py	/^def retryRun(args, maxattempts: int) -> subprocess.CompletedProcess:$/;"	f

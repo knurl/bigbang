@@ -75,21 +75,18 @@ variable "ssh_public_key" {
 }
 
 {% if Target == "aws" %}
+
 variable "sg_name" {
   default = "{{ShortName}}-sg"
 }
+
 {% elif Target == "az" %}
-variable "my_cidr" {
-  default = "{{MyCIDR}}"
-}
 
 variable "resource_group_name" {
   default = "{{ResourceGroup}}"
 }
+
 {% elif Target == "gcp" %}
-variable "my_cidr" {
-  default = "{{MyCIDR}}"
-}
 
 variable "gcp_project_id" {
   default = "{{GcpProjectId}}"
@@ -99,4 +96,5 @@ variable "gcp_project_id" {
 variable "gcp_account" {
   default = "{{GcpAccount}}"
 }
+
 {% endif %}

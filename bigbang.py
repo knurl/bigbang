@@ -56,8 +56,6 @@ rsaPub      = os.path.expanduser("~/.ssh/id_rsa.pub")
 knownhosts  = os.path.expanduser("~/.ssh/known_hosts")
 myvarsbf    = 'my-vars.yaml'
 myvarsf     = bbio.where(myvarsbf)
-helmcredsbf = 'helm-creds.yaml'
-helmcredsf  = bbio.where(helmcredsbf)
 sfdccredsbf = 'sfdc-creds.yaml' # don't find FQP yet as SFDC is optional
 tfvars      = "variables.tf" # basename only, no path!
 hostsf      = "/etc/hosts"
@@ -71,6 +69,7 @@ localhost     = "localhost"
 localhostip   = "127.0.0.1"
 domain        = "hazelcast.net" # cannot terminate with .; Azure will reject
 webfqdn       = "mgmt." + domain
+bastionuser   = 'ubuntu'
 
 # K8S / Helm
 namespace   = "hazelcast"
@@ -283,22 +282,6 @@ def genmask(target, octet):
         return ".".join(octets[::-1]) + "/20"
 
 mySubnetCidr = genmask(target, octet)
-
-#
-# Now, read the credentials file for helm ("./helm-creds.yaml"), also found in
-# this directory.  This is the 2nd configuration file one needs to edit.
-#
-try:
-    with open(helmcredsf) as mypf:
-        helmcreds = yaml.load(mypf, Loader = yaml.FullLoader)
-except IOError as e:
-    sys.exit(f"Couldn't read helm credentials file {e}")
-
-try:
-    repouser     = helmcreds["HelmRepoUser"]
-    repopass     = helmcreds["HelmRepoPassword"]
-except KeyError as e:
-    sys.exit(f"Unspecified configuration parameter {e} in {helmcredsf}")
 
 #
 # Determine which instance types we're using for this cloud target
@@ -674,8 +657,9 @@ class Tunnel:
         self.lport = lPort
         self.raddr = rAddr
         self.rport = rPort
-        self.command = ("ssh -N -L{p}:{a}:{k} ubuntu@{b}"
-                        .format(p=lPort, a=rAddr, k=rPort, b=bastionIp))
+        self.command = ("ssh -N -L{p}:{a}:{k} {bu}@{b}"
+                        .format(p=lPort, a=rAddr, k=rPort, bu=bastionuser,
+                                b=bastionIp))
         print(self.command)
         self.p = subprocess.Popen(self.command.split())
         assert self.p is not None
@@ -719,7 +703,7 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
               "missing?".format(b = bastion_ip, k = knownhosts))
     cmd = f'ssh-keyscan -4 -p22 -H {bastion_ip}'
     print(cmd)
-    cp = retryRun(cmd.split(), 5)
+    cp = retryRun(cmd.split(), 10)
     hostkeys = cp.stdout.strip()
     print("Adding {n} host keys from bastion to {k}"
           .format(n=len(hostkeys.splitlines()), k=knownhosts))
@@ -839,26 +823,28 @@ def set_dns_for_lbs(zid: str, # Zone ID
             # wants us to run a command for each update
             cmd = (f'az network private-dns record-set a delete '
                    f'-g {resourcegrp} -n {name} -z {zid} -y')
-            runStdout(cmd.split())
+            runTry(cmd.split())
             if not delete:
                 cmd = (f'az network private-dns record-set a create '
                        f'-g {resourcegrp} -n {name} -z {zid} --ttl {ttl}')
                 cmd = (f'az network private-dns record-set a add-record '
                        f'-g {resourcegrp} -n {name} -z {zid} -a {host}')
-                runStdout(cmd.split())
+                runCollect(cmd.split())
         elif target == 'gcp':
             # GCP uses IP addresses for LBs, so we use an A record. GCP wants
             # us to run a command for each update.
-            i = 'delete' if delete else 'update'
-            cmd = (f'gcloud dns record-sets {i} {fqn} --zone={zid} --type=A')
+            cmd = (f'gcloud dns record-sets delete {fqn} --zone={zid} '
+                   '--type=A')
+            runTry(cmd.split())
             if not delete:
-                cmd += f' --rrdatas={host} --ttl={ttl}'
-            runStdout(cmd.split())
+                cmd = (f'gcloud dns record-sets create {fqn} --zone={zid} '
+                       f'--type=A --rrdatas={host} --ttl={ttl}')
+                runCollect(cmd.split())
 
     if target == 'aws':
         batchfn = f'{tmpdir}/crrs_batch_aws.json'
         replaceFile(batchfn, json.dumps(batch_aws))
-        runStdout(('aws route53 change-resource-record-sets --hosted-zone-id '
+        runCollect(('aws route53 change-resource-record-sets --hosted-zone-id '
                    f'{zid} --change-batch file://{batchfn} '
                    '--no-cli-pager').split())
     # Nothing more to do for Azure or GCP
@@ -968,8 +954,8 @@ def ensureHelmRepoSetUp(repo: str) -> None:
             out.announce(f"Update of repo failed. Removing repo {repo}")
             helm(f"repo remove {repo}")
 
-    crepouser = f'--username {repouser}' if repouser else ''
-    crepopass = f'--password {repopass}' if repopass else ''
+    crepouser = ''
+    crepopass = ''
     helm(f'repo add {crepouser} {crepopass} {repo} {repoloc}')
 
 def helmGetNamespaces() -> list:
@@ -1110,7 +1096,7 @@ def helm_delete_crds_and_operator():
 
 def announceReady(bastionIp: str) -> list[str]:
     a = [getMgmtUrl()]
-    a.append(f"bastion: {bastionIp}")
+    a.append(f'bastion: {bastionuser}@{bastionIp}')
     return a
 
 def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
@@ -1148,14 +1134,13 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
         bastion_ip = env['bastion_address']
         k8s_server_name = env['k8s_api_server']
 
-        # DNS entries can be removed first. This can happen without the tunnel
-        # to the bastion host, since none of the changes here affect K8S.
-        # NOTE: DNS *must* be removed since Terraform will complain about any
-        # records it didn't create at the time the zone is destroyed.
-        lbs = getLoadBalancers(services, namespace)
-        set_dns_for_lbs(zone_id, lbs, delete=True)
-
+        # We need the bastion tunnel up in order to fetch the LBs
         with setup_bastion_tunnel(bastion_ip, k8s_server_name):
+            # NOTE: DNS *must* be removed since Terraform will complain about any
+            # records it didn't create at the time the zone is destroyed.
+            lbs = getLoadBalancers(services, namespace)
+            set_dns_for_lbs(zone_id, lbs, delete=True)
+
             with Timer('teardown of K8S resources'):
                 # tunnel established. Now delete things in reverse order to how
                 # they were created.
@@ -1325,7 +1310,8 @@ def cleanOldTunnels() -> None:
     # Check to see if anything looks suspiciously like an old ssh tunnel, and
     # see if the user is happy to kill them.
     out.announce('Looking for old tunnels to clean')
-    r = re.compile(r'ssh -N -L.+:.+:.+ ubuntu@')
+    srchexp = f'ssh -N -L.+:.+:.+ {bastionuser}@'
+    r = re.compile(srchexp)
     def get_tunnel_procs():
         nonlocal r
         tunnels = []
@@ -1420,8 +1406,9 @@ def main() -> None:
     if ns.command in ("start", "restart"):
         tuns, bastion = svcStart(ns.skip_cluster_start)
         started = True
-        out.announceBox(f"Your {rsaPub} public key has been installed into the "
-                        "bastion server, so you can ssh there now (user 'ubuntu').")
+        out.announceBox(f'Your {rsaPub} public key has been installed into the '
+                        'bastion server, so you can ssh there now '
+                        f'(user "{bastionuser}").')
 
     y = getCloudSummary()
     if started:
