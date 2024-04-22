@@ -69,8 +69,12 @@ else
 fi
 
 p "installing dependencies for bigbang"
-brew install gcc awscli azure-cli aws-iam-authenticator helm kubectl libyaml \
-    terraform gimme-aws-creds pyenv $OPENSSL universal-ctags
+brew install \
+    gcc awscli azure-cli \ # TODO: Replace with python bindings
+    kubectl \ # TODO: Replace with python bindings
+    helm \ # No good python bindings for Helm
+    terraform \ # No real python replacement
+    pyenv
 
 p "determining correct versions of dependencies"
 PYVERSION=3.11.5

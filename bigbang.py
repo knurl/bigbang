@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#import pdb
+import pdb
 import os
 import hashlib
 import argparse
@@ -155,8 +155,8 @@ try:
 
     appchartversion = myvars[appchartvlabel] # AppChartVersion
     oprchartversion = myvars[oprchartvlabel] # OprChartVersion
-    nodeCount    = myvars[nodecountlabel] # NodeCount
-    tlscoord     = myvars[tlscoordlabel] # RequireCoordTls
+    nodeCount       = myvars[nodecountlabel] # NodeCount
+    tlscoord        = myvars[tlscoordlabel] # RequireCoordTls
 
     requireKey("AwsInstanceTypes", myvars)
     requireKey("AwsSmallInstanceType", myvars)
@@ -165,8 +165,9 @@ try:
     requireKey("GcpMachineTypes", myvars)
     requireKey("GcpSmallMachineType", myvars)
 
-    repo         = myvars["HelmRepo"]
-    repoloc      = myvars["HelmRepoLocation"]
+    helm_repo_name     = myvars["HelmRepo"]
+    helm_repo_location = myvars["HelmRepoLocation"]
+
 except KeyError as e:
     print(f"Unspecified configuration parameter {e} in {myvarsf}.")
     sys.exit(f"Consider running a git diff {myvarsf} to ensure no "
@@ -930,7 +931,7 @@ def helm(cmd: str) -> None:
 def helmGet(cmd: str) -> str:
     return runCollect(["helm"] + cmd.split())
 
-def ensureHelmRepoSetUp(repo: str) -> None:
+def ensureHelmRepoSetUp(helm_repo_name: str, helm_repo_location: str) -> None:
     if (r := helmTry("version")).returncode != 0:
         sys.exit("Unable to run helm. Is it installed? Failing out.")
 
@@ -940,23 +941,25 @@ def ensureHelmRepoSetUp(repo: str) -> None:
     # otherwise try to install.
     if (r := helmTry("repo list -o=json")).returncode == 0:
         repos = [x["name"] for x in json.loads(r.stdout)]
-        if repo in repos:
+        if helm_repo_name in repos:
             # Unfortunately, helm repo update returns a 0 error code even when
             # it fails. So we actually have to collect the output and look to
             # see if it failed. :-( If it fails, then just remove the repo and
             # re-install it.
-            out.announce(f'Updating helm repo {repo}')
+            out.announce(f'Updating helm repo {helm_repo_name}')
             output = helmGet("repo update --fail-on-repo-update-fail")
             if "Update Complete. ⎈Happy Helming!⎈" in output:
                 print("Upgrade of repo succeeded")
                 return
 
-            out.announce(f"Update of repo failed. Removing repo {repo}")
-            helm(f"repo remove {repo}")
+            out.announce(f'Update of repo failed. Removing '
+                         f'repo {helm_repo_name}')
+            helm(f'repo remove {helm_repo_name}')
 
     crepouser = ''
     crepopass = ''
-    helm(f'repo add {crepouser} {crepopass} {repo} {repoloc}')
+    helm(f'repo add {crepouser} {crepopass} '
+         f'{helm_repo_name} {helm_repo_location}')
 
 def helmGetNamespaces() -> list:
     n = []
@@ -1012,7 +1015,7 @@ def helmInstallOperator(module: str, env: dict = {}) -> None:
         out.announce("Installing chart {c} as {r}".format(c = newchart, r =
                                                           releases[module]))
         helm("{h} install {r} {w}/{c} --version {v}"
-             .format(h=helmns, r=releases[module], w=repo, c=charts[module],
+             .format(h=helmns, r=releases[module], w=helm_repo_name, c=charts[module],
                      v=oprchartversion))
     # If either the chart values file changed, or we need to update to a
     # different version of the chart, then we have to upgrade
@@ -1022,7 +1025,7 @@ def helmInstallOperator(module: str, env: dict = {}) -> None:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         out.announce(astr)
         helm("{h} upgrade {r} {w}/{c} --version {v}"
-             .format(h=helmns, r=releases[module], w=repo, c=charts[module],
+             .format(h=helmns, r=releases[module], w=helm_repo_name, c=charts[module],
                      v=oprchartversion))
     else:
         print(f"{chart} values unchanged ➼ avoiding helm upgrade")
@@ -1055,7 +1058,7 @@ def helmUninstallRelease(release: str) -> None:
 def helm_create_operator_and_crds(env):
     helm_create_namespace()
     env |= installSecrets(secrets)
-    ensureHelmRepoSetUp(repo)
+    ensureHelmRepoSetUp(helm_repo_name, helm_repo_location)
     helmInstallOperator(operator, env)
     for crd in crds:
         KubeApplyCrd(crd, env)
@@ -1109,6 +1112,8 @@ def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
         tuns.append(tun)
 
     bastion = env['bastion_address']
+
+    pdb.set_trace()
 
     with Timer('setup of K8S resources'):
         helm_create_operator_and_crds(env)
@@ -1369,6 +1374,19 @@ def check_creds() -> None:
         if badAws:
             print(err)
             sys.exit("Have you run aws configure?")
+        out.announce('Validating AWS SSO token')
+        try:
+            runCollect('aws sts get-caller-identity --no-cli-pager'.split())
+            print('Your AWS SSO token is valid')
+        except CalledProcessError:
+            yn = input("Your AWS SSO token is stale. Refresh it now? [y/N] -> ")
+            if yn.lower() in ("y", "yes"):
+                try:
+                    runStdout('aws sso login'.split())
+                    return
+                except CalledProcessError:
+                    pass
+            sys.exit('Cannot continue with stale AWS SSO token')
     elif target == "az":
         azuredir = os.path.expanduser("~/.azure")
         if not bbio.writeableDir(azuredir):

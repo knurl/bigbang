@@ -58,7 +58,7 @@ delete_all_services	bigbang.py	/^def delete_all_services(lbs: dict[str, str]) ->
 divideOrZero	bigbang.py	/^def divideOrZero(x: int, y: int) -> float:$/;"	f
 domain	bigbang.py	/^domain        = "hazelcast.net" # cannot terminate with .; Azure will reject$/;"	v
 emailparts	bigbang.py	/^emailparts = email.split('@')$/;"	v
-ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(repo: str) -> None:$/;"	f
+ensureHelmRepoSetUp	bigbang.py	/^def ensureHelmRepoSetUp(helm_repo_name: str, helm_repo_location: str) -> None:$/;"	f
 ensure_cluster_is_started	bigbang.py	/^def ensure_cluster_is_started(skipClusterStart: bool) -> tuple[Tunnel, dict]:$/;"	f
 eraseLine	out.py	/^    def eraseLine(flush: bool = False):$/;"	f	function:spinWait
 fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
