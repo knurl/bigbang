@@ -21,11 +21,11 @@ def announce(s: str) -> None:
     cprint(f'==> {s}', 'blue', attrs = ['bold'])
 
 def announceStart(s: str) -> None:
-    cprint(f'--> ⎡⎡ ⟦{s}⟧ START ⎤⎤', 'cyan', attrs = ['bold'])
+    cprint(f'--> ⇩ ⟦{s}⟧ START ⇩', 'cyan', attrs = ['bold'])
 
 def announceEnd(s: str, tinterv: float) -> None:
     ts = time.strftime("%Mm%Ss", time.gmtime(tinterv))
-    cprint(f'--> ⎣⎣ ⟦{s}⟧ ENDED in {ts} ⎦⎦', 'cyan', attrs = ['bold'])
+    cprint(f'--> ⇧ ⟦{s}⟧ ENDED in {ts} ⇧', 'cyan', attrs = ['bold'])
 
 def announceLoud(lines: list[str]) -> None:
     maxl = max(map(len, lines))

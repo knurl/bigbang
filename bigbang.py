@@ -827,8 +827,7 @@ def killAllTerminatingPods() -> None:
         name = col[0]
         status = col[2]
         if status == "Terminating":
-            r = runTry(f"{kubens} delete pod {name} --force "
-                       "--grace-period=0".split())
+            r = runTry(f"{kubens} delete pod {name} --grace-period=60".split())
             if r.returncode == 0:
                 print(f"Terminated pod {name}")
 
@@ -1036,7 +1035,7 @@ def helm_create_namespace() -> None:
 def helm_delete_namespace() -> None:
     if namespace in helmGetNamespaces():
         out.announce(f"Deleting namespace {namespace}")
-        runStdout(f"{kube} delete namespace {namespace}".split())
+        runStdout(f'{kube} delete --grace-period=60 namespace {namespace}'.split())
     runStdout(f"{kube} config set-context --namespace=default "
               "--current".split())
 
@@ -1093,7 +1092,7 @@ def KubeDeleteCrd(crd: str, env) -> None:
 
     if bbio.readableFile(yamltmp):
         out.announce(f'Deleting CRD "{crd}"')
-        runStdout(f'{kubens} delete --ignore-not-found=true -f {yamltmp}'.split())
+        runStdout(f'{kubens} delete --grace-period=60 --ignore-not-found=true -f {yamltmp}'.split())
 
 def helmUninstallRelease(release: str) -> None:
     helm(f"{helmns} uninstall {release}")
@@ -1129,7 +1128,7 @@ def delete_all_services(lbs: dict[str, str]) -> bool:
         print("No LBs running.")
     else:
         print("Load balancers before attempt to delete services: " + ", ".join(lbs.keys()))
-    runStdout(f"{kubens} delete svc --all".split())
+    runStdout(f"{kubens} delete --grace-period=60 svc --all".split())
     lbs_after = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
     if len(lbs_after) == 0:
         print("No load balancers running after service delete.")
