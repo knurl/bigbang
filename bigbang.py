@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import pdb
+#import pdb
 import os
 import hashlib
 import argparse
@@ -603,7 +603,6 @@ def loadBalancerResponding(svc_name: str) -> bool:
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
     try:
-        pdb.set_trace()
         svc = svcs.get(svc_name)
         url = svc.get_url()
         if svc_name == srvnm_manctr:
