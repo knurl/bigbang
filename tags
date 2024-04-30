@@ -8,6 +8,8 @@ CommandGroup	cmdgrp.py	/^class CommandGroup:$/;"	c
 KubeApplyCrd	bigbang.py	/^def KubeApplyCrd(crd: str, env: dict = {}) -> None:$/;"	f
 KubeContextError	bigbang.py	/^class KubeContextError(Exception):$/;"	c
 KubeDeleteCrd	bigbang.py	/^def KubeDeleteCrd(crd: str, env) -> None:$/;"	f
+Service	bigbang.py	/^class Service:$/;"	c
+Services	bigbang.py	/^class Services:$/;"	c
 Timer	timer.py	/^class Timer:$/;"	c
 Tunnel	bigbang.py	/^class Tunnel:$/;"	c
 __del__	bigbang.py	/^    def __del__(self):$/;"	m	class:Tunnel	file:
@@ -15,6 +17,8 @@ __enter__	bigbang.py	/^    def __enter__(self):$/;"	m	class:Tunnel	file:
 __enter__	timer.py	/^    def __enter__(self):$/;"	m	class:Timer	file:
 __exit__	bigbang.py	/^    def __exit__(self, *_):$/;"	m	class:Tunnel	file:
 __exit__	timer.py	/^    def __exit__(self, *args):$/;"	m	class:Timer	file:
+__init__	bigbang.py	/^    def __init__(self):$/;"	m	class:Services
+__init__	bigbang.py	/^    def __init__(self, name: str, lcl_port: int, rmt_port: int):$/;"	m	class:Service
 __init__	bigbang.py	/^    def __init__(self, shortname: str, bastionIp: ipaddress.IPv4Address,$/;"	m	class:Tunnel
 __init__	cmdgrp.py	/^    def __init__(self):$/;"	m	class:CommandGroup
 __init__	timer.py	/^    def __init__(self, descr: str):$/;"	m	class:Timer
@@ -65,20 +69,21 @@ fqdnToDc	bigbang.py	/^def fqdnToDc(fqdn: str) -> str:$/;"	f
 gcpaccount	bigbang.py	/^gcpaccount = ""$/;"	v
 gcpproject	bigbang.py	/^gcpproject = ""$/;"	v
 genmask	bigbang.py	/^def genmask(target, octet):$/;"	f
+get	bigbang.py	/^    def get(self, name: str):$/;"	m	class:Services
 getCloudSummary	bigbang.py	/^def getCloudSummary() -> List[str]:$/;"	f
-getLclPort	bigbang.py	/^def getLclPort(service: str) -> int:$/;"	f
-getLclPortSG	bigbang.py	/^def getLclPortSG(service: str, target: str) -> int:$/;"	f
 getLoadBalancers	bigbang.py	/^def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:$/;"	f
-getMgmtUrl	bigbang.py	/^def getMgmtUrl() -> str:$/;"	f
 getMyPublicIp	bigbang.py	/^def getMyPublicIp() -> ipaddress.IPv4Address:$/;"	f
 getRegionFromZone	bigbang.py	/^def getRegionFromZone(zone: str) -> str:$/;"	f
-getRmtPort	bigbang.py	/^def getRmtPort(service: str) -> int:$/;"	f
 getSecrets	bigbang.py	/^def getSecrets() -> None:$/;"	f
 getSshPublicKey	bigbang.py	/^def getSshPublicKey() -> str:$/;"	f
+get_lcl_port	bigbang.py	/^    def get_lcl_port(self, name: str) -> int:$/;"	m	class:Services
 get_nodes	ready.py	/^def get_nodes() -> tuple[set[str], set[str]]:$/;"	f
 get_output_vars	bigbang.py	/^def get_output_vars() -> dict:$/;"	f
 get_ready_nodes	ready.py	/^def get_ready_nodes() -> set[str]:$/;"	f
+get_rmt_port	bigbang.py	/^    def get_rmt_port(self, name: str) -> int:$/;"	m	class:Services
+get_svc_names	bigbang.py	/^    def get_svc_names(self):$/;"	m	class:Services
 get_tunnel_procs	bigbang.py	/^    def get_tunnel_procs():$/;"	f	function:cleanOldTunnels
+get_url	bigbang.py	/^    def get_url(self, tls: bool = False):$/;"	m	class:Service
 helm	bigbang.py	/^def helm(cmd: str) -> None:$/;"	f
 helmGet	bigbang.py	/^def helmGet(cmd: str) -> str:$/;"	f
 helmGetNamespaces	bigbang.py	/^def helmGetNamespaces() -> list:$/;"	f
@@ -160,7 +165,6 @@ run_commands_seq	cmdgrp.py	/^    def run_commands_seq(self) -> None:$/;"	m	class
 s	bigbang.py	/^s = username + zone$/;"	v
 secretsbf	bigbang.py	/^secretsbf    = "secrets.yaml"$/;"	v
 secretsf	bigbang.py	/^secretsf     = bbio.where(secretsbf)$/;"	v
-services	bigbang.py	/^services = ['mgmt']$/;"	v
 set_dns_for_lbs	bigbang.py	/^def set_dns_for_lbs(zid: str, # Zone ID$/;"	f
 setup_bastion_tunnel	bigbang.py	/^def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,$/;"	f
 sfdccredsbf	bigbang.py	/^sfdccredsbf = 'sfdc-creds.yaml' # don't find FQP yet as SFDC is optional$/;"	v
@@ -177,7 +181,7 @@ start_tunnel_to_lbs	bigbang.py	/^def start_tunnel_to_lbs(bastionIp: str) -> tupl
 summarize_containers	ready.py	/^def summarize_containers(namespace: str = "") -> tuple[set[str], set[str]]:$/;"	f
 svcStart	bigbang.py	/^def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:$/;"	f
 svcStop	bigbang.py	/^def svcStop(onlyEmptyNodes: bool = False) -> None:$/;"	f
-svcports	bigbang.py	/^svcports    = {$/;"	v
+svcs	bigbang.py	/^svcs = Services()$/;"	v
 taints_are_ok	ready.py	/^def taints_are_ok(item: dict) -> bool:$/;"	f
 targetlabel	bigbang.py	/^targetlabel     = 'Target'$/;"	v
 templatedir	bigbang.py	/^templatedir = bbio.where("templates")$/;"	v

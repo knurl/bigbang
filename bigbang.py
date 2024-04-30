@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import pdb
+#import pdb
 import os
 import hashlib
 import argparse
@@ -329,25 +329,47 @@ for crd in crds:
 
 # Portfinder service
 
-services = ['mgmt']
-svcports    = {
-        "apiserv": {"local": 2153, "remote": 443}
-        }
-if tlsenabled():
-    svcports |= {"mgmt": {"local": 8443, "remote": 8443}}
-else:
-    svcports |= {"mgmt": {"local": 8080, "remote": 8080}}
+class Service:
+    def __init__(self, name: str, lcl_port: int, rmt_port: int):
+        self.name = name
+        self.lcl_port = lcl_port
+        self.rmt_port = rmt_port
 
-# Local connections are on workstation, so offset to avoid collision
-def getLclPortSG(service: str, target: str) -> int:
-    return svcports[service]["local"]
+    def get_url(self, tls: bool = False):
+        if tls:
+            scheme = "https"
+        else:
+            scheme = "http"
 
-def getLclPort(service: str) -> int:
-    return getLclPortSG(service, target)
+        return f'{scheme}://{webfqdn}:{self.lcl_port}'
 
-# Remote connections are all to different machines, so they don't need offset
-def getRmtPort(service: str) -> int:
-    return svcports[service]["remote"]
+class Services:
+    def __init__(self):
+        svcs_list: list[Service] = [
+                Service('mgmt', 8443, 443),
+                Service('cluster', 5701, 5701)
+                ]
+        # Cluster services are more limited
+        self.clust_svcs: dict[str, Service] = { i.name: i for i in svcs_list }
+
+        # Total list of services includes the K8S API service
+        self.svcs: dict[str, Service] = self.clust_svcs | {
+                'apiserv': Service('apiserv', 2153, 443)
+                }
+
+    def get_svc_names(self):
+        return self.clust_svcs.keys()
+
+    def get(self, name: str):
+        return self.svcs[name]
+
+    def get_lcl_port(self, name: str) -> int:
+        return self.svcs[name].lcl_port
+
+    def get_rmt_port(self, name: str) -> int:
+        return self.svcs[name].rmt_port
+
+svcs = Services()
 
 def appendToFile(filepath, contents) -> None:
     with open(filepath, "a+") as fh:
@@ -476,8 +498,10 @@ def updateKubeConfig() -> None:
             # get the cluster name
             cluster = columns[2]
             runStdout("kubectl config set clusters.{c}.server "
-                      "https://{h}:{p}".format(c = cluster, h = localhost, p =
-                                               getLclPort("apiserv")).split())
+                      "https://{h}:{p}"
+                      .format(c = cluster,
+                              h = localhost,
+                              p = svcs.get_lcl_port("apiserv")).split())
             runStdout(f"kubectl config set-cluster {cluster} "
                       "--insecure-skip-tls-verify=true".split())
             return
@@ -549,27 +573,19 @@ def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:
         denom = min(minreplicas, denom)
     return divideOrZero(numer, denom)
 
-def getMgmtUrl() -> str:
-    if tlsenabled():
-        scheme = "https"
-    else:
-        scheme = "http"
-
-    host = webfqdn
-    port = getLclPort("mgmt")
-
-    return f"{scheme}://{host}:{port}"
-
 def loadBalancerResponding(service: str) -> bool:
-    assert service in services
+    assert service in svcs.get_svc_names()
 
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
     try:
-        if service == "mgmt":
-            url = getMgmtUrl() + "/cluster-connections"
-            r = requests.get(url, verify = tlsenabled(), timeout=5)
-        return r.status_code == 200
+        url = svcs.get(service).get_url(tlsenabled())
+        if service == 'mgmt':
+            url += '/cluster-connections'
+            r = requests.get(url, verify=tlsenabled(), timeout=5)
+            return r.status_code == 200
+        else:
+            return True
     except requests.exceptions.ConnectionError:
         return False
     except requests.exceptions.Timeout:
@@ -639,7 +655,8 @@ def waitUntilLoadBalancersUp(services: list, namespace: str,
 def waitUntilApiServerResponding() -> float:
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
-    url = "https://{h}:{p}/".format(h = localhost, p = getLclPort("apiserv"))
+    url = ("https://{h}:{p}/"
+           .format(h=localhost, p=svcs.get_lcl_port("apiserv")))
     try:
         r = requests.get(url, verify = False) # ignore certificate
         # Either forbidden (403), unauthorised (403) or 200 are acceptable
@@ -711,8 +728,8 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
     appendToFile(knownhosts, hostkeys)
 
     # Start up the tunnel to the Kubernetes API server
-    tun = Tunnel("k8s-apiserver", bastion_ip, getLclPort("apiserv"),
-                 k8s_server_name, getRmtPort("apiserv"))
+    tun = Tunnel("k8s-apiserver", bastion_ip, svcs.get_lcl_port("apiserv"),
+                 k8s_server_name, svcs.get_rmt_port("apiserv"))
 
     # Now that the tunnel is in place, update our kubecfg with the address to
     # the tunnel, keeping everything else in place
@@ -806,7 +823,7 @@ def set_dns_for_lbs(zid: str, # Zone ID
     # for Azure & GCP, we will run commands as we go
 
     for name, host in lbs.items():
-        assert name == 'bastion' or name in services
+        assert name == 'bastion' or name in svcs.get_svc_names()
         fqn = f'{name}.{domain}.'
 
         if target == 'aws':
@@ -863,23 +880,28 @@ def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
 
     # now the load balancers need to be running with their IPs assigned
     out.announce("Waiting for load-balancers to launch")
-    out.spinWait(lambda: waitUntilLoadBalancersUp(services, namespace))
+    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_svc_names(),
+                                                  namespace))
 
     #
     # Get the DNS name of the load balancers we've created
     #
-    lbs = getLoadBalancers(services, namespace)
+    lbs = getLoadBalancers(svcs.get_svc_names(), namespace)
 
     # we should have a load balancer for every service we'll forward
-    assert len(lbs) == len(services)
-    for svc in services:
+    assert len(lbs) == len(svcs.get_svc_names())
+    for svc in svcs.get_svc_names():
         assert svc in lbs
-        tuns.append(Tunnel(svc, ipaddress.IPv4Address(bastionIp),
-                           getLclPort(svc), lbs[svc], getRmtPort(svc)))
+        tuns.append(Tunnel(svc,
+                           ipaddress.IPv4Address(bastionIp),
+                           svcs.get_lcl_port(svc),
+                           lbs[svc],
+                           svcs.get_rmt_port(svc)))
 
     # make sure the load balancers are actually responding
     out.announce("Waiting for load-balancers to start responding")
-    out.spinWait(lambda: waitUntilLoadBalancersUp(services, namespace,
+    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_svc_names(),
+                                                  namespace,
                                                   checkConnectivity = True))
 
     return tuns, lbs
@@ -1078,7 +1100,7 @@ def delete_all_services(lbs: dict[str, str]) -> bool:
     else:
         print("Load balancers before attempt to delete services: " + ", ".join(lbs.keys()))
     runStdout(f"{kubens} delete svc --all".split())
-    lbs_after = getLoadBalancers(services, namespace)
+    lbs_after = getLoadBalancers(svcs.get_svc_names(), namespace)
     if len(lbs_after) == 0:
         print("No load balancers running after service delete.")
         return True
@@ -1098,7 +1120,7 @@ def helm_delete_crds_and_operator():
     killAllTerminatingPods()
 
 def announceReady(bastionIp: str) -> list[str]:
-    a = [getMgmtUrl()]
+    a = [svcs.get('mgmt').get_url(tlsenabled())]
     a.append(f'bastion: {bastionuser}@{bastionIp}')
     return a
 
@@ -1112,8 +1134,6 @@ def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
         tuns.append(tun)
 
     bastion = env['bastion_address']
-
-    pdb.set_trace()
 
     with Timer('setup of K8S resources'):
         helm_create_operator_and_crds(env)
@@ -1143,7 +1163,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
         with setup_bastion_tunnel(bastion_ip, k8s_server_name):
             # NOTE: DNS *must* be removed since Terraform will complain about any
             # records it didn't create at the time the zone is destroyed.
-            lbs = getLoadBalancers(services, namespace)
+            lbs = getLoadBalancers(svcs.get_svc_names(), namespace)
             set_dns_for_lbs(zone_id, lbs, delete=True)
 
             with Timer('teardown of K8S resources'):
@@ -1156,7 +1176,8 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
 
                 # Make sure to get rid of all services, in case they weren't
                 # already removed. We need to make sure we don't leak LBs.
-                lbs_after_helm_uninstall = getLoadBalancers(services, namespace)
+                lbs_after_helm_uninstall = \
+                        getLoadBalancers(svcs.get_svc_names(), namespace)
                 lbs_cleaned = delete_all_services(lbs_after_helm_uninstall)
                 helm_delete_namespace()
     except KeyError:
