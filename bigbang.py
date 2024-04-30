@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#import pdb
+import pdb
 import os
 import hashlib
 import argparse
@@ -16,6 +16,7 @@ import random
 import yaml # type: ignore
 import psutil # type: ignore
 import time
+import string
 
 from subprocess import CalledProcessError
 from typing import List, Callable, Optional, Any, Dict
@@ -68,7 +69,8 @@ dbports       = { "mysql": 3306, "postgres": 5432 }
 localhost     = "localhost"
 localhostip   = "127.0.0.1"
 domain        = "hazelcast.net" # cannot terminate with .; Azure will reject
-webfqdn       = "mgmt." + domain
+srvnm_manctr  = 'manctr'
+srvnm_cluster = 'cluster'
 bastionuser   = 'ubuntu'
 
 # K8S / Helm
@@ -323,45 +325,54 @@ operator = 'operator'
 releases[operator] = f'operator-{shortname}'
 charts[operator] = 'hazelcast-platform-operator'
 
-crds = ['cluster', 'mgmt']
+crds = ['cluster', srvnm_manctr]
 for crd in crds:
     templates[crd] = f'{crd}_crd_v.yaml'
 
 # Portfinder service
 
 class Service:
-    def __init__(self, name: str, lcl_port: int, rmt_port: int):
+    def __init__(self, name: str, lcl_port: int, rmt_port: int, tls: bool):
         self.name = name
         self.lcl_port = lcl_port
         self.rmt_port = rmt_port
+        self.tls = tls
 
-    def get_url(self, tls: bool = False):
-        if tls:
+    def get_url(self):
+        if self.tls:
             scheme = "https"
         else:
             scheme = "http"
-
-        return f'{scheme}://{webfqdn}:{self.lcl_port}'
+        return f'{scheme}://{self.name}.{domain}:{self.lcl_port}'
 
 class Services:
     def __init__(self):
         svcs_list: list[Service] = [
-                Service('mgmt', 8443, 443),
-                Service('cluster', 5701, 5701)
+                # FIXME tls should be enabled for manctr port 8443 it seems;
+                # but when I do so, I get this error back from requests.get:
+                # [SSL] record layer failure (_ssl.c:1006)
+                Service(srvnm_manctr, 8443, 443, tls=False),
+                Service('cluster', 5701, 5701, tls=tlsenabled())
                 ]
         # Cluster services are more limited
         self.clust_svcs: dict[str, Service] = { i.name: i for i in svcs_list }
 
         # Total list of services includes the K8S API service
         self.svcs: dict[str, Service] = self.clust_svcs | {
-                'apiserv': Service('apiserv', 2153, 443)
+                'apiserv': Service('apiserv', 2153, 443, tls=True)
                 }
 
-    def get_svc_names(self):
+    def get_all_svc_names(self):
+        return self.svcs.keys()
+
+    def get_clust_svc_names(self):
         return self.clust_svcs.keys()
 
     def get(self, name: str):
         return self.svcs[name]
+
+    def get_clust_all(self):
+        return iter(self.clust_svcs.values())
 
     def get_lcl_port(self, name: str) -> int:
         return self.svcs[name].lcl_port
@@ -370,6 +381,13 @@ class Services:
         return self.svcs[name].rmt_port
 
 svcs = Services()
+
+def random_string(length: int) -> str:
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choices(chars, k = length))
+
+def rand_tmp_filename(prefix: str, ext: str) -> str:
+    return f'{tmpdir}/{prefix}_' + random_string(4) + f'.{ext}'
 
 def appendToFile(filepath, contents) -> None:
     with open(filepath, "a+") as fh:
@@ -380,11 +398,12 @@ def replaceFile(filepath, contents) -> bool:
     root, ext = os.path.splitext(filepath)
     formats = {'.yaml': '#',
                '.tf': '#',
-               '.zone': ';'}
+               '.zone': ';',
+               '.hosts': '#'}
 
     if os.path.exists(filepath):
         if not os.path.isfile(filepath):
-            sys.exit("Please manually remove {filepath} and rerun")
+            sys.exit("{filepath} exists but isn't a file")
         # We have an old file by the same name. Check the extension, as we only
         # embed the md5 and version in file formats that take comments, and
         # .json files don't take comments.
@@ -415,42 +434,47 @@ def replaceFile(filepath, contents) -> bool:
         raise
     return True # wrote new file
 
-def removeOldVersions(yamltmp: str, similar: str) -> None:
+def removeOldVersions(similar: str) -> None:
     old = glob.glob(similar)
     for f in old:
-        if f == yamltmp:
-            continue # skip the one we're about to write
         print(f"Removing old parameterised file {f}")
         os.remove(f)
 
-def parameteriseTemplate(template: str, targetDir: str, varsDict: dict,
+def parameteriseTemplate(template: str, tmp_dir: str, varsDict: dict,
                          undefinedOk: set[str] = set()) -> tuple[bool, str]:
     assert os.path.basename(template) == template, \
             f"YAML template {template} should be in basename form (no path)"
     root, ext = os.path.splitext(template)
+
+    # get rid of leading period
+    if ext[0] == '.':
+        ext = ext[1:]
+
     assert len(root) > 0 and len(ext) > 0
 
     # temporary file where we'll write the filled-in template
-    yamltmp = f"{targetDir}/{root}-{shortname}{ext}"
+    yamltmp = rand_tmp_filename(f'{root}_{shortname}', ext)
 
     # if we're writing a Terraform file, make sure to clean up older,
     # similar-looking Terraform files as these will cause Terraform to fail
-    if ext == ".tf":
-        similar = f"{targetDir}/{root}-*{ext}"
-        removeOldVersions(yamltmp, similar)
+    if ext == "tf":
+        similar = f"{tmp_dir}/{root}.*\.{ext}"
+        removeOldVersions(similar)
 
-    # render the template with the parameters, and capture the result
+    # render the template with the parameters, and capture result in memory
     try:
         file_loader = jinja2.FileSystemLoader(templatedir)
-        env = jinja2.Environment(loader = file_loader, trim_blocks = True,
-                                 lstrip_blocks = True, undefined = jinja2.DebugUndefined)
+        env = jinja2.Environment(loader=file_loader, trim_blocks=True,
+                                 lstrip_blocks=True,
+                                 undefined=jinja2.DebugUndefined)
         t = env.get_template(template)
         output = t.render(varsDict)
         ast = env.parse(output)
         undefined = find_undeclared_variables(ast)
         if len(undefined - undefinedOk) > 0:
-            raise jinja2.UndefinedError(f"Undefined vars in {template}: "
-                                        f"{undefined}; undefinedOK = {undefinedOk}")
+            raise jinja2.UndefinedError(f'Undefined vars in {template}: '
+                                        f'{undefined}; undefinedOK'
+                                        f'={undefinedOk}')
     except jinja2.TemplateNotFound as e:
         print(f"Couldn't read {template} from {templatedir} due to {e}")
         raise
@@ -573,16 +597,18 @@ def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:
         denom = min(minreplicas, denom)
     return divideOrZero(numer, denom)
 
-def loadBalancerResponding(service: str) -> bool:
-    assert service in svcs.get_svc_names()
+def loadBalancerResponding(svc_name: str) -> bool:
+    assert svc_name in svcs.get_clust_svc_names()
 
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
     try:
-        url = svcs.get(service).get_url(tlsenabled())
-        if service == 'mgmt':
+        pdb.set_trace()
+        svc = svcs.get(svc_name)
+        url = svc.get_url()
+        if svc_name == srvnm_manctr:
             url += '/cluster-connections'
-            r = requests.get(url, verify=tlsenabled(), timeout=5)
+            r = requests.get(url, verify=svc.tls, timeout=5)
             return r.status_code == 200
         else:
             return True
@@ -804,6 +830,11 @@ def killAllTerminatingPods() -> None:
             if r.returncode == 0:
                 print(f"Terminated pod {name}")
 
+# We run this command in 'delete' mode to get rid of the DNS record sets right
+# before shutdown. Technically it shouldn't be needed for AWS or GCP, both of
+# which have a 'force_destroy' option for the hosted zone that gets rid of
+# record sets on destroy... but even these have many reported issues, so I
+# don't want to rely on those to always work.
 def set_dns_for_lbs(zid: str, # Zone ID
                     lbs: dict[str, str],
                     delete: bool = False) -> None:
@@ -822,9 +853,9 @@ def set_dns_for_lbs(zid: str, # Zone ID
                 }
     # for Azure & GCP, we will run commands as we go
 
-    for name, host in lbs.items():
-        assert name == 'bastion' or name in svcs.get_svc_names()
-        fqn = f'{name}.{domain}.'
+    for svcname, host in lbs.items():
+        assert svcname == 'bastion' or svcname in svcs.get_clust_svc_names()
+        fqn = f'{svcname}.{domain}.'
 
         if target == 'aws':
             # AWS uses DNS names for LBs, not IP addresses, so we have to
@@ -840,13 +871,13 @@ def set_dns_for_lbs(zid: str, # Zone ID
             # Azure uses IP addresses for LBs, so we use an A record. Azure
             # wants us to run a command for each update
             cmd = (f'az network private-dns record-set a delete '
-                   f'-g {resourcegrp} -n {name} -z {zid} -y')
+                   f'-g {resourcegrp} -n {svcname} -z {zid} -y')
             runTry(cmd.split())
             if not delete:
                 cmd = (f'az network private-dns record-set a create '
-                       f'-g {resourcegrp} -n {name} -z {zid} --ttl {ttl}')
+                       f'-g {resourcegrp} -n {svcname} -z {zid} --ttl {ttl}')
                 cmd = (f'az network private-dns record-set a add-record '
-                       f'-g {resourcegrp} -n {name} -z {zid} -a {host}')
+                       f'-g {resourcegrp} -n {svcname} -z {zid} -a {host}')
                 runCollect(cmd.split())
         elif target == 'gcp':
             # GCP uses IP addresses for LBs, so we use an A record. GCP wants
@@ -860,7 +891,7 @@ def set_dns_for_lbs(zid: str, # Zone ID
                 runCollect(cmd.split())
 
     if target == 'aws':
-        batchfn = f'{tmpdir}/crrs_batch_aws.json'
+        batchfn = rand_tmp_filename('crrs_batch_aws', 'json')
         replaceFile(batchfn, json.dumps(batch_aws))
         runCollect(('aws route53 change-resource-record-sets --hosted-zone-id '
                    f'{zid} --change-batch file://{batchfn} '
@@ -880,27 +911,27 @@ def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
 
     # now the load balancers need to be running with their IPs assigned
     out.announce("Waiting for load-balancers to launch")
-    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_svc_names(),
+    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_clust_svc_names(),
                                                   namespace))
 
     #
     # Get the DNS name of the load balancers we've created
     #
-    lbs = getLoadBalancers(svcs.get_svc_names(), namespace)
+    lbs = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
 
     # we should have a load balancer for every service we'll forward
-    assert len(lbs) == len(svcs.get_svc_names())
-    for svc in svcs.get_svc_names():
-        assert svc in lbs
-        tuns.append(Tunnel(svc,
+    assert len(lbs) == len(svcs.get_clust_svc_names())
+    for svcname in svcs.get_clust_svc_names():
+        assert svcname in lbs
+        tuns.append(Tunnel(svcname,
                            ipaddress.IPv4Address(bastionIp),
-                           svcs.get_lcl_port(svc),
-                           lbs[svc],
-                           svcs.get_rmt_port(svc)))
+                           svcs.get_lcl_port(svcname),
+                           lbs[svcname],
+                           svcs.get_rmt_port(svcname)))
 
     # make sure the load balancers are actually responding
     out.announce("Waiting for load-balancers to start responding")
-    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_svc_names(),
+    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_clust_svc_names(),
                                                   namespace,
                                                   checkConnectivity = True))
 
@@ -1025,11 +1056,6 @@ def helmWhichChartInstalled(module: str) -> Optional[str]:
     return chart
 
 def helmInstallOperator(module: str, env: dict = {}) -> None:
-    env |= {
-            'AppChartVersion': appchartversion,
-            'NodeCount': nodeCount
-            }
-
     chart = helmWhichChartInstalled(module)
     newchart = charts[module] + "-" + oprchartversion # which one to install?
 
@@ -1053,11 +1079,6 @@ def helmInstallOperator(module: str, env: dict = {}) -> None:
         print(f"{chart} values unchanged ➼ avoiding helm upgrade")
 
 def KubeApplyCrd(crd: str, env: dict = {}) -> None:
-    env |= {
-            'AppChartVersion': appchartversion,
-            'NodeCount': nodeCount
-            }
-
     _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
 
     out.announce(f'Applying CRD "{crd}"')
@@ -1078,9 +1099,18 @@ def helmUninstallRelease(release: str) -> None:
     helm(f"{helmns} uninstall {release}")
 
 def helm_create_operator_and_crds(env):
+    # Do this first so all resources install into the namespace
     helm_create_namespace()
-    env |= installSecrets(secrets)
+
+    # Set up the Helm repo if not already done
     ensureHelmRepoSetUp(helm_repo_name, helm_repo_location)
+
+    env |= installSecrets(secrets) | {
+            'AppChartVersion': appchartversion,
+            'NodeCount': nodeCount,
+            'SrvNmCluster': srvnm_cluster,
+            'SrvNmManctr': srvnm_manctr
+            }
     helmInstallOperator(operator, env)
     for crd in crds:
         KubeApplyCrd(crd, env)
@@ -1100,7 +1130,7 @@ def delete_all_services(lbs: dict[str, str]) -> bool:
     else:
         print("Load balancers before attempt to delete services: " + ", ".join(lbs.keys()))
     runStdout(f"{kubens} delete svc --all".split())
-    lbs_after = getLoadBalancers(svcs.get_svc_names(), namespace)
+    lbs_after = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
     if len(lbs_after) == 0:
         print("No load balancers running after service delete.")
         return True
@@ -1118,11 +1148,6 @@ def helm_delete_crds_and_operator():
         except CalledProcessError as e:
             print(f"Unable to uninstall release {release}: {e}")
     killAllTerminatingPods()
-
-def announceReady(bastionIp: str) -> list[str]:
-    a = [svcs.get('mgmt').get_url(tlsenabled())]
-    a.append(f'bastion: {bastionuser}@{bastionIp}')
-    return a
 
 def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
     tuns: list[Tunnel] = []
@@ -1163,7 +1188,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
         with setup_bastion_tunnel(bastion_ip, k8s_server_name):
             # NOTE: DNS *must* be removed since Terraform will complain about any
             # records it didn't create at the time the zone is destroyed.
-            lbs = getLoadBalancers(svcs.get_svc_names(), namespace)
+            lbs = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
             set_dns_for_lbs(zone_id, lbs, delete=True)
 
             with Timer('teardown of K8S resources'):
@@ -1177,7 +1202,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 # Make sure to get rid of all services, in case they weren't
                 # already removed. We need to make sure we don't leak LBs.
                 lbs_after_helm_uninstall = \
-                        getLoadBalancers(svcs.get_svc_names(), namespace)
+                        getLoadBalancers(svcs.get_clust_svc_names(), namespace)
                 lbs_cleaned = delete_all_services(lbs_after_helm_uninstall)
                 helm_delete_namespace()
     except KeyError:
@@ -1290,47 +1315,90 @@ def checkRSAKey() -> None:
 
 def checkEtcHosts() -> None:
     out.announce(f'Ensuring needed mapping entries are in {hostsf}')
+    tmpfile = rand_tmp_filename('etc', 'hosts')
 
     # Start by trying to see if the entries are already in the hosts file, in
     # the form we want. If they are, we don't need to create them.
-    if bbio.readableFile(hostsf):
-        with open(hostsf) as fh:
-            for line in fh:
-                # skip commented lines
-                if re.match(r"^\s*#", line):
-                    continue
+    hosts_checklist = set(svcs.get_all_svc_names())
+    hosts_found = set()
+    modified = False
 
-                # skip non-mapping entries
-                cols = line.split()
-                if len(cols) < 2:
-                    continue
+    with open(hostsf) as rfh, open(tmpfile, 'w') as wfh:
+        r = re.compile(r"^\s*"
+                       r"([\.:\d]*)"
+                       r"\s+"
+                       r"((?=.{1,255}$)[A-Za-z0-9]{1,63})"
+                       r"((\.[A-Za-z0-9\-]{1,63})*)"
+                       r"\.?"
+                       r"(?<!-)$")
 
-                # this is a mapping entry; see if we find a mapping that
-                # matches what we're looking for
-                ip = cols[0]
-                hostname = cols[1]
-                if ip == localhostip and hostname == webfqdn:
-                    # Success! We have all we need in the /etc/hosts file, so
-                    # we can quit searching and leave this function
-                    print(f'Found {hostsf} entry satisfying requirement:')
-                    print(line.strip())
-                    return
+        for line in rfh:
+            # skip commented lines
+            rexp = r.match(line)
 
-    # We didn't manage to return out of this function, so the /etc/hosts file
-    # didn't have the required entries. Offer to create them.
-    print(f'You will need {webfqdn} in {hostsf}.')
-    print('I can add this but will need to run this as sudo:')
-    cmd = f"echo {localhostip} {webfqdn} | sudo tee -a {hostsf}"
-    print(cmd)
-    yn = input("Would you like me to run that with sudo? [y/N] -> ")
-    if yn.lower() in ("y", "yes"):
-        rc = runShell(cmd)
-        if rc == 0:
-            print(f"Added {webfqdn} to {hostsf}.")
-            return
+            if rexp:
+                ip, hostname, fqdomain = rexp.group(1,2,3)
+
+                # This is some kind of mapping entry. If it maps to localhost,
+                # then this might be one of the service mapping entries we're
+                # looking for.
+                if ip == localhostip and fqdomain and fqdomain == f'.{domain}':
+                    if hostname in hosts_checklist:
+                        # Success! We have found one of the needed hosts.
+                        # Write the new line to our new temp file, and remove
+                        # the found host from our checklist.
+                        hosts_checklist.remove(hostname)
+                        hosts_found.add(hostname)
+                    else:
+                        # This means we found our special fqdomain in the line,
+                        # but it doesn't include one of our known services.
+                        print(f'Dropping entry: unexpected host {hostname}')
+                        modified = True
+                        continue
+
+            # Write the line through to the output file
+            wfh.write(line)
+
+        # Write all the hosts that we didn't find as new lines
+        for host in hosts_checklist:
+            modified = True
+            wfh.write(f'{localhostip}\t{host}.{domain}\n')
+
+    if hosts_found:
+        print(f'Found valid {hostsf} entries for ' + ', '.join(hosts_found))
+
+    if modified:
+        print('You need to have DNS entries for ' + ', '.join(hosts_checklist)
+              + f' in {hostsf}.')
+        print(f'The following changes to your {hostsf} are suggested:')
+        try:
+            # diff returns 0 for no differences, 1 for differences, or > 1 if
+            # there was some kind of error
+            runStdout(f'diff --unified {hostsf} {tmpfile}'.split())
+            # We shouldn't get here, because it would imply diff returned
+            # exitcode==0, which means that the new /etc/hosts file didn't have
+            # any changes... which it should.
+            sys.exit('Should have found differences but did not')
+        except CalledProcessError as cpe:
+            # Shouldn't be here unless returncode was nonzero
+            assert cpe.returncode > 0
+            # We got a geniune diff error
+            if cpe.returncode > 1:
+                raise
+            elif cpe.returncode == 1:
+                # This is the *expected* path, since we only get to this point
+                # if there were modifications to the /etc/hosts file, and diff
+                # returns exitcode==1 if there were changes
+                pass
+
+        cmd = f'cat {tmpfile} | sudo tee {hostsf}'
+        yn = input(f'Implement these changes to your {hostsf}, '
+                   'using sudo? [y/N] -> ')
+        if yn.lower() in ('y', 'yes'):
+            runShell(cmd)
+            print(f'{hostsf} successfully updated.')
         else:
-            print(f"Unable to write to {hostsf}. Try yourself?")
-    sys.exit(f"Script cannot continue without {webfqdn} in {hostsf}")
+            sys.exit('Cannot continue without these changes.')
 
 def cleanOldTunnels() -> None:
     # Check to see if anything looks suspiciously like an old ssh tunnel, and
@@ -1441,23 +1509,18 @@ def main() -> None:
         svcStop(ns.empty_nodes)
 
     tuns: list[Tunnel] = []
-    bastion = ''
+
+    y = getCloudSummary()
     if ns.command in ("start", "restart"):
-        tuns, bastion = svcStart(ns.skip_cluster_start)
+        tuns, bastion_ip = svcStart(ns.skip_cluster_start)
         started = True
         out.announceBox(f'Your {rsaPub} public key has been installed into the '
                         'bastion server, so you can ssh there now '
                         f'(user "{bastionuser}").')
-
-    y = getCloudSummary()
-    if started:
         y += (['Service is started on:'] +
-              announceReady(bastion) +
-              ['Connect now to localhost ports:'] +
-              [str(i) for i in tuns])
+              [f'[{s.name}] {s.get_url()}' for s in svcs.get_clust_all()])
     else:
         y += ['Service is stopped']
-
     out.announceLoud(y)
     if started:
         input("Press return key to quit and terminate tunnels!")

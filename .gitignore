@@ -16,3 +16,4 @@ gcp/key.json
 commit
 *.csv
 *.log
+tags

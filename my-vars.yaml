@@ -5,9 +5,9 @@ Email: rob.anderson@hazelcast.com
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-#Target: aws
-#Target: az
-Target: gcp
+Target: aws
+  #Target: az
+  #Target: gcp
 
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.

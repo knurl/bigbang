@@ -1,7 +1,5 @@
 import time
-import random
 import textwrap
-import string
 from termcolor import cprint, colored # type: ignore
 from typing import Callable
 from shutil import get_terminal_size
@@ -111,9 +109,3 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
             return
         i += 1
         time.sleep(0.25)
-
-# TODO: This shouldn't be in this module. This is a hack.
-def randomString(length: int) -> str:
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choices(chars, k = length))
-
