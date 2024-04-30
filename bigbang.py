@@ -386,8 +386,22 @@ def random_string(length: int) -> str:
     chars = string.ascii_letters + string.digits
     return ''.join(random.choices(chars, k = length))
 
-def rand_tmp_filename(prefix: str, ext: str) -> str:
-    return f'{tmpdir}/{prefix}_' + random_string(4) + f'.{ext}'
+def tmp_filename(prefix: str, ext: str, random: bool = False) -> str:
+    fn = f'{tmpdir}/{prefix}'
+    if random:
+        fn += '_' + random_string(4)
+    fn += f'.{ext}'
+    return fn
+
+def convert_template_to_tmpname(template: str) -> tuple[str, str, str]:
+    assert os.path.basename(template) == template, \
+            f"YAML template {template} should be in basename form (no path)"
+    root, ext = os.path.splitext(template)
+    if ext[0] == '.':
+        ext = ext[1:] # get rid of leading period
+    assert len(root) > 0 and len(ext) > 0
+    # temporary file where we'll write the filled-in template
+    return tmp_filename(f'{root}_{shortname}', ext, random=False), root, ext
 
 def appendToFile(filepath, contents) -> None:
     with open(filepath, "a+") as fh:
@@ -442,18 +456,7 @@ def removeOldVersions(similar: str) -> None:
 
 def parameteriseTemplate(template: str, tmp_dir: str, varsDict: dict,
                          undefinedOk: set[str] = set()) -> tuple[bool, str]:
-    assert os.path.basename(template) == template, \
-            f"YAML template {template} should be in basename form (no path)"
-    root, ext = os.path.splitext(template)
-
-    # get rid of leading period
-    if ext[0] == '.':
-        ext = ext[1:]
-
-    assert len(root) > 0 and len(ext) > 0
-
-    # temporary file where we'll write the filled-in template
-    yamltmp = rand_tmp_filename(f'{root}_{shortname}', ext)
+    yamltmp, root, ext = convert_template_to_tmpname(template)
 
     # if we're writing a Terraform file, make sure to clean up older,
     # similar-looking Terraform files as these will cause Terraform to fail
@@ -890,7 +893,7 @@ def set_dns_for_lbs(zid: str, # Zone ID
                 runCollect(cmd.split())
 
     if target == 'aws':
-        batchfn = rand_tmp_filename('crrs_batch_aws', 'json')
+        batchfn = tmp_filename('crrs_batch_aws', 'json')
         replaceFile(batchfn, json.dumps(batch_aws))
         runCollect(('aws route53 change-resource-record-sets --hosted-zone-id '
                    f'{zid} --change-batch file://{batchfn} '
@@ -1078,21 +1081,19 @@ def helmInstallOperator(module: str, env: dict = {}) -> None:
         print(f"{chart} values unchanged ➼ avoiding helm upgrade")
 
 def KubeApplyCrd(crd: str, env: dict = {}) -> None:
+    # Ignore changes, apply every time
     _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
 
     out.announce(f'Applying CRD "{crd}"')
     runStdout(f'{kubens} apply -f {yamltmp}'.split())
 
 def KubeDeleteCrd(crd: str, env) -> None:
-    env |= {
-            'AppChartVersion': appchartversion,
-            'NodeCount': nodeCount
-            }
+    # Generate filename of tmp file where CRD lives
+    yamltmp, _, _ = convert_template_to_tmpname(templates[crd])
 
-    _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
-
-    out.announce(f'Deleting CRD "{crd}"')
-    runStdout(f'{kubens} delete --ignore-not-found=true -f {yamltmp}'.split())
+    if bbio.readableFile(yamltmp):
+        out.announce(f'Deleting CRD "{crd}"')
+        runStdout(f'{kubens} delete --ignore-not-found=true -f {yamltmp}'.split())
 
 def helmUninstallRelease(release: str) -> None:
     helm(f"{helmns} uninstall {release}")
@@ -1153,13 +1154,13 @@ def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
     #
     # Infrastructure first. Create the cluster using Terraform.
     #
-    with Timer('starting cluster'):
+    with Timer('create infrastructure'):
         tun, env = ensure_cluster_is_started(skipClusterStart)
         tuns.append(tun)
 
     bastion = env['bastion_address']
 
-    with Timer('setup of K8S resources'):
+    with Timer('deploy K8S resources'):
         helm_create_operator_and_crds(env)
         # Wait for pods & LBs to become ready
         # Set up port forward tunnels for LBs
@@ -1314,7 +1315,7 @@ def checkRSAKey() -> None:
 
 def checkEtcHosts() -> None:
     out.announce(f'Ensuring needed mapping entries are in {hostsf}')
-    tmpfile = rand_tmp_filename('etc', 'hosts')
+    tmpfile = tmp_filename('etc', 'hosts')
 
     # Start by trying to see if the entries are already in the hosts file, in
     # the form we want. If they are, we don't need to create them.
