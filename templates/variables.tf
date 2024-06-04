@@ -52,6 +52,10 @@ variable "bastion_name" {
   default = "{{ShortName}}-bastion"
 }
 
+variable "client_name" {
+  default = "{{ShortName}}-client"
+}
+
 variable "bastion_fw_ingress" {
   default = ["{{MyPublicIP}}/32"]
 }

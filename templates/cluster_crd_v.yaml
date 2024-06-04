@@ -8,5 +8,7 @@ spec:
   licenseKeySecretName: license
   clusterSize: {{NodeCount}}
   exposeExternally:
+    #    type: Smart
     type: Unisocket
     discoveryServiceType: LoadBalancer
+      #    memberAccess: LoadBalancer

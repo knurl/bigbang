@@ -52,6 +52,7 @@ resource "aws_security_group" "vpc_endpoint_sg" {
 
 locals {
   bastion_ip          = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
+  client_ip           = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 101)
   prvpub_subnet_cidrs = concat(module.vpc.public_subnets_cidr_blocks, module.vpc.private_subnets_cidr_blocks)
 }
 

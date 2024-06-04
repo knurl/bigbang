@@ -17,6 +17,7 @@ import yaml # type: ignore
 import psutil # type: ignore
 import time
 import string
+from datetime import datetime
 
 from subprocess import CalledProcessError
 from typing import List, Callable, Optional, Any, Dict
@@ -34,7 +35,7 @@ import bbio
 import ready # local imports
 from cmdgrp import CommandGroup
 from capcalc import numberOfReplicas, numberOfContainers
-from run import runShell, runTry, runStdout, runCollect, retryRun
+from run import runShell, runTry, runStdout, runCollect, retryRun, runIgnore
 from timer import Timer
 
 # Suppress info-level messages from the requests library
@@ -84,7 +85,6 @@ maxpodpnode = 32
 #
 # Secrets
 # 
-secrets: dict[str, dict[str, str]] = {}
 secretsbf    = "secrets.yaml"
 secretsf     = bbio.where(secretsbf)
 
@@ -386,14 +386,17 @@ def random_string(length: int) -> str:
     chars = string.ascii_letters + string.digits
     return ''.join(random.choices(chars, k = length))
 
-def tmp_filename(prefix: str, ext: str, random: bool = False) -> str:
-    fn = f'{tmpdir}/{prefix}'
+def tmp_filename(prefix: str, ext: str, my_tmp_dir: str = "", random: bool = False) -> str:
+    tmp_dir = tmpdir
+    if my_tmp_dir:
+        tmp_dir = my_tmp_dir
+    fn = f'{tmp_dir}/{prefix}'
     if random:
         fn += '_' + random_string(4)
     fn += f'.{ext}'
     return fn
 
-def convert_template_to_tmpname(template: str) -> tuple[str, str, str]:
+def convert_template_to_tmpname(template: str, my_tmp_dir: str = "") -> tuple[str, str, str]:
     assert os.path.basename(template) == template, \
             f"YAML template {template} should be in basename form (no path)"
     root, ext = os.path.splitext(template)
@@ -401,7 +404,8 @@ def convert_template_to_tmpname(template: str) -> tuple[str, str, str]:
         ext = ext[1:] # get rid of leading period
     assert len(root) > 0 and len(ext) > 0
     # temporary file where we'll write the filled-in template
-    return tmp_filename(f'{root}_{shortname}', ext, random=False), root, ext
+    return (tmp_filename(f'{root}_{shortname}', ext, my_tmp_dir=my_tmp_dir,
+                         random=False), root, ext)
 
 def appendToFile(filepath, contents) -> None:
     with open(filepath, "a+") as fh:
@@ -456,7 +460,7 @@ def removeOldVersions(similar: str) -> None:
 
 def parameteriseTemplate(template: str, tmp_dir: str, varsDict: dict,
                          undefinedOk: set[str] = set()) -> tuple[bool, str]:
-    yamltmp, root, ext = convert_template_to_tmpname(template)
+    yamltmp, root, ext = convert_template_to_tmpname(template, tmp_dir)
 
     # if we're writing a Terraform file, make sure to clean up older,
     # similar-looking Terraform files as these will cause Terraform to fail
@@ -485,14 +489,23 @@ def parameteriseTemplate(template: str, tmp_dir: str, varsDict: dict,
     changed = replaceFile(yamltmp, output)
     return changed, yamltmp
 
+class MissingTerraformOutput(Exception):
+    pass
+
 def get_output_vars() -> dict:
     x = json.loads(runCollect(f"{tf} output -json".split()))
 
     env = {k: v["value"] for k, v in x.items()}
+    if not env:
+        raise MissingTerraformOutput()
+
     if target == "aws":
         # Trim off everything on the AWS API server endpoint so that we're left
         # with just the hostname.
-        ep = env["k8s_api_server"]
+        ep = env.get('k8s_api_server')
+        if not ep:
+            raise MissingTerraformOutput()
+
         u = urlparse(ep)
         assert u.scheme is None or u.scheme == "https"
         assert u.port is None or u.port == 443
@@ -534,10 +547,10 @@ def updateKubeConfig() -> None:
             return
     raise KubeContextError(f"No active {kube} context within:\n{c}")
 
-def getMyPublicIp() -> ipaddress.IPv4Address:
+def get_my_pub_ip() -> ipaddress.IPv4Address:
     out.announce("Getting public IP address")
     try:
-        i = runCollect("dig +short myip.opendns.com @resolver1.opendns.com".split())
+        i = runCollect("curl https://ipinfo.io/ip".split())
     except CalledProcessError:
         sys.exit("Unable to reach the internet. Are your DNS resolvers set "
                  "correctly?")
@@ -552,7 +565,7 @@ def getMyPublicIp() -> ipaddress.IPv4Address:
         print(f"Unable to retrieve my public IP address; got {i}")
         raise
 
-def getSshPublicKey() -> str:
+def get_ssh_pub_key() -> str:
     out.announce(f"Retrieving public ssh key {rsaPub}")
     try:
         with open(rsaPub) as rf:
@@ -769,17 +782,19 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
 
     return tun
 
-def ensure_cluster_is_started(skipClusterStart: bool) -> tuple[Tunnel, dict]:
+def ensure_cluster_is_started(skipClusterStart: bool,
+                              my_pub_ip: ipaddress.IPv4Address,
+                              my_ssh_pub_key: str) -> tuple[Tunnel, dict]:
     env = {"ClusterName":         clustname,
            "Domain":              domain,
            "InstanceTypes":       instanceTypes,
            "MaxPodsPerNode":      maxpodpnode,
            "MyCIDR":              mySubnetCidr,
-           "MyPublicIP":          getMyPublicIp(),
+           "MyPublicIP":          my_pub_ip,
            'NetwkName':           netwkname,
            "NodeCount":           nodeCount,
            "SmallInstanceType":   smallInstanceType,
-           "SshPublicKey":        getSshPublicKey(),
+           "SshPublicKey":        my_ssh_pub_key,
            "Region":              region,
            "Target":              target,
            "UserName":            username,
@@ -879,7 +894,7 @@ def set_dns_for_lbs(zid: str, # Zone ID
                        f'-g {resourcegrp} -n {svcname} -z {zid} --ttl {ttl}')
                 cmd = (f'az network private-dns record-set a add-record '
                        f'-g {resourcegrp} -n {svcname} -z {zid} -a {host}')
-                runCollect(cmd.split())
+                runIgnore(cmd.split())
         elif target == 'gcp':
             # GCP uses IP addresses for LBs, so we use an A record. GCP wants
             # us to run a command for each update.
@@ -889,12 +904,12 @@ def set_dns_for_lbs(zid: str, # Zone ID
             if not delete:
                 cmd = (f'gcloud dns record-sets create {fqn} --zone={zid} '
                        f'--type=A --rrdatas={host} --ttl={ttl}')
-                runCollect(cmd.split())
+                runIgnore(cmd.split())
 
     if target == 'aws':
         batchfn = tmp_filename('crrs_batch_aws', 'json')
         replaceFile(batchfn, json.dumps(batch_aws))
-        runCollect(('aws route53 change-resource-record-sets --hosted-zone-id '
+        runIgnore(('aws route53 change-resource-record-sets --hosted-zone-id '
                    f'{zid} --change-batch file://{batchfn} '
                    '--no-cli-pager').split())
     # Nothing more to do for Azure or GCP
@@ -938,41 +953,72 @@ def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
 
     return tuns, lbs
 
-def installSecrets(secrets: dict[str, dict[str, str]]) -> dict[str, str]:
-    env = {}
-    out.announce("Installing secrets")
-    installed = []
-    if secrets:
-        installed = runCollect(f"{kubens} get secrets "
-                               f"-o=jsonpath={{.items[*].metadata.name}}".split()).split()
+def convert_zulu_time_to_timestamp(datetimestr: str) -> float:
+    # Google sometimes returns UTC dates with military/Zulu format; standardise
+    # these here so we can parse them uniformly
+    if datetimestr.endswith('Z'):
+        datetimestr = datetimestr[:-1] + "+00:00"
+    return datetime.timestamp(datetime.fromisoformat(datetimestr))
 
-    for name, values in secrets.items():
+def install_secrets_into_k8s(secrets_to_add: dict[str, dict[str, str]]) \
+        -> dict[str, str]:
+    out.announce('Ensuring secrets are installed in K8S')
+    env = {}
+    installed_secrets = {}
+    if secrets_to_add:
+        x = runCollect(kubens.split() +
+                       ['get', 'secrets',
+                        '-o=jsonpath={range $.items[*].metadata}'
+                        '{.name}{" "}{.creationTimestamp}{" "}{end}'])
+        if x:
+            s = x.split()
+            z = zip(s[0::2], s[1::2])
+            installed_secrets = {x: y for x, y in z}
+
+    for secret_to_add_name, secret_to_add_content in secrets_to_add.items():
         # These are needed only for GCP
-        if target != "gcp" and name == "gcskey":
+        if target != "gcp" and secret_to_add_name == "gcskey":
             continue
 
         # We always want to store the secret name, no matter what
-        env[name] = name
+        env[secret_to_add_name] = secret_to_add_name
+        isgroup = secret_to_add_content.get('isgroup')
 
         # if this isn't a cert group, then record the base filename and fully
         # qualified filename to the environment dict
-        if "isgroup" not in values or not values["isgroup"]:
-            env[name + "bf"] = values["bf"]
-            env[name + "f"] = values["f"]
+        file = ''
+        file_arg = ''
+        if not isgroup:
+            env[secret_to_add_name + "bf"] = secret_to_add_content["bf"]
+            env[secret_to_add_name + "f"] = secret_to_add_content["f"]
+            file = secret_to_add_content['f']
+            file_arg = file
+            if (k := secret_to_add_content.get('k')):
+                file_arg = f'{k}={file}'
 
-        # if the secret with that name doesn't yet exist, create it
-        if name not in installed:
-            # If this isn't a cert group, then install the secret normally. If
-            # this is a cert group, and we are terminating TLS at an
-            # ingress-based LB, then we need to install a secret that we'll use
-            # in the helm chart with the LB.
-            if "isgroup" not in values or not values["isgroup"]:
-                f = values['f']
-                k = values.get('k')
-                if k:
-                    f = f'{k}={f}'
-                runStdout(f'{kubens} create secret generic {name} '
-                          f'--from-file={f}'.split())
+        # if the secret with that name doesn't yet exist, create it; if there
+        # is a newer version of the file, replace the secret with the newer one
+        secret_ts_str = installed_secrets.get(secret_to_add_name)
+        if secret_ts_str: # There is a secret already with that name
+            secret_ts = convert_zulu_time_to_timestamp(secret_ts_str)
+            file_ts = os.path.getmtime(file)
+
+            # Secret already installed and file isn't newer -> NOOP
+            if file_ts < secret_ts:
+                continue
+
+            print(f'Replacing secret "{secret_to_add_name}" '
+                  f'with newer version of {file}')
+            runIgnore(f'{kubens} delete secret {secret_to_add_name}'.split())
+        else:
+            print(f'Installing secret "{secret_to_add_name}" from {file}')
+
+        # If this isn't a cert group, then install the secret normally. If
+        # this is a cert group, and we are terminating TLS at an
+        # ingress-based LB, then we need to install a secret that we'll use
+        # in the helm chart with the LB.
+        runIgnore(f'{kubens} create secret generic {secret_to_add_name} '
+                  f'--from-file={file_arg}'.split())
 
     return env
 
@@ -985,7 +1031,7 @@ def helm(cmd: str) -> None:
 def helmGet(cmd: str) -> str:
     return runCollect(["helm"] + cmd.split())
 
-def ensureHelmRepoSetUp(helm_repo_name: str, helm_repo_location: str) -> None:
+def helm_set_up_repo(helm_repo_name: str, helm_repo_location: str) -> None:
     if (r := helmTry("version")).returncode != 0:
         sys.exit("Unable to run helm. Is it installed? Failing out.")
 
@@ -1026,7 +1072,7 @@ def helmGetNamespaces() -> list:
 
     return n
 
-def helm_create_namespace() -> None:
+def k8s_create_namespace() -> None:
     if namespace not in helmGetNamespaces():
         runStdout(f'{kube} create namespace {namespace}'.split())
     runStdout(f'{kube} config set-context --namespace={namespace} '
@@ -1097,19 +1143,7 @@ def KubeDeleteCrd(crd: str, env) -> None:
 def helmUninstallRelease(release: str) -> None:
     helm(f"{helmns} uninstall {release}")
 
-def helm_create_operator_and_crds(env):
-    # Do this first so all resources install into the namespace
-    helm_create_namespace()
-
-    # Set up the Helm repo if not already done
-    ensureHelmRepoSetUp(helm_repo_name, helm_repo_location)
-
-    env |= installSecrets(secrets) | {
-            'AppChartVersion': appchartversion,
-            'NodeCount': nodeCount,
-            'SrvNmCluster': srvnm_cluster,
-            'SrvNmManctr': srvnm_manctr
-            }
+def helm_create_operator_and_crds(env: dict[str, str]) -> None:
     helmInstallOperator(operator, env)
     for crd in crds:
         KubeApplyCrd(crd, env)
@@ -1148,16 +1182,39 @@ def helm_delete_crds_and_operator():
             print(f"Unable to uninstall release {release}: {e}")
     killAllTerminatingPods()
 
-def svcStart(skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
+def svcStart(secrets: dict[str, dict[str, str]],
+             skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
     tuns: list[Tunnel] = []
+    env: dict[str, str] = {}
+
+    # Get my public IP and SSH public key
+    #
+    my_pub_ip = get_my_pub_ip()
+    my_ssh_pub_key = get_ssh_pub_key()
+
     #
     # Infrastructure first. Create the cluster using Terraform.
     #
-    with Timer('create infrastructure'):
-        tun, env = ensure_cluster_is_started(skipClusterStart)
+    with Timer('set up infrastructure'):
+        tun, env = ensure_cluster_is_started(skipClusterStart, my_pub_ip,
+                                             my_ssh_pub_key)
         tuns.append(tun)
 
     bastion = env['bastion_address']
+
+    # Do this first so all resources install into the namespace
+    with Timer('set up K8S and Helm'):
+        k8s_create_namespace()
+
+        env |= {
+            'AppChartVersion': appchartversion,
+            'NodeCount': nodeCount,
+            'SrvNmCluster': srvnm_cluster,
+            'SrvNmManctr': srvnm_manctr
+            } | install_secrets_into_k8s(secrets)
+
+        # Set up the Helm repo if not already done
+        helm_set_up_repo(helm_repo_name, helm_repo_location)
 
     with Timer('deploy K8S resources'):
         helm_create_operator_and_crds(env)
@@ -1175,10 +1232,10 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion to allow our commands to flow
     # through to the K8S cluster.
     out.announce("Re-establishing bastion tunnel")
-    env = get_output_vars()
     lbs_cleaned = False
 
     try:
+        env = get_output_vars()
         zone_id = env['zone_id']
         bastion_ip = env['bastion_address']
         k8s_server_name = env['k8s_api_server']
@@ -1188,7 +1245,10 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
             # NOTE: DNS *must* be removed since Terraform will complain about any
             # records it didn't create at the time the zone is destroyed.
             lbs = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
-            set_dns_for_lbs(zone_id, lbs, delete=True)
+            try:
+                set_dns_for_lbs(zone_id, lbs, delete=True)
+            except CalledProcessError:
+                print('Unable to delete DNS record sets (do they exist?)')
 
             with Timer('teardown of K8S resources'):
                 # tunnel established. Now delete things in reverse order to how
@@ -1204,8 +1264,8 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                         getLoadBalancers(svcs.get_clust_svc_names(), namespace)
                 lbs_cleaned = delete_all_services(lbs_after_helm_uninstall)
                 helm_delete_namespace()
-    except KeyError:
-        out.announce('Terraform objects seem destroyed, ergo no bastion.')
+    except (MissingTerraformOutput):
+        out.announce('Terraform objects partly or fully destroyed')
 
     if onlyEmptyNodes:
         return
@@ -1237,7 +1297,8 @@ def getCloudSummary() -> List[str]:
             # FIXME this should show the instance type actually selected!
             f"Cluster: {nodeCount} × {instanceTypes[0]}"]
 
-def getSecrets() -> None:
+def load_secrets_from_file() -> dict[str, dict[str, str]]:
+    secrets: dict[str, dict[str, str]] = {}
     try:
         with open(secretsf) as fh:
             s = yaml.load(fh, Loader = yaml.FullLoader)
@@ -1256,7 +1317,8 @@ def getSecrets() -> None:
         # a pre-made secret, and it must already be on disk and readable.
         if ("generated" not in values or not values["generated"]) \
                 and not bbio.readableFile(filename):
-                    sys.exit(f"Can't find a readable file at {filename} for {name}")
+                    sys.exit(f"Can't find a readable file at {filename} "
+                             f"for secret {name}")
 
         # Certificate groups should be treated specially, and we should add
         # these to the set as a single object. Store them away here and return
@@ -1293,6 +1355,8 @@ def getSecrets() -> None:
                                                                       values["cert"], ch = values["chain"]))
                 sys.exit(-1)
         secrets[groupname] = values
+
+    return secrets
 
 def announceSummary() -> None:
     out.announceLoud(getCloudSummary())
@@ -1464,7 +1528,7 @@ def check_creds() -> None:
             sys.exit("Have you run aws configure?")
         out.announce('Validating AWS SSO token')
         try:
-            runCollect('aws sts get-caller-identity --no-cli-pager'.split())
+            runIgnore('aws sts get-caller-identity --no-cli-pager'.split())
             print('Your AWS SSO token is valid')
         except CalledProcessError:
             yn = input("Your AWS SSO token is stale. Refresh it now? [y/N] -> ")
@@ -1492,7 +1556,7 @@ def main() -> None:
         sys.exit(0)
 
     out.announce("Verifying environment")
-    getSecrets()
+    secrets = load_secrets_from_file()
     announceSummary()
     check_creds()
     checkRSAKey()
@@ -1511,7 +1575,7 @@ def main() -> None:
 
     y = getCloudSummary()
     if ns.command in ("start", "restart"):
-        tuns, bastion_ip = svcStart(ns.skip_cluster_start)
+        tuns, bastion_ip = svcStart(secrets, ns.skip_cluster_start)
         started = True
         out.announceBox(f'Your {rsaPub} public key has been installed into the '
                         'bastion server, so you can ssh there now '

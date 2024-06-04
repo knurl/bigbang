@@ -14,6 +14,7 @@ Target: aws
 # This value can be overridden with -z flag on commandline
 PreferredZones:
   aws:
+    - eu-west-3 # AWS - Paris, France, EU
     - eu-west-2 # AWS - London, UK, EU
     - us-east-2 # AWS - Columbus, OH, USA
     - us-east-1 # AWS - Northern Virginia, USA
@@ -22,12 +23,12 @@ PreferredZones:
     - eastus # Azure - Virginia, USA
     - francecentral # Azure - Paris, France, EU
   gcp:
-    - europe-west2-b # GCP - London, UK, EU
     - europe-west1-b # GCP - St. Ghislain, Belgium, EU
+    - europe-west2-b # GCP - London, UK, EU
 
 # Chart version you want to install. This must match across all charts.
-AppChartVersion: 5.10.13 # Chart for Hazelcast 5.3.6
-OperatorChartVersion: 5.10.0
+AppChartVersion: 5.11.1 # Chart for Hazelcast 5.4.0
+OperatorChartVersion: 5.11.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 3

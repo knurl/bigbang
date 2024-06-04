@@ -17,10 +17,8 @@ def run(args, check = True, verbose = True) -> subprocess.CompletedProcess:
     if verbose:
         print(command)
 
-    return subprocess.run(args,
-                          capture_output = (not verbose),
-                          check = check,
-                          text = True)
+    return subprocess.run(args, capture_output=(not verbose), check=check,
+                          text=True)
 
 # Run a command string in a shell
 def runShell(cmd: str) -> int:
@@ -41,6 +39,9 @@ def runStdout(args):
 # CheckRC==True, and we are collecting output, which we'll return back
 def runCollect(args) -> str:
     return run(args, check = True, verbose = False).stdout.strip()
+
+def runIgnore(args) -> None:
+    run(args, check = True, verbose = False)
 
 def retryRun(args, maxattempts: int) -> subprocess.CompletedProcess:
     attempts = 1
