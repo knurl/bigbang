@@ -4,28 +4,30 @@
 contsForPod: dict[str, list[str]] = {
         'operator': ['manager'],
         'cluster': ['hazelcast', 'sidecar-agent'],
-        'manctr': ['management-center']
+        'manctr': ['management-center'],
+        'bbclient': ['bbclient']
         }
 
 # replicas per pod
-def replicasPerPod(podname: str, numNodes: int) -> int:
+def replicasPerPod(podname: str, numNodes: int, numClients: int) -> int:
     assert podname in contsForPod
     if podname == 'cluster':
         return numNodes
+    elif podname == 'bbclient':
+        return numClients
     else:
         return 1
 
-def numberOfReplicas(numNodes: int) -> int:
+def numberOfReplicas(numNodes: int, numClients: int) -> int:
     numReplicas = 0
     for podname in contsForPod:
-        numReplicas += replicasPerPod(podname, numNodes)
+        numReplicas += replicasPerPod(podname, numNodes, numClients)
     return numReplicas
 
-def numberOfContainers(numNodes: int) -> int:
-    # We start with the assumption that we have at least one node for the
-    # coordinator, and one for each worker.
+def numberOfContainers(numNodes: int, numClients: int) -> int:
     assert numNodes >= 3
     numContainers = 0
     for podname, conts in contsForPod.items():
-        numContainers += len(conts) * replicasPerPod(podname, numNodes)
+        numContainers += (len(conts) *
+                          replicasPerPod(podname, numNodes, numClients))
     return numContainers

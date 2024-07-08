@@ -5,9 +5,9 @@ Email: rob.anderson@hazelcast.com
 # XXX Make sure to change this in conjunction with the following field so
 # zone/location you're selecting is appropriate for cloud target
 # This value can be overridden with -t flag on commandline
-Target: aws
-  #Target: az
-  #Target: gcp
+#Target: aws
+#Target: az
+Target: gcp
 
 # The zone/region/location you want to run in.
 # XXX Choose something appropriate for the cloud you've selected above.
@@ -23,15 +23,22 @@ PreferredZones:
     - eastus # Azure - Virginia, USA
     - francecentral # Azure - Paris, France, EU
   gcp:
-    - europe-west1-b # GCP - St. Ghislain, Belgium, EU
     - europe-west2-b # GCP - London, UK, EU
+    - europe-west1-b # GCP - St. Ghislain, Belgium, EU
+    - us-west1-b # GCP - Oregon, USA
 
 # Chart version you want to install. This must match across all charts.
-AppChartVersion: 5.11.1 # Chart for Hazelcast 5.4.0
+AppVersion: 5.4.0
 OperatorChartVersion: 5.11.0
 
 # Number of nodes in K8S cluster.
-NodeCount: 3
+NodeCount: 5
+
+# Number of nodes in Hz cluster.
+HzNodeCount: 3
+
+# Number of clients
+HzClientCount: 16
 
 # Require TLS on client <-> coordinator connection.
 RequireCoordTls: False
@@ -50,7 +57,8 @@ AwsInstanceTypes:
 AzureVmTypes:
     - Standard_B2s
 GcpMachineTypes:
-    - e2-standard-2 # 16 vCPU, 128 GB, optional SSD
+    - n2d-standard-8 # 8 vCPU, 32 GB
+#    - e2-standard-2 # 16 vCPU, 128 GB
 
 # smaller instance types (for bastions etc) - 2 vCPU / 8 GB RAM
 AwsSmallInstanceType: m5.large

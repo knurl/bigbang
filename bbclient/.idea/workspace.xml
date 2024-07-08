@@ -5,21 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="83796aea-c0d8-41ad-845a-56533da9b650" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/artifacts/bbclient_jar.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/jarRepositories.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/META-INF/MANIFEST.MF" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../aws/vpc.tf" beforeDir="false" afterPath="$PROJECT_DIR$/../aws/vpc.tf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/out/artifacts/bbclient_jar/bbclient.jar" beforeDir="false" afterPath="$PROJECT_DIR$/out/artifacts/bbclient_jar/bbclient.jar" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../bigbang.py" beforeDir="false" afterPath="$PROJECT_DIR$/../bigbang.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../client/client.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../capcalc.py" beforeDir="false" afterPath="$PROJECT_DIR$/../capcalc.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../my-vars.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../out.py" beforeDir="false" afterPath="$PROJECT_DIR$/../out.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../templates/variables.tf" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/variables.tf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -45,6 +40,7 @@
     "Application.Main.executor": "Run",
     "Application.bbclient.executor": "Run",
     "Docker.Dockerfile.executor": "Run",
+    "Docker.bbclient_docker.executor": "Run",
     "JAR Application.bbclient.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
@@ -57,7 +53,7 @@
     "settings.editor.selected.configurable": "preferences.lookFeel"
   }
 }]]></component>
-  <component name="RunManager" selected="Docker.Dockerfile">
+  <component name="RunManager" selected="Docker.bbclient_docker">
     <configuration name="Main" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="com.hazelcast.Main" />
       <module name="bbclient" />
@@ -71,29 +67,31 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Dockerfile" type="docker-deploy" factoryName="dockerfile" singleton="false" temporary="true" server-name="Docker">
-      <deployment type="dockerfile">
-        <settings>
-          <option name="containerName" value="bbclient" />
-          <option name="sourceFilePath" value="Dockerfile" />
-        </settings>
-      </deployment>
-      <method v="2" />
-    </configuration>
     <configuration default="true" type="docker-deploy" factoryName="dockerfile" temporary="true">
       <deployment type="dockerfile">
         <settings />
       </deployment>
       <method v="2" />
     </configuration>
+    <configuration name="bbclient_docker" type="docker-deploy" factoryName="dockerfile" singleton="false" server-name="Docker">
+      <deployment type="dockerfile">
+        <settings>
+          <option name="imageTag" value="robhazelcast/robhz" />
+          <option name="buildCliOptions" value="--platform linux/amd64" />
+          <option name="containerName" value="bbclient" />
+          <option name="sourceFilePath" value="Dockerfile" />
+        </settings>
+      </deployment>
+      <method v="2" />
+    </configuration>
     <list>
       <item itemvalue="Application.Main" />
-      <item itemvalue="Docker.Dockerfile" />
+      <item itemvalue="Docker.bbclient_docker" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Docker.Dockerfile" />
         <item itemvalue="Application.Main" />
+        <item itemvalue="Docker.bbclient_docker" />
       </list>
     </recent_temporary>
   </component>
@@ -107,5 +105,16 @@
       <updated>1714742984280</updated>
     </task>
     <servers />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/hazelcast/Main.java</url>
+          <line>94</line>
+          <option name="timeStamp" value="3" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

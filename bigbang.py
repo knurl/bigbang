@@ -71,7 +71,7 @@ localhost     = "localhost"
 localhostip   = "127.0.0.1"
 domain        = "hazelcast.net" # cannot terminate with .; Azure will reject
 srvnm_manctr  = 'manctr'
-srvnm_cluster = 'cluster'
+srvnm_cluster = 'dev'
 bastionuser   = 'ubuntu'
 
 # K8S / Helm
@@ -79,7 +79,7 @@ namespace   = "hazelcast"
 kube        = "kubectl"
 kubens      = f"{kube} -n {namespace}"
 helmns      = f"-n {namespace}"
-minNodes    = 3 # See getMinNodeResources(); allows rolling upgrades
+minNodes    = 3
 maxpodpnode = 32
 
 #
@@ -130,8 +130,10 @@ if ns.command not in ("stop", "restart") and ns.empty_nodes:
 #
 targetlabel     = 'Target'
 prefzonelabel   = 'PreferredZones'
-nodecountlabel  = 'NodeCount'
-appchartvlabel  = 'AppChartVersion'
+nk8snodeslabel  = 'NodeCount'
+nhznodeslabel   = 'HzNodeCount'
+nhzclientslabel = 'HzClientCount'
+appversionlabel = 'AppVersion'
 oprchartvlabel  = 'OperatorChartVersion'
 tlscoordlabel   = 'RequireCoordTls'
 
@@ -155,9 +157,11 @@ try:
     # Zone - If from myvars, take first choice from preferred list
     zone = ns.zone if ns.zone else myvars[prefzonelabel][target][0]
 
-    appchartversion = myvars[appchartvlabel] # AppChartVersion
+    appversion      = myvars[appversionlabel] # AppVersion
     oprchartversion = myvars[oprchartvlabel] # OprChartVersion
-    nodeCount       = myvars[nodecountlabel] # NodeCount
+    nk8snodes       = myvars[nk8snodeslabel] # NodeCount
+    nhznodes        = myvars[nhznodeslabel] # HzNodeCount
+    nhzclients      = myvars[nhzclientslabel] # HzClientCount
     tlscoord        = myvars[tlscoordlabel] # RequireCoordTls
 
     requireKey("AwsInstanceTypes", myvars)
@@ -232,17 +236,18 @@ def check_chart_version(label, vers):
         sys.exit(f'The {label} in {myvarsf} field must be of the form '
                  f'x.y.z, all numbers; {vers} is not of a valid form')
 
-check_chart_version(appchartvlabel, appchartversion)
+check_chart_version(appversionlabel, appversion)
 check_chart_version(oprchartvlabel, oprchartversion)
 
 #
 # NodeCount
 #
-# The yaml files for the coordinator and worker specify they should be on
-# different nodes, so we need a 2-node cluster at minimum.
-if nodeCount < minNodes:
-    sys.exit(f"Must have at least {minNodes} nodes; {nodeCount} set for "
-             f"{nodecountlabel} in {myvarsf}.")
+if nk8snodes <= nhznodes:
+    sys.exit(f'To accommodate clients, {nk8snodeslabel} must be greater '
+             f'than {nhznodeslabel}.')
+if nhznodes < minNodes:
+    sys.exit(f"Must have at least {minNodes} nodes; {nhznodes} set for "
+             f"{nhznodeslabel} in {myvarsf}.")
 
 def tlsenabled() -> bool: return tlscoord
 
@@ -325,7 +330,7 @@ operator = 'operator'
 releases[operator] = f'operator-{shortname}'
 charts[operator] = 'hazelcast-platform-operator'
 
-crds = ['cluster', srvnm_manctr]
+crds = ['cluster', srvnm_manctr, 'bbclient']
 for crd in crds:
     templates[crd] = f'{crd}_crd_v.yaml'
 
@@ -352,7 +357,7 @@ class Services:
                 # but when I do so, I get this error back from requests.get:
                 # [SSL] record layer failure (_ssl.c:1006)
                 Service(srvnm_manctr, 8443, 443, tls=False),
-                Service('cluster', 5701, 5701, tls=tlsenabled())
+                Service(srvnm_cluster, 5701, 5701, tls=tlsenabled())
                 ]
         # Cluster services are more limited
         self.clust_svcs: dict[str, Service] = { i.name: i for i in svcs_list }
@@ -465,7 +470,7 @@ def parameteriseTemplate(template: str, tmp_dir: str, varsDict: dict,
     # if we're writing a Terraform file, make sure to clean up older,
     # similar-looking Terraform files as these will cause Terraform to fail
     if ext == "tf":
-        similar = f"{tmp_dir}/{root}.*\.{ext}"
+        similar = f"{tmp_dir}/{root}*{ext}"
         removeOldVersions(similar)
 
     # render the template with the parameters, and capture result in memory
@@ -792,7 +797,7 @@ def ensure_cluster_is_started(skipClusterStart: bool,
            "MyCIDR":              mySubnetCidr,
            "MyPublicIP":          my_pub_ip,
            'NetwkName':           netwkname,
-           "NodeCount":           nodeCount,
+           "NodeCount":           nk8snodes,
            "SmallInstanceType":   smallInstanceType,
            "SshPublicKey":        my_ssh_pub_key,
            "Region":              region,
@@ -826,7 +831,7 @@ def ensure_cluster_is_started(skipClusterStart: bool,
 
     # Don't continue until all nodes are ready
     out.announce("Waiting for nodes to come online")
-    out.spinWait(lambda: waitUntilNodesReady(nodeCount))
+    out.spinWait(lambda: waitUntilNodesReady(nk8snodes))
 
     # Don't continue until all K8S system pods are ready
     out.announce("Waiting for K8S system pods to come online")
@@ -918,11 +923,11 @@ def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
     tuns: list[Tunnel] = []
 
     out.announce("Waiting for pods to be ready")
-    expectedContainers = numberOfContainers(nodeCount)
+    expectedContainers = numberOfContainers(nhznodes, nhzclients)
     out.spinWait(lambda: waitUntilPodsReady(namespace, expectedContainers))
 
     out.announce("Waiting for deployments to be available")
-    expectedReplicas = numberOfReplicas(nodeCount)
+    expectedReplicas = numberOfReplicas(nhznodes, nhzclients)
     out.spinWait(lambda: waitUntilDeploymentsAvail(namespace, expectedReplicas))
 
     # now the load balancers need to be running with their IPs assigned
@@ -1110,8 +1115,8 @@ def helmInstallOperator(module: str, env: dict = {}) -> None:
         out.announce("Installing chart {c} as {r}".format(c = newchart, r =
                                                           releases[module]))
         helm("{h} install {r} {w}/{c} --version {v}"
-             .format(h=helmns, r=releases[module], w=helm_repo_name, c=charts[module],
-                     v=oprchartversion))
+             .format(h=helmns, r=releases[module], w=helm_repo_name,
+                     c=charts[module], v=oprchartversion))
     # If either the chart values file changed, or we need to update to a
     # different version of the chart, then we have to upgrade
     elif chart != newchart:
@@ -1120,8 +1125,8 @@ def helmInstallOperator(module: str, env: dict = {}) -> None:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         out.announce(astr)
         helm("{h} upgrade {r} {w}/{c} --version {v}"
-             .format(h=helmns, r=releases[module], w=helm_repo_name, c=charts[module],
-                     v=oprchartversion))
+             .format(h=helmns, r=releases[module], w=helm_repo_name,
+                     c=charts[module], v=oprchartversion))
     else:
         print(f"{chart} values unchanged ➼ avoiding helm upgrade")
 
@@ -1182,6 +1187,7 @@ def helm_delete_crds_and_operator():
             print(f"Unable to uninstall release {release}: {e}")
     killAllTerminatingPods()
 
+
 def svcStart(secrets: dict[str, dict[str, str]],
              skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
     tuns: list[Tunnel] = []
@@ -1207,8 +1213,9 @@ def svcStart(secrets: dict[str, dict[str, str]],
         k8s_create_namespace()
 
         env |= {
-            'AppChartVersion': appchartversion,
-            'NodeCount': nodeCount,
+            appversionlabel: appversion,
+            'HzClientCount': nhzclients,
+            'HzNodeCount': nhznodes,
             'SrvNmCluster': srvnm_cluster,
             'SrvNmManctr': srvnm_manctr
             } | install_secrets_into_k8s(secrets)
@@ -1295,7 +1302,7 @@ def getCloudSummary() -> List[str]:
     return [f"Cloud: {cloud}",
             f"Region: {region}",
             # FIXME this should show the instance type actually selected!
-            f"Cluster: {nodeCount} × {instanceTypes[0]}"]
+            f"Cluster: {nk8snodes} × {instanceTypes[0]}"]
 
 def load_secrets_from_file() -> dict[str, dict[str, str]]:
     secrets: dict[str, dict[str, str]] = {}

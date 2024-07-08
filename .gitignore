@@ -18,3 +18,5 @@ commit
 *.log
 *.java
 tags
+.DS_Store
+.exrc

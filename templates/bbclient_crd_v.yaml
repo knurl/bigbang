@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bbclient-depl
+  labels:
+    app: bbclient
+spec:
+  replicas: {{HzClientCount}}
+  selector:
+    matchLabels:
+      app: bbclient
+  strategy: 
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 100%
+  template:
+    metadata:
+      labels:
+        app: bbclient
+    spec:
+      containers:
+      - name: bbclient
+        image: robhazelcast/robhz:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "1"

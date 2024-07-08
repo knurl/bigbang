@@ -4,11 +4,11 @@ metadata:
   name: {{SrvNmCluster}}
 spec:
   repository: 'docker.io/hazelcast/hazelcast-enterprise'
-  version: '5.3.6'
+  version: {{AppVersion}}
   licenseKeySecretName: license
-  clusterSize: {{NodeCount}}
+  clusterSize: {{HzNodeCount}}
+  clusterName: {{SrvNmCluster}}
   exposeExternally:
-    #    type: Smart
-    type: Unisocket
+    type: Smart
     discoveryServiceType: LoadBalancer
-      #    memberAccess: LoadBalancer
+    memberAccess: LoadBalancer
