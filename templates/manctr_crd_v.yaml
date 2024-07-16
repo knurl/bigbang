@@ -10,3 +10,10 @@ spec:
   hazelcastClusters:
     - address: {{SrvNmCluster}}
       name: {{SrvNmCluster}}
+  jvm:
+    args:
+      - "-Dhazelcast.mc.rest.enabled=true"
+  resources:
+    requests:
+      memory: "16Gi"
+      cpu: "4"

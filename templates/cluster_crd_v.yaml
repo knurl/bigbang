@@ -6,9 +6,16 @@ spec:
   repository: 'docker.io/hazelcast/hazelcast-enterprise'
   version: {{AppVersion}}
   licenseKeySecretName: license
-  clusterSize: {{HzNodeCount}}
+  clusterSize: {{HzMemberCount}}
   clusterName: {{SrvNmCluster}}
   exposeExternally:
     type: Smart
     discoveryServiceType: LoadBalancer
-    memberAccess: LoadBalancer
+    memberAccess: NodePortNodeName
+  jvm:
+    args:
+      - "-Dcom.sun.management.jmxremote"
+      - "-Dcom.sun.management.jmxremote.authenticate=false"
+  properties:
+    "hazelcast.partition.count": "29"
+    "hazelcast.jmx": "true"

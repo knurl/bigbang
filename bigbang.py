@@ -75,12 +75,12 @@ srvnm_cluster = 'dev'
 bastionuser   = 'ubuntu'
 
 # K8S / Helm
-namespace   = "hazelcast"
-kube        = "kubectl"
-kubens      = f"{kube} -n {namespace}"
-helmns      = f"-n {namespace}"
-minNodes    = 3
-maxpodpnode = 32
+hz_namespace    = "hazelcast"
+chaos_namespace = "chaos-mesh"
+kube            = "kubectl"
+helm            = "helm"
+minNodes        = 3
+maxpodpnode     = 32
 
 #
 # Secrets
@@ -98,7 +98,7 @@ p.add_argument('-c', '--skip-cluster-start', action="store_true",
 p.add_argument('-e', '--empty-nodes', action="store_true",
                help="Unload k8s cluster only. Used with stop or restart.")
 p.add_argument('-s', '--summarise-ssh-tunnels', action="store_true",
-               help="Summarise the ssh tunnels on exit.")
+               help="Summarise the ssh tunnels.")
 p.add_argument('-t', '--target', action="store",
                help="Force cloud target to specified value.")
 p.add_argument('-z', '--zone', action="store",
@@ -128,14 +128,15 @@ if ns.command not in ("stop", "restart") and ns.empty_nodes:
 # very small, called ./helm-creds.yaml, which contains just the username and
 # password for the helm repo you wish to use to get the helm charts.
 #
-targetlabel     = 'Target'
-prefzonelabel   = 'PreferredZones'
-nk8snodeslabel  = 'NodeCount'
-nhznodeslabel   = 'HzNodeCount'
-nhzclientslabel = 'HzClientCount'
-appversionlabel = 'AppVersion'
-oprchartvlabel  = 'OperatorChartVersion'
-tlscoordlabel   = 'RequireCoordTls'
+targetlabel      = 'Target'
+prefzonelabel    = 'PreferredZones'
+nk8snodeslabel   = 'NodeCount'
+nhzmemberslabel  = 'HzMemberCount'
+nhzclientslabel  = 'HzClientCount'
+appversionlabel  = 'AppVersion'
+oprchartvlabel   = 'OperatorChartVersion'
+chaoschartvlabel = 'ChaosMeshChartVersion'
+tlscoordlabel    = 'RequireCoordTls'
 
 try:
     with open(myvarsf) as mypf:
@@ -157,12 +158,13 @@ try:
     # Zone - If from myvars, take first choice from preferred list
     zone = ns.zone if ns.zone else myvars[prefzonelabel][target][0]
 
-    appversion      = myvars[appversionlabel] # AppVersion
-    oprchartversion = myvars[oprchartvlabel] # OprChartVersion
-    nk8snodes       = myvars[nk8snodeslabel] # NodeCount
-    nhznodes        = myvars[nhznodeslabel] # HzNodeCount
-    nhzclients      = myvars[nhzclientslabel] # HzClientCount
-    tlscoord        = myvars[tlscoordlabel] # RequireCoordTls
+    appversion        = myvars[appversionlabel] # AppVersion
+    oprchartversion   = myvars[oprchartvlabel] # OprChartVersion
+    chaoschartversion = myvars[chaoschartvlabel] # ChaosMeshChartVersion
+    nk8snodes         = myvars[nk8snodeslabel] # NodeCount
+    nhzmembers        = myvars[nhzmemberslabel] # HzNodeCount
+    nhzclients        = myvars[nhzclientslabel] # HzClientCount
+    tlscoord          = myvars[tlscoordlabel] # RequireCoordTls
 
     requireKey("AwsInstanceTypes", myvars)
     requireKey("AwsSmallInstanceType", myvars)
@@ -171,9 +173,10 @@ try:
     requireKey("GcpMachineTypes", myvars)
     requireKey("GcpSmallMachineType", myvars)
 
-    helm_repo_name     = myvars["HelmRepo"]
-    helm_repo_location = myvars["HelmRepoLocation"]
-
+    hz_helm_repo_name        = myvars["HzHelmRepo"]
+    hz_helm_repo_location    = myvars["HzHelmRepoLocation"]
+    chaos_helm_repo_name     = myvars["ChaosHelmRepo"]
+    chaos_helm_repo_location = myvars["ChaosHelmLocation"]
 except KeyError as e:
     print(f"Unspecified configuration parameter {e} in {myvarsf}.")
     sys.exit(f"Consider running a git diff {myvarsf} to ensure no "
@@ -238,16 +241,17 @@ def check_chart_version(label, vers):
 
 check_chart_version(appversionlabel, appversion)
 check_chart_version(oprchartvlabel, oprchartversion)
+check_chart_version(chaoschartvlabel, chaoschartversion)
 
 #
 # NodeCount
 #
-if nk8snodes <= nhznodes:
+if nk8snodes <= nhzmembers:
     sys.exit(f'To accommodate clients, {nk8snodeslabel} must be greater '
-             f'than {nhznodeslabel}.')
-if nhznodes < minNodes:
-    sys.exit(f"Must have at least {minNodes} nodes; {nhznodes} set for "
-             f"{nhznodeslabel} in {myvarsf}.")
+             f'than {nhzmemberslabel}.')
+if nhzmembers < minNodes:
+    sys.exit(f"Must have at least {minNodes} nodes; {nhzmembers} set for "
+             f"{nhzmemberslabel} in {myvarsf}.")
 
 def tlsenabled() -> bool: return tlscoord
 
@@ -321,50 +325,69 @@ clustname = shortname + "cl"
 resourcegrp = shortname + "rg"
 netwkname = shortname + 'net'
 
+#
+# Helm templates (yaml), releases, charts
 templates = {}
 releases = {}
 charts = {}
 
-operator = 'operator'
+operator_module = 'operator'
 # no template for an operator!
-releases[operator] = f'operator-{shortname}'
-charts[operator] = 'hazelcast-platform-operator'
+releases[operator_module] = f'{operator_module}-{shortname}'
+charts[operator_module] = 'hazelcast-platform-operator'
 
-crds = ['cluster', srvnm_manctr, 'bbclient']
-for crd in crds:
+chaosmesh_module='chaos-mesh'
+releases[chaosmesh_module] = f'{chaosmesh_module}-{shortname}'
+charts[chaosmesh_module] = 'chaos-mesh'
+chaosmeshoptions=(
+        '--set chaosDaemon.runtime=containerd '
+        '--set chaosDaemon.socketPath=/run/containerd/containerd.sock')
+
+hz_crds = ['cluster', srvnm_manctr, 'bbclient']
+for crd in hz_crds:
     templates[crd] = f'{crd}_crd_v.yaml'
 
 # Portfinder service
 
 class Service:
-    def __init__(self, name: str, lcl_port: int, rmt_port: int, tls: bool):
+    def __init__(self, name: str,
+                 scheme: str,
+                 lcl_port: int,
+                 rmt_port: int):
         self.name = name
+        self.scheme = scheme
         self.lcl_port = lcl_port
         self.rmt_port = rmt_port
-        self.tls = tls
+        if scheme == 'https':
+            self.tls = True
+        else: # FIXME extend to other TLS-protected Hz connections
+            self.tls = False
 
-    def get_url(self):
-        if self.tls:
-            scheme = "https"
-        else:
-            scheme = "http"
-        return f'{scheme}://{self.name}.{domain}:{self.lcl_port}'
+    def get_uri(self):
+        return f'{self.scheme}://{self.name}.{domain}:{self.lcl_port}'
 
 class Services:
     def __init__(self):
+        cluster_port = 5701
+
         svcs_list: list[Service] = [
                 # FIXME tls should be enabled for manctr port 8443 it seems;
                 # but when I do so, I get this error back from requests.get:
                 # [SSL] record layer failure (_ssl.c:1006)
-                Service(srvnm_manctr, 8443, 443, tls=False),
-                Service(srvnm_cluster, 5701, 5701, tls=tlsenabled())
+                Service(srvnm_manctr, 'http', 8080, 8080),
+                Service(srvnm_cluster, 'hz', cluster_port, cluster_port)
                 ]
+
+#        for i in range(0, nhzmembers):
+#            svcs_list.append(Service(f'{srvnm_cluster}-{i}', 'hz', cluster_port
+#                                     + i, cluster_port))
+
         # Cluster services are more limited
         self.clust_svcs: dict[str, Service] = { i.name: i for i in svcs_list }
 
         # Total list of services includes the K8S API service
         self.svcs: dict[str, Service] = self.clust_svcs | {
-                'apiserv': Service('apiserv', 2153, 443, tls=True)
+                'apiserv': Service('apiserv', 'https', 2153, 443)
                 }
 
     def get_all_svc_names(self):
@@ -391,7 +414,10 @@ def random_string(length: int) -> str:
     chars = string.ascii_letters + string.digits
     return ''.join(random.choices(chars, k = length))
 
-def tmp_filename(prefix: str, ext: str, my_tmp_dir: str = "", random: bool = False) -> str:
+def tmp_filename(prefix: str,
+                 ext: str, 
+                 my_tmp_dir: str = "",
+                 random: bool = False) -> str:
     tmp_dir = tmpdir
     if my_tmp_dir:
         tmp_dir = my_tmp_dir
@@ -625,9 +651,8 @@ def loadBalancerResponding(svc_name: str) -> bool:
     # have been established between the localhost and the bastion host
     try:
         svc = svcs.get(svc_name)
-        url = svc.get_url()
         if svc_name == srvnm_manctr:
-            url += '/cluster-connections'
+            url = svc.get_uri() + '/cluster-connections'
             r = requests.get(url, verify=svc.tls, timeout=5)
             return r.status_code == 200
         else:
@@ -840,16 +865,18 @@ def ensure_cluster_is_started(skipClusterStart: bool,
 
 # Pods sometimes get stuck in Terminating phase after a helm upgrade.
 # Kill these off immediately to save time and they will restart quickly.
-def killAllTerminatingPods() -> None:
-    lines = runCollect(f"{kubens} get pods --no-headers".split()).splitlines()
+def killAllTerminatingPods(namespace: str) -> None:
+    lines = runCollect(f"{kube} -n {namespace} get pods "
+                       "--no-headers".split()).splitlines()
     for line in lines:
         col = line.split()
         name = col[0]
         status = col[2]
         if status == "Terminating":
-            r = runTry(f"{kubens} delete pod {name} --grace-period=60".split())
+            r = runTry(f"{kube} -n {namespace} delete pod {name} "
+                       "--grace-period=60".split())
             if r.returncode == 0:
-                print(f"Terminated pod {name}")
+                print(f"Cleaning up terminating pod {name}")
 
 # We run this command in 'delete' mode to get rid of the DNS record sets right
 # before shutdown. Technically it shouldn't be needed for AWS or GCP, both of
@@ -923,22 +950,24 @@ def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
     tuns: list[Tunnel] = []
 
     out.announce("Waiting for pods to be ready")
-    expectedContainers = numberOfContainers(nhznodes, nhzclients)
-    out.spinWait(lambda: waitUntilPodsReady(namespace, expectedContainers))
+    expectedContainers = numberOfContainers(nhzmembers, nhzclients)
+    out.spinWait(lambda: waitUntilPodsReady(hz_namespace,
+                                            expectedContainers))
 
     out.announce("Waiting for deployments to be available")
-    expectedReplicas = numberOfReplicas(nhznodes, nhzclients)
-    out.spinWait(lambda: waitUntilDeploymentsAvail(namespace, expectedReplicas))
+    expectedReplicas = numberOfReplicas(nhzmembers, nhzclients)
+    out.spinWait(lambda: waitUntilDeploymentsAvail(hz_namespace,
+                                                   expectedReplicas))
 
     # now the load balancers need to be running with their IPs assigned
     out.announce("Waiting for load-balancers to launch")
     out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_clust_svc_names(),
-                                                  namespace))
+                                                  hz_namespace))
 
     #
     # Get the DNS name of the load balancers we've created
     #
-    lbs = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
+    lbs = getLoadBalancers(svcs.get_clust_svc_names(), hz_namespace)
 
     # we should have a load balancer for every service we'll forward
     assert len(lbs) == len(svcs.get_clust_svc_names())
@@ -953,7 +982,7 @@ def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
     # make sure the load balancers are actually responding
     out.announce("Waiting for load-balancers to start responding")
     out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_clust_svc_names(),
-                                                  namespace,
+                                                  hz_namespace,
                                                   checkConnectivity = True))
 
     return tuns, lbs
@@ -965,16 +994,16 @@ def convert_zulu_time_to_timestamp(datetimestr: str) -> float:
         datetimestr = datetimestr[:-1] + "+00:00"
     return datetime.timestamp(datetime.fromisoformat(datetimestr))
 
-def install_secrets_into_k8s(secrets_to_add: dict[str, dict[str, str]]) \
+def install_secrets_into_k8s(namespace: str,
+                             secrets_to_add: dict[str, dict[str, str]]) \
         -> dict[str, str]:
     out.announce('Ensuring secrets are installed in K8S')
     env = {}
     installed_secrets = {}
     if secrets_to_add:
-        x = runCollect(kubens.split() +
-                       ['get', 'secrets',
-                        '-o=jsonpath={range $.items[*].metadata}'
-                        '{.name}{" "}{.creationTimestamp}{" "}{end}'])
+        x = runCollect([kube, '-n', namespace, 'get', 'secrets',
+                       '-o=jsonpath={range $.items[*].metadata}'
+                       '{.name}{" "}{.creationTimestamp}{" "}{end}'])
         if x:
             s = x.split()
             z = zip(s[0::2], s[1::2])
@@ -1014,7 +1043,8 @@ def install_secrets_into_k8s(secrets_to_add: dict[str, dict[str, str]]) \
 
             print(f'Replacing secret "{secret_to_add_name}" '
                   f'with newer version of {file}')
-            runIgnore(f'{kubens} delete secret {secret_to_add_name}'.split())
+            runIgnore(f'{kube} -n {namespace} delete secret '
+                      f'{secret_to_add_name}'.split())
         else:
             print(f'Installing secret "{secret_to_add_name}" from {file}')
 
@@ -1022,29 +1052,31 @@ def install_secrets_into_k8s(secrets_to_add: dict[str, dict[str, str]]) \
         # this is a cert group, and we are terminating TLS at an
         # ingress-based LB, then we need to install a secret that we'll use
         # in the helm chart with the LB.
-        runIgnore(f'{kubens} create secret generic {secret_to_add_name} '
-                  f'--from-file={file_arg}'.split())
+        runIgnore(f'{kube} -n {namespace} create secret generic '
+                  f'{secret_to_add_name} --from-file={file_arg}'.split())
 
     return env
 
-def helmTry(cmd: str) -> subprocess.CompletedProcess:
-    return runTry(["helm"] + cmd.split())
+def helmTry(namespace: str, cmd: str) -> subprocess.CompletedProcess:
+    return runTry(['helm', '-n', namespace] + cmd.split())
 
-def helm(cmd: str) -> None:
-    runStdout(["helm"] + cmd.split())
+def helmCmd(namespace: str, cmd: str) -> None:
+    runStdout(['helm', '-n', namespace] + cmd.split())
 
-def helmGet(cmd: str) -> str:
-    return runCollect(["helm"] + cmd.split())
+def helmGet(namespace: str, cmd: str) -> str:
+    return runCollect(['helm', '-n', namespace] + cmd.split())
 
-def helm_set_up_repo(helm_repo_name: str, helm_repo_location: str) -> None:
-    if (r := helmTry("version")).returncode != 0:
+def helm_set_up_repo(namespace: str,
+                     helm_repo_name: str,
+                     helm_repo_location: str) -> None:
+    if (r := helmTry(namespace, "version")).returncode != 0:
         sys.exit("Unable to run helm. Is it installed? Failing out.")
 
     # There is a bug in helm repo list, wherein it inconsistently returns
     # nonzero error codes when there are no repos installed. So just try to
     # fast-path the common case where the repo is already installed, and
     # otherwise try to install.
-    if (r := helmTry("repo list -o=json")).returncode == 0:
+    if (r := helmTry(namespace, "repo list -o=json")).returncode == 0:
         repos = [x["name"] for x in json.loads(r.stdout)]
         if helm_repo_name in repos:
             # Unfortunately, helm repo update returns a 0 error code even when
@@ -1052,18 +1084,18 @@ def helm_set_up_repo(helm_repo_name: str, helm_repo_location: str) -> None:
             # see if it failed. :-( If it fails, then just remove the repo and
             # re-install it.
             out.announce(f'Updating helm repo {helm_repo_name}')
-            output = helmGet("repo update --fail-on-repo-update-fail")
+            output = helmGet(namespace, "repo update --fail-on-repo-update-fail")
             if "Update Complete. ⎈Happy Helming!⎈" in output:
                 print("Upgrade of repo succeeded")
                 return
 
             out.announce(f'Update of repo failed. Removing '
                          f'repo {helm_repo_name}')
-            helm(f'repo remove {helm_repo_name}')
+            helmCmd(namespace, f'repo remove {helm_repo_name}')
 
     crepouser = ''
     crepopass = ''
-    helm(f'repo add {crepouser} {crepopass} '
+    helmCmd(namespace, f'repo add {crepouser} {crepopass} '
          f'{helm_repo_name} {helm_repo_location}')
 
 def helmGetNamespaces() -> list:
@@ -1077,116 +1109,127 @@ def helmGetNamespaces() -> list:
 
     return n
 
-def k8s_create_namespace() -> None:
+def k8s_create_namespace(namespace: str) -> None:
     if namespace not in helmGetNamespaces():
         runStdout(f'{kube} create namespace {namespace}'.split())
+
+def k8s_set_context_namespace(namespace: str) -> None:
+    assert namespace in helmGetNamespaces()
     runStdout(f'{kube} config set-context --namespace={namespace} '
               '--current'.split())
 
-def helm_delete_namespace() -> None:
+def helm_delete_namespace(namespace: str) -> None:
     if namespace in helmGetNamespaces():
         out.announce(f"Deleting namespace {namespace}")
         runStdout(f'{kube} delete --grace-period=60 namespace {namespace}'.split())
     runStdout(f"{kube} config set-context --namespace=default "
               "--current".split())
 
-def helmGetReleases() -> dict:
+def helmGetReleases(namespace: str) -> dict:
     rls = {}
     try:
-        rlsj = json.loads(helmGet(f"{helmns} list -ojson"))
+        rlsj = json.loads(helmGet(namespace, "list -ojson"))
         rls = { r["name"]: r["chart"] for r in rlsj }
     except CalledProcessError:
         print("No helm releases found.")
     return rls
 
-def helmWhichChartInstalled(module: str) -> Optional[str]:
+def helmWhichChartInstalled(namespace: str, module: str) -> Optional[str]:
     chart = None
     release = releases[module] # Get release name for module name
-    installed = helmGetReleases()
+    installed = helmGetReleases(namespace)
     if release in installed:
         chart = installed[release] # Get chart for release
     return chart
 
-def helmInstallOperator(module: str, env: dict = {}) -> None:
-    chart = helmWhichChartInstalled(module)
-    newchart = charts[module] + "-" + oprchartversion # which one to install?
+def helm_install_release(namespace: str,
+                         reponame: str,
+						 module: str,
+						 version: str,
+						 options: str = "") -> None:
+    chart = helmWhichChartInstalled(namespace, module)
+    newchart = charts[module] + "-" + version # which one to install?
 
     if chart is None: # Nothing installed yet, so we need to install
-        out.announce("Installing chart {c} as {r}".format(c = newchart, r =
-                                                          releases[module]))
-        helm("{h} install {r} {w}/{c} --version {v}"
-             .format(h=helmns, r=releases[module], w=helm_repo_name,
-                     c=charts[module], v=oprchartversion))
+        out.announce("Installing {ns}/{r} from {c}"
+                     .format(ns=namespace, r=releases[module], c=newchart))
+        helmCmd(namespace, 'install {r} {repo}/{c} --version {v} {o}'
+             .format(r=releases[module], repo=reponame, c=charts[module],
+                     v=version, o=options))
     # If either the chart values file changed, or we need to update to a
     # different version of the chart, then we have to upgrade
     elif chart != newchart:
-        astr = "Upgrading release {}".format(releases[module])
+        astr = "Upgrading {ns}/{r}".format(ns=namespace,
+                                           r=releases[module])
         if chart != newchart:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         out.announce(astr)
-        helm("{h} upgrade {r} {w}/{c} --version {v}"
-             .format(h=helmns, r=releases[module], w=helm_repo_name,
-                     c=charts[module], v=oprchartversion))
+        helmCmd(namespace, 'upgrade {r} {repo}/{c} --version {v} {o}'
+             .format(r=releases[module], repo=reponame, c=charts[module],
+                     v=version, o=options))
     else:
-        print(f"{chart} values unchanged ➼ avoiding helm upgrade")
+        print(f'{namespace}/{chart} values unchanged ➼ avoiding helm upgrade')
 
-def KubeApplyCrd(crd: str, env: dict = {}) -> None:
+def KubeApplyCrd(crd: str, namespace: str, env: dict = {}) -> None:
     # Ignore changes, apply every time
     _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
 
     out.announce(f'Applying CRD "{crd}"')
-    runStdout(f'{kubens} apply -f {yamltmp}'.split())
+    runStdout(f'{kube} -n {namespace} apply -f {yamltmp}'.split())
 
-def KubeDeleteCrd(crd: str, env) -> None:
+def KubeDeleteCrd(crd: str, namespace: str, env) -> None:
     # Generate filename of tmp file where CRD lives
     yamltmp, _, _ = convert_template_to_tmpname(templates[crd])
 
     if bbio.readableFile(yamltmp):
         out.announce(f'Deleting CRD "{crd}"')
-        runStdout(f'{kubens} delete --grace-period=60 --ignore-not-found=true -f {yamltmp}'.split())
+        runStdout(f'{kube} -n {namespace} delete --grace-period=60 '
+                  f'--ignore-not-found=true -f {yamltmp}'.split())
 
-def helmUninstallRelease(release: str) -> None:
-    helm(f"{helmns} uninstall {release}")
+def helmUninstallRelease(namespace: str, release: str) -> None:
+    helmCmd(namespace, f"uninstall {release}")
 
-def helm_create_operator_and_crds(env: dict[str, str]) -> None:
-    helmInstallOperator(operator, env)
-    for crd in crds:
-        KubeApplyCrd(crd, env)
-
-    # Speed up the deployment of the updated pods by killing the old ones
-    killAllTerminatingPods()
-
-def delete_all_services(lbs: dict[str, str]) -> bool:
+def delete_all_services(namespace: str) -> bool:
     # Explicitly deleting services gets rid of load balancers, which eliminates
     # a race condition that Terraform is susceptible to, where the ELBs created
     # by the load balancers endure while the cluster is destroyed, stranding
     # the ENIs and preventing the deletion of the associated subnets
     # https://github.com/kubernetes/kubernetes/issues/93390
-    out.announce("Deleting all k8s services")
-    if len(lbs) == 0:
-        print("No LBs running.")
+    out.announce(f"Deleting all k8s services for namespace {namespace}")
+    lbs_before: dict[str, str] = getLoadBalancers(svcs.get_clust_svc_names(),
+                                           namespace)
+
+    # Summarize which LBs were there before attempt to kill services
+    if len(lbs_before) == 0:
+        print("No LBs running before deleting all services.")
     else:
-        print("Load balancers before attempt to delete services: " + ", ".join(lbs.keys()))
-    runStdout(f"{kubens} delete --grace-period=60 svc --all".split())
-    lbs_after = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
-    if len(lbs_after) == 0:
-        print("No load balancers running after service delete.")
-        return True
-    else:
+        print("Load balancers before attempt "
+              "to delete services: " + ", ".join(lbs_before.keys()))
+
+    # Destroy all services!
+    runStdout(f'{kube} -n {namespace} delete '
+              '--grace-period=60 svc --all'.split())
+    lbs_after = getLoadBalancers(svcs.get_clust_svc_names(),
+                                 namespace)
+
+    # Indicate if any LBs remain after killing services
+    if len(lbs_after) != 0:
         print("# WARN Load balancers running after service delete! " +
               str(lbs_after))
         print("# WARN This may cause dependency problems later!")
         return False
 
-def helm_delete_crds_and_operator():
-    for release, chart in helmGetReleases().items():
+    print("No load balancers running after service delete.")
+    return True
+
+def helm_uninstall_releases_and_kill_pods(namespace: str):
+    for release, chart in helmGetReleases(namespace).items():
         try:
-            out.announce(f"Uninstalling chart {chart}")
-            helmUninstallRelease(release)
+            out.announce(f"Uninstalling namespace {namespace} chart {chart}")
+            helmUninstallRelease(namespace, release)
         except CalledProcessError as e:
             print(f"Unable to uninstall release {release}: {e}")
-    killAllTerminatingPods()
-
+    killAllTerminatingPods(namespace)
 
 def svcStart(secrets: dict[str, dict[str, str]],
              skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
@@ -1209,25 +1252,60 @@ def svcStart(secrets: dict[str, dict[str, str]],
     bastion = env['bastion_address']
 
     # Do this first so all resources install into the namespace
-    with Timer('set up K8S and Helm'):
-        k8s_create_namespace()
+    with Timer(f'set up {hz_namespace} namespace objects in K8S'):
+        #
+        # Hazelcast namespace objects
+        #
+        k8s_create_namespace(hz_namespace)
+        k8s_set_context_namespace(hz_namespace) # default namespace
 
         env |= {
             appversionlabel: appversion,
             'HzClientCount': nhzclients,
-            'HzNodeCount': nhznodes,
+            'HzMemberCount': nhzmembers,
             'SrvNmCluster': srvnm_cluster,
             'SrvNmManctr': srvnm_manctr
-            } | install_secrets_into_k8s(secrets)
+            } | install_secrets_into_k8s(hz_namespace, secrets)
 
         # Set up the Helm repo if not already done
-        helm_set_up_repo(helm_repo_name, helm_repo_location)
+        helm_set_up_repo(hz_namespace, hz_helm_repo_name,
+                         hz_helm_repo_location)
 
-    with Timer('deploy K8S resources'):
-        helm_create_operator_and_crds(env)
-        # Wait for pods & LBs to become ready
-        # Set up port forward tunnels for LBs
-        new_tuns, lbs = start_tunnel_to_lbs(bastion)
+        helm_install_release(hz_namespace, hz_helm_repo_name, operator_module,
+                             oprchartversion)
+        for crd in hz_crds:
+            KubeApplyCrd(crd, hz_namespace, env)
+
+        # Speed up the deployment of the updated pods by killing the old ones
+        killAllTerminatingPods(hz_namespace)
+
+    with Timer(f'set up {chaos_namespace} namespace objects in K8S'):
+        #
+        # Chaos-Mesh namespace objects
+        #
+        k8s_create_namespace(chaos_namespace)
+
+        # Set up the Chaos Mesh repo if not already done
+        helm_set_up_repo(chaos_namespace, chaos_helm_repo_name,
+                         chaos_helm_repo_location)
+
+        helm_install_release(chaos_namespace, chaos_helm_repo_name,
+                             chaosmesh_module, chaoschartversion,
+                             chaosmeshoptions)
+
+        # TODO: There is a bug in chaos-mesh in the auth module, that prevents
+        # chaos-mesh from working across namespaces. This is the workaround:
+        runIgnore(f'{kube} -n {chaos_namespace} delete '
+                  '--ignore-not-found=true '
+                  'validatingwebhookconfigurations.admissionregistration.k8s.io '
+                  'chaos-mesh-validation-auth'.split())
+
+        # Speed up the deployment of the updated pods by killing the old ones
+        killAllTerminatingPods(chaos_namespace)
+
+    # Wait for pods & LBs to become ready
+    # Set up port forward tunnels for LBs
+    new_tuns, lbs = start_tunnel_to_lbs(bastion)
 
     # Add CNAMES or A records for DNS for new LBs
     set_dns_for_lbs(env['zone_id'], lbs)
@@ -1239,7 +1317,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion to allow our commands to flow
     # through to the K8S cluster.
     out.announce("Re-establishing bastion tunnel")
-    lbs_cleaned = False
+    lbs_were_cleaned = False
 
     try:
         env = get_output_vars()
@@ -1251,7 +1329,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
         with setup_bastion_tunnel(bastion_ip, k8s_server_name):
             # NOTE: DNS *must* be removed since Terraform will complain about any
             # records it didn't create at the time the zone is destroyed.
-            lbs = getLoadBalancers(svcs.get_clust_svc_names(), namespace)
+            lbs = getLoadBalancers(svcs.get_clust_svc_names(), hz_namespace)
             try:
                 set_dns_for_lbs(zone_id, lbs, delete=True)
             except CalledProcessError:
@@ -1261,27 +1339,29 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 # tunnel established. Now delete things in reverse order to how
                 # they were created.
 
-                for crd in crds:
-                    KubeDeleteCrd(crd, env)
-                helm_delete_crds_and_operator()
+                for crd in hz_crds:
+                    KubeDeleteCrd(crd, hz_namespace, env)
+                helm_uninstall_releases_and_kill_pods(hz_namespace)
+                helm_uninstall_releases_and_kill_pods(chaos_namespace)
 
                 # Make sure to get rid of all services, in case they weren't
                 # already removed. We need to make sure we don't leak LBs.
-                lbs_after_helm_uninstall = \
-                        getLoadBalancers(svcs.get_clust_svc_names(), namespace)
-                lbs_cleaned = delete_all_services(lbs_after_helm_uninstall)
-                helm_delete_namespace()
+                lbs_were_cleaned = delete_all_services(hz_namespace)
+                lbs_were_cleaned = (lbs_were_cleaned and
+                                    delete_all_services(chaos_namespace))
+                helm_delete_namespace(chaos_namespace)
+                helm_delete_namespace(hz_namespace)
     except (MissingTerraformOutput):
         out.announce('Terraform objects partly or fully destroyed')
 
     if onlyEmptyNodes:
         return
 
-    if not lbs_cleaned:
+    if not lbs_were_cleaned:
         out.announceBox(textwrap.dedent("""\
-                Your bastion host is not responding. I will try to destroy your
-                terraform without unloading your pods, but you might have
-                trouble on the destroy with leaked LBs."""))
+                I was unable to clear away load balancers. I will try to destroy
+                your terraform, but you might have trouble on the destroy with
+                leaked LBs."""))
 
     out.announce(f"Ensuring cluster {clustname} is deleted")
     with Timer('stopping cluster'):
@@ -1397,7 +1477,7 @@ def checkEtcHosts() -> None:
         r = re.compile(r"^\s*"
                        r"([\.:\d]*)"
                        r"\s+"
-                       r"((?=.{1,255}$)[A-Za-z0-9]{1,63})"
+                       r"((?=.{1,255}$)[A-Za-z0-9\-]{1,63})"
                        r"((\.[A-Za-z0-9\-]{1,63})*)"
                        r"\.?"
                        r"(?<!-)$")
@@ -1588,10 +1668,16 @@ def main() -> None:
                         'bastion server, so you can ssh there now '
                         f'(user "{bastionuser}").')
         y += (['Service is started on:'] +
-              [f'[{s.name}] {s.get_url()}' for s in svcs.get_clust_all()])
+              [f'[{s.name}] {s.get_uri()}' for s in svcs.get_clust_all()])
     else:
         y += ['Service is stopped']
     out.announceLoud(y)
+    if ns.summarise_ssh_tunnels:
+        lines: list[str] = ['Summary of tunnels:']
+        for tun in tuns:
+            lines.append(tun.command)
+        out.announceLoud(lines)
+
     if started:
         input("Press return key to quit and terminate tunnels!")
 

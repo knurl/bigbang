@@ -1,0 +1,162 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  name: try-workflow-parallel
+  namespace: hazelcast
+spec:
+  entry: net-chaos
+  templates:
+    - name: net-chaos
+      templateType: Serial
+      deadline: 5h
+      children:
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+        - workflow-network-partition
+        - workflow-network-delay
+    - name: workflow-network-partition
+      templateType: NetworkChaos
+      deadline: 80s
+      networkChaos:
+        direction: both
+        action: partition
+        mode: all
+        selector:
+          namespaces:
+            - hazelcast
+          labelSelectors:
+            'apps.kubernetes.io/pod-index': '2'
+        target:
+          mode: all
+          selector:
+            namespaces:
+              - hazelcast
+            labelSelectors:
+              'apps.kubernetes.io/pod-index': '0'
+              'apps.kubernetes.io/pod-index': '1'
+    - name: workflow-network-delay
+      templateType: NetworkChaos
+      deadline: 80s
+      networkChaos:
+        direction: both
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - hazelcast
+          labelSelectors:
+            'apps.kubernetes.io/pod-index': '2'
+          labelSelectors:
+        delay:
+          latency: '50ms'
+          correlation: '95'
+          jitter: '40ms'
+        target:
+          mode: all
+          selector:
+            namespaces:
+              - hazelcast
+            labelSelectors:
+              'apps.kubernetes.io/pod-index': '0'
+              'apps.kubernetes.io/pod-index': '1'

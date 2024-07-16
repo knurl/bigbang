@@ -1,18 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="ArtifactsWorkspaceSettings">
+    <artifacts-to-build>
+      <artifact name="bbclient:jar" />
+    </artifacts-to-build>
+  </component>
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="83796aea-c0d8-41ad-845a-56533da9b650" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/artifacts/bbclient_jar.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/encodings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/uiDesigner.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/out/artifacts/bbclient_jar/bbclient.jar" beforeDir="false" afterPath="$PROJECT_DIR$/out/artifacts/bbclient_jar/bbclient.jar" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../bigbang.py" beforeDir="false" afterPath="$PROJECT_DIR$/../bigbang.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../capcalc.py" beforeDir="false" afterPath="$PROJECT_DIR$/../capcalc.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../gcp/versions.tf" beforeDir="false" afterPath="$PROJECT_DIR$/../gcp/versions.tf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../my-vars.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/../setup.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" afterDir="false" />
     </list>
@@ -21,98 +32,96 @@
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
-  <component name="ProjectColorInfo">{
-  &quot;associatedIndex&quot;: 8
-}</component>
-  <component name="ProjectId" id="2fxW09451SPNEqVG5ZG2mJKhdx3" />
-  <component name="ProjectLevelVcsManager">
-    <ConfirmationsSetting value="2" id="Add" />
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="2j98ph2KYVoBWET2JeA8xpfjeY4" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
     "Application.Main.executor": "Run",
-    "Application.bbclient.executor": "Run",
-    "Docker.Dockerfile.executor": "Run",
-    "Docker.bbclient_docker.executor": "Run",
-    "JAR Application.bbclient.executor": "Run",
+    "Application.bbclient.Main.executor": "Run",
+    "Docker.Docker.executor": "Run",
+    "Downloaded.Files.Path.Enabled": "false",
+    "Repository.Attach.Annotations": "false",
+    "Repository.Attach.JavaDocs": "false",
+    "Repository.Attach.Sources": "false",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "git-widget-placeholder": "main",
     "kotlin-language-version-configured": "true",
-    "onboarding.tips.debug.path": "/Users/randerson/git/bigbang/bbclient/src/main/java/com/hazelcast/Main.java",
-    "project.structure.last.edited": "Artifacts",
+    "last_opened_file_path": "/Users/randerson/git/bigbang/bbclient",
+    "project.structure.last.edited": "Modules",
     "project.structure.proportion": "0.15",
-    "project.structure.side.proportion": "0.2",
-    "settings.editor.selected.configurable": "preferences.lookFeel"
+    "project.structure.side.proportion": "0.37197357",
+    "settings.editor.selected.configurable": "reference.settings.project.maven.repository.indices"
   }
 }]]></component>
-  <component name="RunManager" selected="Docker.bbclient_docker">
-    <configuration name="Main" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
-      <option name="MAIN_CLASS_NAME" value="com.hazelcast.Main" />
+  <component name="RunManager" selected="Docker.Docker">
+    <configuration name="bbclient.Main" type="Application" factoryName="Application">
+      <option name="ALTERNATIVE_JRE_PATH" value="21 (2)" />
+      <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+      <option name="MAIN_CLASS_NAME" value="com.bbclient.Main" />
       <module name="bbclient" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="com.hazelcast.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration default="true" type="docker-deploy" factoryName="dockerfile" temporary="true">
-      <deployment type="dockerfile">
-        <settings />
-      </deployment>
-      <method v="2" />
-    </configuration>
-    <configuration name="bbclient_docker" type="docker-deploy" factoryName="dockerfile" singleton="false" server-name="Docker">
+    <configuration name="Docker" type="docker-deploy" factoryName="dockerfile" server-name="Docker">
       <deployment type="dockerfile">
         <settings>
-          <option name="imageTag" value="robhazelcast/robhz" />
+          <option name="imageTag" value="robhazelcast/robhz:latest" />
           <option name="buildCliOptions" value="--platform linux/amd64" />
-          <option name="containerName" value="bbclient" />
+          <option name="buildOnly" value="true" />
+          <option name="containerName" value="" />
           <option name="sourceFilePath" value="Dockerfile" />
         </settings>
       </deployment>
-      <method v="2" />
+      <method v="2">
+        <option name="BuildArtifacts" enabled="true">
+          <artifact name="bbclient:jar" />
+        </option>
+      </method>
     </configuration>
     <list>
-      <item itemvalue="Application.Main" />
-      <item itemvalue="Docker.bbclient_docker" />
+      <item itemvalue="Application.bbclient.Main" />
+      <item itemvalue="Docker.Docker" />
     </list>
-    <recent_temporary>
-      <list>
-        <item itemvalue="Application.Main" />
-        <item itemvalue="Docker.bbclient_docker" />
-      </list>
-    </recent_temporary>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="83796aea-c0d8-41ad-845a-56533da9b650" name="Changes" comment="" />
-      <created>1714742984280</created>
+      <changelist id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="" />
+      <created>1720788116110</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1714742984280</updated>
+      <updated>1720788116110</updated>
     </task>
     <servers />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
-        <line-breakpoint type="java-line">
-          <url>file://$PROJECT_DIR$/src/main/java/com/hazelcast/Main.java</url>
-          <line>94</line>
-          <option name="timeStamp" value="3" />
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/com/bbclient/ManCtrRest.java</url>
+          <line>40</line>
+          <option name="timeStamp" value="9" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

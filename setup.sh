@@ -68,24 +68,23 @@ else
     echo "Brew is already installed"
 fi
 
-p "installing dependencies for bigbang"
-brew install \
-    gcc awscli azure-cli \ # TODO: Replace with python bindings
-    kubectl \ # TODO: Replace with python bindings
-    helm \ # No good python bindings for Helm
-    terraform \ # No real python replacement
-    pyenv
+export PATH="$HOMEBREWPATH/bin:$PATH"
 
-p "determining correct versions of dependencies"
-PYVERSION=3.11.5
-OPENSSL="openssl@1.1"
-OPENSSLPATH=$(readlink -f $(brew --prefix openssl@1.1))
+OPENSSL="openssl@3"
+
+p "installing dependencies for bigbang"
+brew install gcc awscli azure-cli kubectl helm terraform pyenv $OPENSSL
+
+OPENSSLPATH=$(readlink -f $(brew --prefix $OPENSSL))
 OPENSSLLIB=$(readlink -f $OPENSSLPATH/lib)
 OPENSSLINCLUDE=$(readlink -f $OPENSSLPATH/include)
-echo "python version is $PYVERSION"
 echo "OpenSSL path is $OPENSSLPATH"
 echo "OPenSSL lib directory is $OPENSSLLIB"
 echo "OPenSSL include directory is $OPENSSLINCLUDE"
+
+p "determining correct versions of dependencies"
+PYVERSION=3.11.5
+echo "python version is $PYVERSION"
 
 p "setting up pyenv"
 export PYENV_ROOT="$HOME/.pyenv"
@@ -93,7 +92,7 @@ export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 ensure_in_profile '# pyenv'
 ensure_in_profile 'export PYENV_ROOT="$HOME/.pyenv"'
-ensure_in_profile 'export PATH="$PYENV_ROOT/bin:$PATH"'
+ensure_in_profile 'export PATH="$HOMEBREWPATH/bin:$PYENV_ROOT/bin:$PATH"'
 ensure_in_profile 'eval "$(pyenv init -)"'
 p "pyenv version is $(pyenv --version)"
 
@@ -114,7 +113,8 @@ python -m ensurepip --upgrade
 pip install --upgrade pip
 
 p "installing python dependencies for bigbang"
-pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor mypy types-requests
+pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor \
+    mypy types-requests
 
 #p "installing bigbang"
 #if [ ! -d bigbang ]; then
@@ -138,22 +138,20 @@ fi
 # Configure Azure
 #
 p "configuring Azure profile"
-if [[ ! -d $HOME/.config/.azure ]]; then
-    az configure
-    az login
-else
-    echo "Azure config already set up"
-fi
+az configure
+az login
 
 pip install google-cloud-bigquery google-cloud-storage
 brew install --cask google-cloud-sdk
 gcloud components install gke-gcloud-auth-plugin
 if [[ ! -d $HOME/.config/gcloud ]]; then
     gcloud init
-    gcloud auth login
-    gcloud auth application-default login
 else
     echo "GCP config already set up"
 fi
+
+gcloud components update
+gcloud auth login
+gcloud auth application-default login
 
 p "***BIGBANG INSTALLATION COMPLETE***"

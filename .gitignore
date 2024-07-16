@@ -20,3 +20,4 @@ commit
 tags
 .DS_Store
 .exrc
+bbclient/out/
