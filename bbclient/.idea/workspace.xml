@@ -10,22 +10,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/artifacts/bbclient_jar.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/encodings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/uiDesigner.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/artifacts/bbclient_jar/bbclient.jar" beforeDir="false" afterPath="$PROJECT_DIR$/out/artifacts/bbclient_jar/bbclient.jar" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/out/artifacts/bbclient_jar/bbclient.jar" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../bigbang.py" beforeDir="false" afterPath="$PROJECT_DIR$/../bigbang.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../gcp/versions.tf" beforeDir="false" afterPath="$PROJECT_DIR$/../gcp/versions.tf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../my-vars.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/../setup.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,7 +60,7 @@
     "settings.editor.selected.configurable": "reference.settings.project.maven.repository.indices"
   }
 }]]></component>
-  <component name="RunManager" selected="Docker.Docker">
+  <component name="RunManager" selected="Application.bbclient.Main">
     <configuration name="bbclient.Main" type="Application" factoryName="Application">
       <option name="ALTERNATIVE_JRE_PATH" value="21 (2)" />
       <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
@@ -120,7 +107,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/com/bbclient/ManCtrRest.java</url>
-          <line>40</line>
+          <line>52</line>
           <option name="timeStamp" value="9" />
         </line-breakpoint>
       </breakpoints>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#import pdb
+import pdb
 import os
 import hashlib
 import argparse
@@ -27,8 +27,6 @@ from jinja2.meta import find_undeclared_variables
 
 import logging
 
-from urllib3 import disable_warnings # type: ignore
-
 # local imports
 import out
 import bbio
@@ -38,13 +36,14 @@ from capcalc import numberOfReplicas, numberOfContainers
 from run import runShell, runTry, runStdout, runCollect, retryRun, runIgnore
 from timer import Timer
 
+# Do this just to get rid of the warning when we try to read from the
+# api server, and the certificate isn't trusted
+import urllib3 # type: ignore
+urllib3.disable_warnings()
+
 # Suppress info-level messages from the requests library
 logging.getLogger("requests").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
-
-# Do this just to get rid of the warning when we try to read from the
-# api server, and the certificate isn't trusted
-disable_warnings()
 
 #
 # Global variables.
@@ -346,6 +345,8 @@ chaosmeshoptions=(
 hz_crds = ['cluster', srvnm_manctr, 'bbclient']
 for crd in hz_crds:
     templates[crd] = f'{crd}_crd_v.yaml'
+
+chaos_crds = ['chaos/workflow.yaml']
 
 # Portfinder service
 
@@ -652,7 +653,7 @@ def loadBalancerResponding(svc_name: str) -> bool:
     try:
         svc = svcs.get(svc_name)
         if svc_name == srvnm_manctr:
-            url = svc.get_uri() + '/cluster-connections'
+            url = svc.get_uri()
             r = requests.get(url, verify=svc.tls, timeout=5)
             return r.status_code == 200
         else:
@@ -664,6 +665,8 @@ def loadBalancerResponding(svc_name: str) -> bool:
     except Exception as e:
         print(f'Unexpected exception {e}')
         return False
+
+all_get_svc = dict()
 
 # Get a list of load balancers, in the form of a dictionary mapping service
 # names to load balancer hostname or IP address. This function takes a list of
@@ -678,6 +681,9 @@ def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:
         r = runTry(f"{kube}{namesp} get svc -ojson {serv}".split())
         if r.returncode == 0:
             jout = json.loads(r.stdout)
+            if serv == 'manctr':
+                global all_get_svc
+                all_get_svc[time.time() * 1000] = jout
             assert "items" not in jout
             s = jout
 
@@ -994,20 +1000,23 @@ def convert_zulu_time_to_timestamp(datetimestr: str) -> float:
         datetimestr = datetimestr[:-1] + "+00:00"
     return datetime.timestamp(datetime.fromisoformat(datetimestr))
 
-def install_secrets_into_k8s(namespace: str,
-                             secrets_to_add: dict[str, dict[str, str]]) \
+def k8s_secrets_list(namespace: str):
+    installed_secrets = {}
+    x = runCollect([kube, '-n', namespace, 'get', 'secrets',
+                   '-o=jsonpath={range $.items[*].metadata}'
+                   '{.name}{" "}{.creationTimestamp}{" "}{end}'])
+    if x:
+        s = x.split()
+        z = zip(s[0::2], s[1::2])
+        installed_secrets = {x: y for x, y in z}
+    return installed_secrets
+
+def k8s_secrets_create(namespace: str,
+                       secrets_to_add: dict[str, dict[str, str]]) \
         -> dict[str, str]:
     out.announce('Ensuring secrets are installed in K8S')
     env = {}
-    installed_secrets = {}
-    if secrets_to_add:
-        x = runCollect([kube, '-n', namespace, 'get', 'secrets',
-                       '-o=jsonpath={range $.items[*].metadata}'
-                       '{.name}{" "}{.creationTimestamp}{" "}{end}'])
-        if x:
-            s = x.split()
-            z = zip(s[0::2], s[1::2])
-            installed_secrets = {x: y for x, y in z}
+    installed_secrets = k8s_secrets_list(namespace)
 
     for secret_to_add_name, secret_to_add_content in secrets_to_add.items():
         # These are needed only for GCP
@@ -1057,6 +1066,18 @@ def install_secrets_into_k8s(namespace: str,
 
     return env
 
+def k8s_secrets_delete(namespace: str):
+    installed_secrets = k8s_secrets_list(namespace)
+    for secret in installed_secrets:
+        runStdout(f'{kube} -n {namespace} delete secret {secret}'.split())
+
+def k8s_pvc_delete(namespace: str):
+    pvcs = json.loads(runCollect([kube, '-n', namespace, 'get',
+                                  'pvc', '-ojson']))
+    for pvc in pvcs['items']:
+        pvcname = pvc['metadata']['name']
+        runStdout(f'{kube} -n {namespace} delete pvc {pvcname}'.split())
+
 def helmTry(namespace: str, cmd: str) -> subprocess.CompletedProcess:
     return runTry(['helm', '-n', namespace] + cmd.split())
 
@@ -1065,6 +1086,9 @@ def helmCmd(namespace: str, cmd: str) -> None:
 
 def helmGet(namespace: str, cmd: str) -> str:
     return runCollect(['helm', '-n', namespace] + cmd.split())
+
+def helmIgnore(namespace: str, cmd: str) -> None:
+    runIgnore(['helm', '-n', namespace] + cmd.split())
 
 def helm_set_up_repo(namespace: str,
                      helm_repo_name: str,
@@ -1118,10 +1142,11 @@ def k8s_set_context_namespace(namespace: str) -> None:
     runStdout(f'{kube} config set-context --namespace={namespace} '
               '--current'.split())
 
-def helm_delete_namespace(namespace: str) -> None:
+def k8s_delete_namespace(namespace: str) -> None:
     if namespace in helmGetNamespaces():
         out.announce(f"Deleting namespace {namespace}")
-        runStdout(f'{kube} delete --grace-period=60 namespace {namespace}'.split())
+        runStdout(f'{kube} delete --grace-period=60 '
+                  f'namespace {namespace}'.split())
     runStdout(f"{kube} config set-context --namespace=default "
               "--current".split())
 
@@ -1151,22 +1176,23 @@ def helm_install_release(namespace: str,
     newchart = charts[module] + "-" + version # which one to install?
 
     if chart is None: # Nothing installed yet, so we need to install
-        out.announce("Installing {ns}/{r} from {c}"
-                     .format(ns=namespace, r=releases[module], c=newchart))
-        helmCmd(namespace, 'install {r} {repo}/{c} --version {v} {o}'
-             .format(r=releases[module], repo=reponame, c=charts[module],
-                     v=version, o=options))
+        out.announce("Installing {ns}/{r} v{v}"
+                     .format(ns=namespace, r=releases[module], v=version))
+        helmIgnore(namespace, 'install {r} {repo}/{c} --version {v} {o}'
+                   .format(r=releases[module], repo=reponame, c=charts[module],
+                           v=version, o=options))
     # If either the chart values file changed, or we need to update to a
     # different version of the chart, then we have to upgrade
     elif chart != newchart:
-        astr = "Upgrading {ns}/{r}".format(ns=namespace,
-                                           r=releases[module])
+        astr = "Upgrading {ns}/{r} v{v}".format(ns=namespace,
+                                                r=releases[module],
+                                                v=version)
         if chart != newchart:
             astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         out.announce(astr)
-        helmCmd(namespace, 'upgrade {r} {repo}/{c} --version {v} {o}'
-             .format(r=releases[module], repo=reponame, c=charts[module],
-                     v=version, o=options))
+        helmIgnore(namespace, 'upgrade {r} {repo}/{c} --version {v} {o}'
+                   .format(r=releases[module], repo=reponame, c=charts[module],
+                           v=version, o=options))
     else:
         print(f'{namespace}/{chart} values unchanged ➼ avoiding helm upgrade')
 
@@ -1177,14 +1203,16 @@ def KubeApplyCrd(crd: str, namespace: str, env: dict = {}) -> None:
     out.announce(f'Applying CRD "{crd}"')
     runStdout(f'{kube} -n {namespace} apply -f {yamltmp}'.split())
 
-def KubeDeleteCrd(crd: str, namespace: str, env) -> None:
+def k8s_crd_delete(filename: str, namespace: str):
+    if bbio.readableFile(filename):
+        out.announce(f'Deleting CRD "{filename}"')
+        runTry(f'{kube} -n {namespace} delete --grace-period=60 '
+               f'--ignore-not-found=true -f {filename}'.split())
+
+def k8s_crd_delete_templated(crd: str, namespace: str, env) -> None:
     # Generate filename of tmp file where CRD lives
     yamltmp, _, _ = convert_template_to_tmpname(templates[crd])
-
-    if bbio.readableFile(yamltmp):
-        out.announce(f'Deleting CRD "{crd}"')
-        runStdout(f'{kube} -n {namespace} delete --grace-period=60 '
-                  f'--ignore-not-found=true -f {yamltmp}'.split())
+    k8s_crd_delete(yamltmp, namespace)
 
 def helmUninstallRelease(namespace: str, release: str) -> None:
     helmCmd(namespace, f"uninstall {release}")
@@ -1225,7 +1253,7 @@ def delete_all_services(namespace: str) -> bool:
 def helm_uninstall_releases_and_kill_pods(namespace: str):
     for release, chart in helmGetReleases(namespace).items():
         try:
-            out.announce(f"Uninstalling namespace {namespace} chart {chart}")
+            out.announce(f"Uninstalling {namespace}/{release}")
             helmUninstallRelease(namespace, release)
         except CalledProcessError as e:
             print(f"Unable to uninstall release {release}: {e}")
@@ -1265,7 +1293,9 @@ def svcStart(secrets: dict[str, dict[str, str]],
             'HzMemberCount': nhzmembers,
             'SrvNmCluster': srvnm_cluster,
             'SrvNmManctr': srvnm_manctr
-            } | install_secrets_into_k8s(hz_namespace, secrets)
+            }
+
+        env |= k8s_secrets_create(hz_namespace, secrets)
 
         # Set up the Helm repo if not already done
         helm_set_up_repo(hz_namespace, hz_helm_repo_name,
@@ -1339,8 +1369,13 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 # tunnel established. Now delete things in reverse order to how
                 # they were created.
 
+                # Delete all the CRDs applied. Note that the chaos-mesh
+                # workflow is installed in the Hz namespace!
+                for crd in chaos_crds:
+                    k8s_crd_delete(crd, hz_namespace)
                 for crd in hz_crds:
-                    KubeDeleteCrd(crd, hz_namespace, env)
+                    k8s_crd_delete_templated(crd, hz_namespace, env)
+
                 helm_uninstall_releases_and_kill_pods(hz_namespace)
                 helm_uninstall_releases_and_kill_pods(chaos_namespace)
 
@@ -1349,8 +1384,15 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 lbs_were_cleaned = delete_all_services(hz_namespace)
                 lbs_were_cleaned = (lbs_were_cleaned and
                                     delete_all_services(chaos_namespace))
-                helm_delete_namespace(chaos_namespace)
-                helm_delete_namespace(hz_namespace)
+
+                k8s_secrets_delete(chaos_namespace)
+                k8s_secrets_delete(hz_namespace)
+
+                k8s_pvc_delete(chaos_namespace)
+                k8s_pvc_delete(hz_namespace)
+
+                k8s_delete_namespace(chaos_namespace)
+                k8s_delete_namespace(hz_namespace)
     except (MissingTerraformOutput):
         out.announce('Terraform objects partly or fully destroyed')
 
