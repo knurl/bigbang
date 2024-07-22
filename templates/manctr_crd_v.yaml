@@ -15,5 +15,5 @@ spec:
       - "-Dhazelcast.mc.rest.enabled=true"
   resources:
     requests:
-      memory: "16Gi"
-      cpu: "4"
+      memory: "8Gi"
+      cpu: "2"

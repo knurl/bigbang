@@ -2,7 +2,7 @@ module "eks" {
   source          = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
   cluster_version = "1.29"
-  version         = "20.8.5"
+  version         = "20.19.0"
 
   # Where to place the EKS cluster and workers.
   vpc_id                          = module.vpc.vpc_id

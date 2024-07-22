@@ -28,18 +28,18 @@ PreferredZones:
     - us-west1-b # GCP - Oregon, USA
 
 # Chart versions you want to install.
-AppVersion: 5.3.7
+AppVersion: 5.3.8-jdk17
 OperatorChartVersion: 5.11.0
 ChaosMeshChartVersion: 2.6.3
 
 # Number of nodes in K8S cluster.
-NodeCount: 6
+NodeCount: 4
 
 # Number of nodes in Hz cluster.
 HzMemberCount: 3
 
 # Number of clients
-HzClientCount: 12
+HzClientCount: 6
 
 # Require TLS on client <-> coordinator connection.
 RequireCoordTls: False
@@ -54,7 +54,7 @@ AuthNLdap: False
 
 # non-performance (default) node pool types
 AwsInstanceTypes:
-    - r5a.2xlarge # 8 vCPU, 64 GB
+    - m5.2xlarge # 8 vCPU, 32 GB
 AzureVmTypes:
     - Standard_B2s
 GcpMachineTypes:

@@ -230,19 +230,6 @@ for d in [templatedir, tmpdir, tfdir]:
     assert bbio.writeableDir(d)
 
 #
-# ChartVersion.
-#
-def check_chart_version(label, vers):
-    components = vers.split('.')
-    if len(components) != 3 or not all(map(str.isdigit, components)):
-        sys.exit(f'The {label} in {myvarsf} field must be of the form '
-                 f'x.y.z, all numbers; {vers} is not of a valid form')
-
-check_chart_version(appversionlabel, appversion)
-check_chart_version(oprchartvlabel, oprchartversion)
-check_chart_version(chaoschartvlabel, chaoschartversion)
-
-#
 # NodeCount
 #
 if nk8snodes <= nhzmembers:
