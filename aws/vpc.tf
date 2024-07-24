@@ -10,8 +10,8 @@ module "vpc" {
   cidr = var.my_cidr
 
   azs             = data.aws_availability_zones.available.names
-  private_subnets = [for k in ["prv_a", "prv_b", "prv_c"] : module.subnet_addrs.network_cidr_blocks[k]]
-  public_subnets  = [for k in ["pub_a", "pub_b", "pub_c"] : module.subnet_addrs.network_cidr_blocks[k]]
+  private_subnets = [for k, v in local.azs : cidrsubnet(var.my_cidr, 4, k)]
+  public_subnets  = [for k, v in local.azs : cidrsubnet(var.my_cidr, 8, k + 48)]
 
   /*
    * We are setting up a fully-private EKS cluster on this VPC, which
@@ -23,8 +23,9 @@ module "vpc" {
   enable_dns_support   = true
 
   # Our workers will need to be able to get packages
-  enable_nat_gateway = true
-  single_nat_gateway = true
+  enable_nat_gateway     = true
+  single_nat_gateway     = false
+  one_nat_gateway_per_az = true
 
   # Required to allow internal ELBs
   private_subnet_tags = {
@@ -51,6 +52,7 @@ resource "aws_security_group" "vpc_endpoint_sg" {
 }
 
 locals {
+  azs                 = slice(data.aws_availability_zones.available.names, 0, 3)
   bastion_ip          = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
   client_ip           = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 101)
   prvpub_subnet_cidrs = concat(module.vpc.public_subnets_cidr_blocks, module.vpc.private_subnets_cidr_blocks)
@@ -89,4 +91,3 @@ module "vpc_endpoints" {
 
   tags = var.tags
 }
-

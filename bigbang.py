@@ -329,7 +329,7 @@ chaosmeshoptions=(
         '--set chaosDaemon.runtime=containerd '
         '--set chaosDaemon.socketPath=/run/containerd/containerd.sock')
 
-hz_crds = ['cluster', srvnm_manctr, 'bbclient']
+hz_crds = ['cluster', srvnm_manctr, 'bbclient', 'priclass']
 for crd in hz_crds:
     templates[crd] = f'{crd}_crd_v.yaml'
 

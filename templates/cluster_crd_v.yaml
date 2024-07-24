@@ -12,14 +12,8 @@ spec:
     type: Smart
     discoveryServiceType: LoadBalancer
     memberAccess: NodePortNodeName
+  highAvailabilityMode: ZONE
   properties:
     "hazelcast.socket.send.buffer.size": "2048"
     "hazelcast.socket.receive.buffer.size": "2048"
-  jvm:
-    args:
-      - "-Dcom.sun.management.jmxremote"
-      - "-Dcom.sun.management.jmxremote.authenticate=false"
-    memory:
-      initialRAMPercentage: "38"
-      maxRAMPercentage: "38"
-      minRAMPercentage: "38"
+    "hazelcast.cluster.version.auto.upgrade.enabled": "false"

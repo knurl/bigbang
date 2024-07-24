@@ -17,3 +17,17 @@ spec:
     requests:
       memory: "8Gi"
       cpu: "2"
+    limits:
+      memory: "8Gi"
+      cpu: "2"
+  scheduling:
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - hazelcast
+            topologyKey: kubernetes.io/hostname

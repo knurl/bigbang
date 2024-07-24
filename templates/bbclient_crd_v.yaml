@@ -30,3 +30,14 @@ spec:
           limits:
             memory: "4Gi"
             cpu: "1"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - hazelcast
+              topologyKey: kubernetes.io/hostname
+      priorityClassName: hazelcast-client-priclass
