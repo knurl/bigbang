@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import pdb
+#import pdb
 import os
 import hashlib
 import argparse
@@ -17,7 +17,9 @@ import yaml # type: ignore
 import psutil # type: ignore
 import time
 import string
+from threading import Thread
 from datetime import datetime
+from contextlib import ExitStack
 
 from subprocess import CalledProcessError
 from typing import List, Callable, Optional, Any, Dict
@@ -80,6 +82,7 @@ kube            = "kubectl"
 helm            = "helm"
 minNodes        = 3
 maxpodpnode     = 32
+maxloggedcns    = 32
 
 #
 # Secrets
@@ -95,7 +98,7 @@ p = argparse.ArgumentParser()
 p.add_argument('-c', '--skip-cluster-start', action="store_true",
                help="Skip checking to see if cluster needs to be started.")
 p.add_argument('-e', '--empty-nodes', action="store_true",
-               help="Unload k8s cluster only. Used with stop or restart.")
+               help="Unload k8s cluster only. Used with stop.")
 p.add_argument('-s', '--summarise-ssh-tunnels', action="store_true",
                help="Summarise the ssh tunnels.")
 p.add_argument('-t', '--target', action="store",
@@ -103,23 +106,23 @@ p.add_argument('-t', '--target', action="store",
 p.add_argument('-z', '--zone', action="store",
                help="Force zone/region to specified value.")
 p.add_argument('command',
-               choices = ['start', 'stop', 'restart'],
-               help="""Start/stop/restart the demo environment.""")
+               choices = ['start', 'stop'],
+               help="""Start/stop the demo environment.""")
 p.add_argument('-P', '--progmeter-test', action="store_true",
                help=argparse.SUPPRESS)
 
 ns = p.parse_args()
 
-# Options which can only be used with start (or restart)
-if ns.command not in ("start", "restart"):
+# Options which can only be used with start
+if ns.command != 'start':
     v = vars(ns)
-    for switch in {"dont_load", "skip_cluster_start", "drop_tables"}:
+    for switch in {'skip_cluster_start'}:
         if switch in v and v[switch]:
-            p.error(f"{switch} is only used with start (or restart)")
+            p.error(f"{switch} is only used with start")
 
-# Options which can only be used with stop (or restart)
-if ns.command not in ("stop", "restart") and ns.empty_nodes:
-    p.error("empty_nodes is only used with stop or restart")
+# Options which can only be used with stop
+if ns.command != "stop" and ns.empty_nodes:
+    p.error("empty_nodes is only used with stop")
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -769,6 +772,73 @@ class Tunnel:
         print(f'Tunnel CLOSED: {self}')
         return False
 
+# A class for logging pods
+class PodLog:
+    def __init__(self,
+                 namespace: str,
+                 name: str,
+                 pod_selector: str,
+                 container: str = ""):
+        self.name = name
+        self.pod_selector = pod_selector
+        self.filename = tmp_filename(name, "log", random=True)
+        self.fh = open(self.filename, "w+")
+        self.thread: Optional[Thread] = None
+        self.terminate = False
+        container_switch = "--all-containers"
+        if container:
+            container_switch = f'--container={container}'
+        self.command = (f'{kube} -n{namespace} logs -f --timestamps '
+                        f'--tail=-1 {container_switch} --prefix '
+                        f'--max-log-requests={maxloggedcns} '
+                        f'-l{pod_selector}')
+        self.thread = Thread(target=self.__log_forever_thread)
+        self.thread.start()
+
+    def __log_forever_thread(self):
+        while True:
+            subprocess_terminated = False
+            return_code = 0
+            p = subprocess.Popen(self.command.split(),
+                                 stdout=self.fh,
+                                 stderr=subprocess.STDOUT,
+                                 close_fds=False)
+            try:
+                return_code = p.wait(timeout=2) # wait for termination
+                subprocess_terminated = True
+            except subprocess.TimeoutExpired: # timeout completed
+                pass
+
+            if self.terminate: # someone wants us to stop
+                if not subprocess_terminated:
+                    p.terminate() # terminate child process
+                break
+
+            if subprocess_terminated:
+                msg=('Previous log ended w/ RC={rc}. '
+					 'Log restarting @{ts}: {me}'.format(
+                         rc=return_code,
+                         ts=str(datetime.now().time()),
+                         me=str(self)))
+                assert not self.fh.closed
+                self.fh.write(msg + "\n") # write it to the log...
+                print(msg)           # ... and to stdout
+
+    def __del__(self):
+        self.terminate = True
+        out.announce("Terminating log capture " + str(self))
+        assert self.fh is not None
+        self.fh.close()
+
+    def __str__(self):
+        return (f'{self.name} >> {self.filename}')
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.terminate = True
+        return False
 
 # Input dictionary is the output variables from Terraform.
 def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
@@ -1247,8 +1317,9 @@ def helm_uninstall_releases_and_kill_pods(namespace: str):
     killAllTerminatingPods(namespace)
 
 def svcStart(secrets: dict[str, dict[str, str]],
-             skipClusterStart: bool = False) -> tuple[list[Tunnel], str]:
+             skipClusterStart: bool = False) -> list[Tunnel]:
     tuns: list[Tunnel] = []
+
     env: dict[str, str] = {}
 
     # Get my public IP and SSH public key
@@ -1328,7 +1399,7 @@ def svcStart(secrets: dict[str, dict[str, str]],
     set_dns_for_lbs(env['zone_id'], lbs)
 
     tuns.extend(new_tuns)
-    return tuns, bastion
+    return tuns
 
 def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion to allow our commands to flow
@@ -1666,6 +1737,19 @@ def check_creds() -> None:
             print("Directory {gcpdir} doesn't exist or isn't readable.")
             sys.exit("Have you run gcloud init?")
 
+def get_hz_cluster_podnames(ss_selector: str) -> list[str]:
+    return runCollect([kube, '-n', hz_namespace, 'get', 'pods',
+                       f'-l{ss_selector}',
+                       '-ojsonpath={.items[*].metadata.name}']).split()
+
+def log_hz_cluster_member(ss_selector: str, podname: str) -> PodLog:
+    selectors: list[str] = [ss_selector]
+    selectors.append(f'statefulset.kubernetes.io/pod-name={podname}')
+    return PodLog(hz_namespace,
+                  podname,
+                  ",".join(selectors),
+                  container='hazelcast')
+
 def main() -> None:
     if ns.progmeter_test:
         spinWaitCGTest()
@@ -1681,33 +1765,43 @@ def main() -> None:
     if target == "gcp":
         out.announce(f"GCP project is {gcpproject}")
     print(f"Your CIDR is {mySubnetCidr}")
-
-    started = False
-
-    if ns.command in ("stop", "restart"):
-        svcStop(ns.empty_nodes)
-
     tuns: list[Tunnel] = []
 
     y = getCloudSummary()
-    if ns.command in ("start", "restart"):
-        tuns, bastion_ip = svcStart(secrets, ns.skip_cluster_start)
-        started = True
-        out.announceBox(f'Your {rsaPub} public key has been installed into the '
-                        'bastion server, so you can ssh there now '
+
+    if ns.command not in ('start', 'stop'):
+        sys.exit(f'Invalid command {ns.command}')
+
+    if ns.command == 'stop':
+        svcStop(ns.empty_nodes)
+        y += ['Service is stopped']
+        out.announceLoud(y)
+        return
+
+    # ns.command == 'start'
+
+    tuns = svcStart(secrets, ns.skip_cluster_start)
+    ss_selector = 'app.kubernetes.io/instance=dev'
+    podnames = get_hz_cluster_podnames(ss_selector)
+    with ExitStack() as stack:
+        logs = [stack.enter_context(log_hz_cluster_member(ss_selector,
+                                                          podname))
+                                    for podname in podnames]
+        for log in logs:
+            out.announce("Log started for " + str(log))
+
+        out.announceBox(f'Your {rsaPub} public key has been installed into '
+                        f'the bastion server, so you can ssh there now '
                         f'(user "{bastionuser}").')
         y += (['Service is started on:'] +
               [f'[{s.name}] {s.get_uri()}' for s in svcs.get_clust_all()])
-    else:
-        y += ['Service is stopped']
-    out.announceLoud(y)
+        out.announceLoud(y)
+        input("Press return key to quit and terminate tunnels!\n")
+
     if ns.summarise_ssh_tunnels:
         lines: list[str] = ['Summary of tunnels:']
         for tun in tuns:
             lines.append(tun.command)
         out.announceLoud(lines)
-
-    if started:
-        input("Press return key to quit and terminate tunnels!")
 
 main()

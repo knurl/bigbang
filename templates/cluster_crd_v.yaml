@@ -14,6 +14,5 @@ spec:
     memberAccess: NodePortNodeName
   highAvailabilityMode: ZONE
   properties:
-    "hazelcast.socket.send.buffer.size": "2048"
-    "hazelcast.socket.receive.buffer.size": "2048"
     "hazelcast.cluster.version.auto.upgrade.enabled": "false"
+      #    "hazelcast.invocation.max.retry.count": "10"

@@ -23,9 +23,8 @@ module "vpc" {
   enable_dns_support   = true
 
   # Our workers will need to be able to get packages
-  enable_nat_gateway     = true
-  single_nat_gateway     = false
-  one_nat_gateway_per_az = true
+  enable_nat_gateway = true
+  single_nat_gateway = true
 
   # Required to allow internal ELBs
   private_subnet_tags = {
@@ -54,7 +53,6 @@ resource "aws_security_group" "vpc_endpoint_sg" {
 locals {
   azs                 = slice(data.aws_availability_zones.available.names, 0, 3)
   bastion_ip          = cidrhost(module.vpc.public_subnets_cidr_blocks[0], 101)
-  client_ip           = cidrhost(module.vpc.private_subnets_cidr_blocks[0], 101)
   prvpub_subnet_cidrs = concat(module.vpc.public_subnets_cidr_blocks, module.vpc.private_subnets_cidr_blocks)
 }
 

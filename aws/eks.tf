@@ -56,6 +56,7 @@ module "eks" {
       min_size     = 0
       max_size     = var.node_count
       desired_size = var.node_count
+      subnet_ids   = slice(module.vpc.private_subnets, 0, 1)
 
       lifecycle = {
         create_before_destroy = false

@@ -10,10 +10,11 @@ spec:
       templateType: Parallel
       deadline: 4h
       children:
-        - workflow-network-intra-az-delay
-        - workflow-network-dev3-delay
+        - workflow-network-intra-az-delay-0-to-1
+        - workflow-network-intra-az-delay-01-to-2
         - workflow-serial-flipflop
-    - name: workflow-network-intra-az-delay
+          #        - workflow-network-dev3-delay
+    - name: workflow-network-intra-az-delay-0-to-1
       templateType: NetworkChaos
       deadline: 4h
       networkChaos:
@@ -24,20 +25,44 @@ spec:
           namespaces:
             - hazelcast
           labelSelectors:
-            'app.kubernetes.io/instance': 'dev'
-            'app': 'bbclient'
+            'apps.kubernetes.io/pod-index': '0'
+          labelSelectors:
         target:
           mode: all
           selector:
             namespaces:
               - hazelcast
             labelSelectors:
-              'app.kubernetes.io/instance': 'dev'
-              'app': 'bbclient'
+              'apps.kubernetes.io/pod-index': '1'
         delay:
-          latency: '6ms'
-          jitter: '0ms'
-          correlation: '100'
+          latency: '2ms'
+          jitter: '1ms'
+          correlation: '75'
+    - name: workflow-network-intra-az-delay-01-to-2
+      templateType: NetworkChaos
+      deadline: 4h
+      networkChaos:
+        direction: both
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - hazelcast
+          labelSelectors:
+            'apps.kubernetes.io/pod-index': '2'
+          labelSelectors:
+        target:
+          mode: all
+          selector:
+            namespaces:
+              - hazelcast
+            labelSelectors:
+              'apps.kubernetes.io/pod-index': '0'
+              'apps.kubernetes.io/pod-index': '1'
+        delay:
+          latency: '8ms'
+          jitter: '1ms'
+          correlation: '75'
     - name: workflow-network-dev3-delay
       templateType: NetworkChaos
       deadline: 4h
@@ -60,38 +85,19 @@ spec:
               'apps.kubernetes.io/pod-index': '0'
               'apps.kubernetes.io/pod-index': '1'
         delay:
-          latency: '30ms'
-          correlation: '75'
-          jitter: '20ms'
-          reorder:
-            gap: 1000
-            reorder: '0.1'
-            correlation: '90'
-    - name: workflow-network-dev3-bandwidth
-      templateType: NetworkChaos
+          latency: '15ms'
+          jitter: '5ms'
+          correlation: '90'
+            #          reorder:
+            #            gap: 1000
+            #            reorder: '0.1'
+            #            correlation: '90'
+    - name: workflow-serial-flipflop
+      templateType: Serial
       deadline: 4h
-      networkChaos:
-        direction: both
-        action: bandwidth
-        mode: all
-        selector:
-          namespaces:
-            - hazelcast
-          labelSelectors:
-            'apps.kubernetes.io/pod-index': '2'
-          labelSelectors:
-        target:
-          mode: all
-          selector:
-            namespaces:
-              - hazelcast
-            labelSelectors:
-              'apps.kubernetes.io/pod-index': '0'
-              'apps.kubernetes.io/pod-index': '1'
-        bandwidth:
-          rate: '10mbps'
-          limit: 209715200
-          buffer: 100000
+      children:
+        - workflow-network-partition
+        - workflow-network-suspend
     - name: workflow-network-partition
       templateType: NetworkChaos
       deadline: 70s
@@ -115,9 +121,3 @@ spec:
     - name: workflow-network-suspend
       templateType: Suspend
       deadline: 60s
-    - name: workflow-serial-flipflop
-      templateType: Serial
-      deadline: 4h
-      children:
-        - workflow-network-partition
-        - workflow-network-suspend

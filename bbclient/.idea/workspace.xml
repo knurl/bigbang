@@ -10,14 +10,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../aws/subnets.tf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../aws/eks.tf" beforeDir="false" afterPath="$PROJECT_DIR$/../aws/eks.tf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../aws/vpc.tf" beforeDir="false" afterPath="$PROJECT_DIR$/../aws/vpc.tf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../bigbang.py" beforeDir="false" afterPath="$PROJECT_DIR$/../bigbang.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../chaos/workflow.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../chaos/workflow.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../my-vars.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../templates/bbclient_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/bbclient_crd_v.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/cluster_crd_v.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../templates/manctr_crd_v.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -33,6 +32,9 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="jar:///Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home/lib/src.zip!/java.base/java/lang/Thread.java" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="ProblemsViewState">
     <option name="selectedTabId" value="CurrentFile" />
@@ -63,7 +65,7 @@
     "project.structure.last.edited": "Modules",
     "project.structure.proportion": "0.15",
     "project.structure.side.proportion": "0.37197357",
-    "settings.editor.selected.configurable": "preferences.pluginManager"
+    "settings.editor.selected.configurable": "Errors"
   }
 }]]></component>
   <component name="RunManager" selected="Docker.Docker">
@@ -107,16 +109,5 @@
       <updated>1720788116110</updated>
     </task>
     <servers />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/src/main/java/com/bbclient/ManCtrRest.java</url>
-          <line>75</line>
-          <option name="timeStamp" value="9" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>
