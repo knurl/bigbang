@@ -2,43 +2,41 @@ package com.bbclient;
 
 import com.hazelcast.map.IMap;
 
-import java.util.Random;
-
 import static com.bbclient.RandomStringBuilder.generateRandomString;
 
-public class PutIfAbsentRunnable extends IMapMethodRunnable {
-    Random random;
-    final private int mapValueSizeMin;
-    final private int mapValueSizeMax;
-    final private long firstKey;
-    final private long lastKey;
+class PutIfAbsentRunnable extends IMapMethodRunnable {
+    private final String value;
+
+    private final long firstKey;
+    private final long lastKey;
+
+    /*
+     * synchronized
+     */
     private long nextKey;
 
+    private synchronized long getNextKey() {
+        var nextKey = this.nextKey;
+        this.nextKey++;
+        if (this.nextKey > this.lastKey)
+            this.nextKey = this.firstKey;
+        return nextKey;
+    }
+
     PutIfAbsentRunnable(IMap<Long, String> map,
-                        int mapValueSizeMin,
-                        int mapValueSizeMax,
+                        int mapValueSize,
                         long firstKey,
                         long lastKey) {
-        super(map, "putIfAbsent");
-        this.random = new Random();
-        this.mapValueSizeMin = mapValueSizeMin;
-        this.mapValueSizeMax = mapValueSizeMax;
+        super(map, "putIfAbsent", false);
+        this.value = generateRandomString(mapValueSize);
         this.firstKey = firstKey;
         this.lastKey = lastKey;
         this.nextKey = firstKey;
     }
 
-    String prepare() {
-        int mapValueSize = random.nextInt(mapValueSizeMin, mapValueSizeMax);
-        return generateRandomString(mapValueSize);
-    }
-
-    void invokeMethod(String newValue) {
-        var oldValue = super.map.putIfAbsent(nextKey, newValue);
+    void invokeMethod() {
+        var oldValue = map.putIfAbsent(getNextKey(), value);
         /* We always use keys we've used before! */
         assert (oldValue != null);
-        nextKey++;
-        if (nextKey > lastKey)
-            nextKey = firstKey;
     }
 }

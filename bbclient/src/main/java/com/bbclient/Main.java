@@ -5,124 +5,36 @@ import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.util.ClientStateListener;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.map.IMap;
-import com.hazelcast.shaded.nonapi.io.github.classgraph.utils.StringUtils;
+import org.jetbrains.annotations.NotNull;
 
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
-import java.rmi.ServerException;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.format.DateTimeFormatterBuilder;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
+import java.util.concurrent.*;
 
-import static com.bbclient.RandomStringBuilder.generateRandomString;
+import static com.bbclient.Logger.log;
 
 class Main {
+    static final int numThreads = 3;
+    static final ExecutorService executorService = new ThreadPoolExecutor(
+            numThreads, numThreads*2, 60,
+            TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(numThreads*6),
+            new ThreadPoolExecutor.CallerRunsPolicy());
+
     private final static String searchDomain = ".hazelcast.net";
     private final static String clusterName = "dev";
     private final static String clusterLoadBalancerName = clusterName + searchDomain;
     private final static String mapName = "map";
 
-    static final int mapValueSizeMin = 1 << 12;
-    static final int mapValueSizeMax = 1 << 26;
+    static final int mapValueSize = 1 << 20;
 
-    static Random random = new Random();
-
-    private final static long firstKey = random.nextLong();
-    private static long nextKey = firstKey;
-    private static long lastKey = nextKey;
+    private final static long firstKey = (new Random()).nextLong();
 
     // How many entries do we want to inject into the map?
-    static final long maxHeapCost = 16L*1024*1024*1024;
-
-    // How often should we dump our collected statistics on response times?
-    static final int statsReportFrequency = 60000; // ms
-
-    // Keep track of the current and last batch size, and the last batch rate
-    static int batchSize = 1;
-    static int lastBatchSize = batchSize;
-    static int lastBatchRate = -1;
-    static final int batchSizeMax = 1 << 20;
-
-    public static void setAsyncBatch(IMap<Long, String> map) throws Throwable {
-        List<CompletableFuture<Void>> futureList = new ArrayList<>();
-
-        Instant start = Instant.now();
-
-        // Fire off a set of async set
-        for (int i = 0; i < Main.batchSize; i++) {
-            int mapValueSize = random.nextInt(mapValueSizeMin, mapValueSizeMax);
-            futureList.add(map.setAsync(nextKey,
-                    generateRandomString(mapValueSize)).toCompletableFuture());
-            lastKey = nextKey;
-            nextKey++;
-        }
-        try {
-            futureList.forEach(CompletableFuture::join);
-        } catch (CompletionException ex) {
-            try {
-                throw ex.getCause();
-            } catch (Error | RuntimeException | ServerException possible) {
-                throw possible;
-            } catch (Throwable impossible) {
-                throw new AssertionError(impossible);
-            }
-        }
-
-        Instant finish = Instant.now();
-
-        final long batchTime = Duration.between(start, finish).toMillis();
-
-        // Protect from division by zero as we calculate the ops/s rate
-        if (batchTime > 0) {
-            final int batchRate = (int) (batchSize * 1_000 / batchTime); // convert to ops/s
-
-            // Capture batch size before modifying it
-            lastBatchSize = batchSize;
-
-            // Ignore first loop, and protect against by div-by-0
-            if (lastBatchRate > 0) {
-                final double changeRatio = (double) (batchRate - lastBatchRate) / (double) lastBatchRate;
-                final int change = (int) Math.round((double)batchSize * changeRatio);
-
-                /* Add change to batch size, but don't allow batch size to
-                 * more than double, or exceed batchSizeMax ever, and it
-                 * always has to be at least 1.
-                 */
-                batchSize = Math.max(1,
-                        Math.min(batchSizeMax,
-                        Math.min(lastBatchSize << 1,
-                                batchSize + change)));
-            }
-
-            // Now we no longer need last batch rate, we can reassign
-            lastBatchRate = batchRate;
-        }
-    }
-
-    static String now(String s) {
-        var formatter = new DateTimeFormatterBuilder().appendInstant(3).toFormatter();
-        return "%s: %s".formatted(formatter.format(Instant.now()), s);
-    }
-
-    static void loadLog(String s) {
-        var prefixElements = new ArrayList<String>();
-        prefixElements.add("LOADING");
-        if (lastBatchSize >= 0)
-            prefixElements.add("BSZ=%,d".formatted(lastBatchSize));
-        if (lastBatchRate >= 0)
-            prefixElements.add("O/s=%,d".formatted(lastBatchRate));
-        String prefixString = "[%s] -> ".formatted(StringUtils.join(" ", prefixElements));
-        System.out.println(now("%s%s".formatted(prefixString, s)));
-    }
-
-    static void log(String s) {
-        System.out.println(now(s));
-    }
+    static final long maxHeapCost = 10L*1024*1024*1024;
 
     static void awaitConnected(ClientStateListener listener) {
         var backoff = 10; // ms
@@ -132,14 +44,14 @@ class Main {
                 listener.awaitConnected();
                 return;
             } catch (InterruptedException ex) {
-                loadLog("*** RECEIVED EXCEPTION [AWAITCONN] *** %s"
+                log("*** RECEIVED EXCEPTION [AWAITCONN] *** %s"
                         .formatted(ex.getClass().getSimpleName()));
                 backoff <<= 1;
 
                 try {
                     Thread.sleep(backoff);
                 } catch (InterruptedException ex2) {
-                    loadLog(("*** RECEIVED EXCEPTION [SLEEPING] *** %s")
+                    log(("*** RECEIVED EXCEPTION [SLEEPING] *** %s")
                             .formatted(ex2.getClass().getSimpleName()));
                     backoff <<= 1;
                 }
@@ -149,60 +61,121 @@ class Main {
 
     private static void clearMap(ManCtrThread manCtrThread,
                                  ClientStateListener listener,
-                                 IMap<Long, String> map) throws InterruptedException {
-        final long stopwatchTimeout = 2_500; // ms
+                                 IMap<Long, String> map) {
+        final long stopwatchTimeout = 1_000; // ms
 
-        loadLog("TARGET HWM HEAP COST -> " + bytesToGigabytes(maxHeapCost));
+        log("Clearing map");
 
         while (true) {
             awaitConnected(listener);
 
-            loadLog("Clearing map");
             map.clear();
             /*
              * The map.clear() won't take effect with Management Center
              * immediately, so we'll have to wait until it catches up.
              */
-            Thread.sleep(stopwatchTimeout);
+            try {
+                Thread.sleep(stopwatchTimeout);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
 
-            var heapCost = manCtrThread.getHeapCost();
+            long heapCost;
+            try {
+                heapCost = manCtrThread.getHeapCost();
+            } catch (NotReadyException e) {
+                try {
+                    Thread.sleep(stopwatchTimeout);
+                } catch (InterruptedException ex) {
+                    throw new RuntimeException(ex);
+                }
+                continue;
+            }
             if (0 <= heapCost && heapCost < maxHeapCost >> 2)
                 break;
         }
+
+        log("Map is cleared");
     }
 
-    private static String bytesToGigabytes(long bytes) {
+    private static @NotNull String bytesToGigabytes(long bytes) {
         return "%,.2f GB".formatted((double)bytes / Math.pow(1024.0, 3));
     }
 
-    private static void fillMap(ManCtrThread manCtrThread,
-                                ClientStateListener listener,
-                                IMap<Long, String> map) {
+    private static long fillMapAndGetLastKey(ManCtrThread manCtrThread,
+                                             ClientStateListener listener,
+                                             IMap<Long, String> map) {
         final long stopwatchTimeout = 1_000; // ms
         var fullnessCheckStopwatch = new Stopwatch(stopwatchTimeout); // ms
-        var lastHeapCost = manCtrThread.getHeapCost();
+        long lastHeapCost = 0;
 
+        log("TARGET HWM HEAP COST -> " + bytesToGigabytes(maxHeapCost));
+
+        SetRunnable setRunnable = new SetRunnable(map, mapValueSize, firstKey);
         while (lastHeapCost < maxHeapCost) {
             awaitConnected(listener);
 
-            if (fullnessCheckStopwatch.isTimeOver())
-                lastHeapCost = manCtrThread.getHeapCost();
-
-            assert(lastHeapCost >= 0);
-
-            loadLog("Map size -> %s".formatted(bytesToGigabytes(lastHeapCost)));
-
-            try { // Fire off a batch of parallel async set() operations
-                setAsyncBatch(map);
-            } catch (Throwable ex) {
-                loadLog("*** RECEIVED EXCEPTION [LOADING] *** %s".formatted(ex.getClass().getSimpleName()));
+            if (fullnessCheckStopwatch.isTimeOver()) {
+                try {
+                    lastHeapCost = manCtrThread.getHeapCost();
+                } catch (NotReadyException e) {
+                    try {
+                        Thread.sleep(stopwatchTimeout);
+                    } catch (InterruptedException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }
+                log("Map size -> %s".formatted(bytesToGigabytes(lastHeapCost)));
             }
+
+            executorService.submit(setRunnable);
         }
 
-        loadLog("+++ Filling complete -> %s +++".formatted(bytesToGigabytes(lastHeapCost)));
+        log("+++ Filling complete -> %s +++".formatted(bytesToGigabytes(lastHeapCost)));
+        return setRunnable.getLastKey();
     }
 
-    public static void main(String[] args) throws InterruptedException, MalformedURLException, URISyntaxException {
+    static boolean reportAnyMigrations(ManCtrThread manCtrThread,
+                                       boolean wasClusterSafe) throws NotReadyException {
+        boolean isClusterSafe;
+        int migrationQ;
+        int numMembers;
+        String logPrefix = "[MIGRATIONS] ";
+
+        isClusterSafe = manCtrThread.getIsClusterSafe();
+        migrationQ = manCtrThread.getPartitionMigrationQ();
+        numMembers = manCtrThread.getNumMembers();
+
+        if (!isClusterSafe && wasClusterSafe) {
+                log(logPrefix + "Cluster is no longer safe!");
+                log(logPrefix + "QLEN=%d NMEM=%d".formatted(
+                        migrationQ,
+                        numMembers));
+        } else if (isClusterSafe && !wasClusterSafe) {
+            log(logPrefix + "Cluster returned to safety");
+        }
+
+        return isClusterSafe;
+    }
+
+    static void waitUntilClusterSafe(ManCtrThread manCtrThread) throws InterruptedException {
+        boolean isClusterSafe = true;
+        log("Ensuring cluster is safe");
+
+        do {
+            try {
+                isClusterSafe = reportAnyMigrations(manCtrThread, isClusterSafe);
+            } catch (NotReadyException e) {
+                Thread.sleep(1000);
+                continue;
+            }
+            Thread.sleep(1000);
+        } while (!isClusterSafe);
+
+        log("Cluster is safe");
+    }
+
+    public static void main(String[] args) throws MalformedURLException, URISyntaxException, InterruptedException {
         ClientConfig clientConfig = new ClientConfig();
         /* This should connect to the dev service, which is a load balancer
            service used for client discovery created by the Operator */
@@ -211,6 +184,8 @@ class Main {
         clientNetworkConfig.setSmartRouting(true);
         ClientStateListener clientStateListener = new ClientStateListener(clientConfig);
         HazelcastInstance hazelcastInstanceClient = HazelcastClient.newHazelcastClient(clientConfig);
+        final int statsReportFrequency = 60000; // ms
+        final int backoffTimeoutMillis = 1000; // ms
 
         IMap<Long, String> map = hazelcastInstanceClient.getMap(mapName);
 
@@ -220,30 +195,43 @@ class Main {
          * the Management Center REST interface.
          */
         var manCtrThread = new ManCtrThread(searchDomain, clusterName, mapName);
-        loadLog("Starting Management Center Thread");
+        log("Starting Management Center Thread");
         manCtrThread.start();
 
-        loadLog("Clearing map");
-        clearMap(manCtrThread, clientStateListener, map);
-        loadLog("Filling map");
-        fillMap(manCtrThread, clientStateListener, map);
+        waitUntilClusterSafe(manCtrThread);
 
-        var runnables = new ArrayList<Runnable>();
+        clearMap(manCtrThread, clientStateListener, map);
+        final var lastKey = fillMapAndGetLastKey(manCtrThread,
+                clientStateListener, map);
+
+        var runnables = new ArrayList<IMapMethodRunnable>();
         var isEmptyRunnable = new IsEmptyRunnable(map);
         runnables.add(isEmptyRunnable);
-        var putIfAbsentRunnable = new PutIfAbsentRunnable(map, mapValueSizeMin,
-                mapValueSizeMax, firstKey, lastKey);
+        var putIfAbsentRunnable = new PutIfAbsentRunnable(map, mapValueSize,
+                firstKey, lastKey);
         runnables.add(putIfAbsentRunnable);
 
         var statsReportStopwatch = new Stopwatch(statsReportFrequency); // ms
+        boolean isClusterSafe = true;
 
         while (true) {
             awaitConnected(clientStateListener);
 
-            runnables.forEach(Runnable::run);
+            for (Runnable runnable : runnables)
+                executorService.submit(runnable);
 
             if (statsReportStopwatch.isTimeOver())
                 runnables.forEach(x -> log(x.toString()));
+
+            /* If there were any migrations previously reported, or we just
+             * observed a large timeout, check on the cluster health and see
+             * if we're running any migrations currently.
+             */
+            try {
+                isClusterSafe = reportAnyMigrations(manCtrThread, isClusterSafe);
+            } catch (NotReadyException e) {
+                Thread.sleep(backoffTimeoutMillis);
+            }
         }
     }
 }

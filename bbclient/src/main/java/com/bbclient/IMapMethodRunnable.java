@@ -5,42 +5,49 @@ import com.hazelcast.map.IMap;
 import java.time.Duration;
 import java.time.Instant;
 
-public abstract class IMapMethodRunnable implements Runnable {
+abstract class IMapMethodRunnable implements Runnable {
     private final String methodName;
-    protected IMap<Long, String> map;
+    protected final IMap<Long, String> map;
+    private final boolean quiet;
+
+    /*
+     * Synchronized
+     */
     private final MovingAverage ma;
 
     IMapMethodRunnable(IMap<Long, String> map,
-                       String methodName) {
+                       String methodName,
+                       boolean quiet) {
         this.map = map;
         this.methodName = methodName;
         this.ma = new MovingAverage(methodName);
+        this.quiet = quiet;
     }
 
-    abstract void invokeMethod(String newValue);
-
-    String prepare() {
-        return null;
-    }
+    abstract void invokeMethod();
 
     public void run() {
-        var prepareString = prepare();
         Instant start = Instant.now(), finish;
         boolean exceptionDuringOperation = false;
         try {
-            invokeMethod(prepareString);
+            invokeMethod();
             finish = Instant.now();
         } catch (Throwable ex) {
             finish = Instant.now();
             exceptionDuringOperation = true;
-            Main.log("*** EXCEPTION [%s] *** %s".formatted(methodName, ex.getClass().getSimpleName()));
+            Logger.log("*** EXCEPTION [%s] *** %s".formatted(methodName,
+                    ex.getClass().getSimpleName()));
         }
 
         var runtime = Duration.between(start, finish).toMillis();
-        ma.add(runtime, exceptionDuringOperation);
+        synchronized (this) {
+            ma.add(runtime, exceptionDuringOperation, quiet);
+        }
     }
 
     public String toString() {
-        return "==> %s() %s".formatted(methodName, ma.toString());
+        synchronized (this) {
+            return "==> %s() %s".formatted(methodName, ma.toString());
+        }
     }
 }

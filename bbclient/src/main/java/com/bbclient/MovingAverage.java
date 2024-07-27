@@ -6,7 +6,8 @@ public class MovingAverage {
     private final String name;
     private final DescriptiveStatistics stats;
     private long failedCount = 0;
-    private final int population = 1 << 10;
+    private final int population = 1 << 12;
+    final int minPopulation = population >> 2;
 
     public MovingAverage(String name) {
         this.name = name;
@@ -17,23 +18,28 @@ public class MovingAverage {
         return "%,.3fs".formatted(runtime / 1000.0f);
     }
 
-    public void add(double value, boolean operationFailed) {
-        final int minPopulation = population >> 4;
+    public void add(double value, boolean operationFailed, boolean quiet) {
         final int outlierNumStddev = 5; // * stddev from mean
 
         stats.addValue(value);
         if (operationFailed)
             failedCount++;
+
+        if (quiet || stats.getN() < minPopulation)
+            return;
+
         final var mean = stats.getMean();
         final var stddev = stats.getStandardDeviation();
-        if (stats.getN() >= minPopulation &&
-                (Math.abs(value - mean) >= (outlierNumStddev * stddev)))
-            System.out.printf("%s(): |T-µ| >= %dσ T=%s µ=%s σ=%s%n",
+        final var distanceFromMean = Math.abs(value - mean);
+        final var numStdDev = Math.floor(distanceFromMean / stddev);
+        if (numStdDev >= outlierNumStddev) {
+            Logger.log("%s(): |T-µ| >= %dσ T=%s µ=%s σ=%s".formatted(
                     name,
-                    outlierNumStddev,
+                    numStdDev,
                     toSeconds(value),
                     toSeconds(mean),
-                    toSeconds(stddev));
+                    toSeconds(stddev)));
+        }
     }
 
     public String toString() {

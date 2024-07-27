@@ -5,7 +5,6 @@ import java.util.Arrays;
 import java.util.Random;
 
 public class RandomStringBuilder {
-
     public static String generateRandomString(int length) {
         var random = new Random();
         var sb = new StringBuilder();

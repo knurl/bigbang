@@ -2,13 +2,13 @@ package com.bbclient;
 
 import com.hazelcast.map.IMap;
 
-public class IsEmptyRunnable extends IMapMethodRunnable {
+class IsEmptyRunnable extends IMapMethodRunnable {
     IsEmptyRunnable(IMap<Long, String> map) {
-        super(map,"isEmpty");
+        super(map,"isEmpty", false);
     }
 
-    void invokeMethod(String newValue) { // ignore newValue
-        var isEmpty = super.map.isEmpty();
+    void invokeMethod() { // ignore newValue
+        var isEmpty = map.isEmpty();
         assert(!isEmpty);
     }
 }
