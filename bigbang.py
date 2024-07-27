@@ -796,13 +796,12 @@ class PodLog:
         self.thread.start()
 
     def __log_forever_thread(self):
+        p = subprocess.Popen(self.command.split(),
+                             stdout=self.fh,
+                             stderr=subprocess.STDOUT)
         while True:
             subprocess_terminated = False
             return_code = 0
-            p = subprocess.Popen(self.command.split(),
-                                 stdout=self.fh,
-                                 stderr=subprocess.STDOUT,
-                                 close_fds=False)
             try:
                 return_code = p.wait(timeout=2) # wait for termination
                 subprocess_terminated = True
@@ -821,8 +820,11 @@ class PodLog:
                          ts=str(datetime.now().time()),
                          me=str(self)))
                 assert not self.fh.closed
-                self.fh.write(msg + "\n") # write it to the log...
-                print(msg)           # ... and to stdout
+                self.fh.write(msg + "\n") # write it to the log
+                p = subprocess.Popen(self.command.split(),
+                                     stdout=self.fh,
+                                     stderr=subprocess.STDOUT)
+                # Continue loop with new subprocess
 
     def __del__(self):
         self.terminate = True

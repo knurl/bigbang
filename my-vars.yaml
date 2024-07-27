@@ -39,7 +39,7 @@ NodeCount: 4
 HzMemberCount: 3
 
 # Number of clients
-HzClientCount: 3
+HzClientCount: 1
 
 # Require TLS on client <-> coordinator connection.
 RequireCoordTls: False

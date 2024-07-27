@@ -25,11 +25,8 @@ spec:
         imagePullPolicy: Always
         resources:
           requests:
-            memory: "4Gi"
-            cpu: "1"
-          limits:
-            memory: "4Gi"
-            cpu: "1"
+            memory: "16Gi"
+            cpu: "4"
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
