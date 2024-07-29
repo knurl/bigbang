@@ -1,0 +1,63 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  name: workflow-network-chaos
+  namespace: hazelcast
+spec:
+  entry: baselatency
+  templates:
+    - name: baselatency
+      templateType: Parallel
+      deadline: 4h
+      children:
+        - workflow-network-intra-az-delay-0-to-1
+        - workflow-network-intra-az-delay-01-to-2
+    - name: workflow-network-intra-az-delay-0-to-1
+      templateType: NetworkChaos
+      deadline: 4h
+      networkChaos:
+        direction: both
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - hazelcast
+          labelSelectors:
+            'apps.kubernetes.io/pod-index': '0'
+          labelSelectors:
+        target:
+          mode: all
+          selector:
+            namespaces:
+              - hazelcast
+            labelSelectors:
+              'apps.kubernetes.io/pod-index': '1'
+        delay:
+          latency: '2ms'
+          jitter: '1ms'
+          correlation: '75'
+    - name: workflow-network-intra-az-delay-01-to-2
+      templateType: NetworkChaos
+      deadline: 4h
+      networkChaos:
+        direction: both
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - hazelcast
+          labelSelectors:
+            'apps.kubernetes.io/pod-index': '2'
+          labelSelectors:
+        target:
+          mode: all
+          selector:
+            namespaces:
+              - hazelcast
+            labelSelectors:
+              'apps.kubernetes.io/pod-index': '0'
+              'apps.kubernetes.io/pod-index': '1'
+        delay:
+          latency: '8ms'
+          jitter: '1ms'
+          correlation: '75'

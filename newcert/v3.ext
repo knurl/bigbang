@@ -1,0 +1,6 @@
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+basicConstraints       = CA:TRUE
+keyUsage               = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign
+subjectAltName         = DNS:dockreg.hazelcast.net, DNS:dockreg.hazelcast.com, DNS:hazelcast.net, DNS:*.hazelcast.net, DNS:127.0.0.1, DNS:localhost
+issuerAltName          = issuer:copy

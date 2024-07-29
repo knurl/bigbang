@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: registry-ca
+  namespace: kube-system
+  labels:
+    k8s-app: registry-ca
+spec:
+  selector:
+    matchLabels:
+      name: registry-ca
+  template:
+    metadata:
+      labels:
+        name: registry-ca
+    spec:
+      hostPID: true
+      hostNetwork: true
+      initContainers:
+      - name: registry-ca
+        image: busybox
+        securityContext:
+          privileged: true
+        command: [ 'sh' ]
+        args:
+          - -c
+          - |
+            cp /home/core/registry-ca /usr/local/share/ca-certificates/registry-ca.crt
+            nsenter --mount=/proc/1/ns/mnt -- sh -c "update-ca-certificates && systemctl restart containerd"
+        volumeMounts:
+        - name: usr-local-share-certs
+          mountPath: /usr/local/share/ca-certificates
+        - name: ca-cert
+          mountPath: /home/core
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: usr-local-share-certs
+        hostPath:
+          path: /usr/local/share/ca-certificates
+      - name: ca-cert
+        secret:
+          secretName: registry-ca
+      containers:
+        - name: wait
+          image: k8s.gcr.io/pause:3.1

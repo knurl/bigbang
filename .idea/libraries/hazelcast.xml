@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="hazelcast" type="repository">
+    <properties maven-id="com.hazelcast:hazelcast:5.3.8" />
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/hazelcast-5.3.8.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
