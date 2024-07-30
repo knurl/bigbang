@@ -3,9 +3,9 @@ package com.bbclient;
 import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.util.ClientStateListener;
+import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.map.IMap;
-import com.hazelcast.partition.PartitionService;
 
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -195,6 +195,19 @@ class Main {
         log("Cluster is safe");
     }
 
+    private static void registerEventListeners(HazelcastInstance hazelcastInstanceClient) {
+        var cluster = hazelcastInstanceClient.getCluster();
+        log("Registering ClientMembershipListener with cluster %s".formatted(cluster));
+        cluster.addMembershipListener(new ClientMembershipListener());
+
+        var memberInstances = Hazelcast.getAllHazelcastInstances();
+        for (HazelcastInstance hazelcastInstanceMember: memberInstances) {
+            log("Registering ClientMigrationListener with member %s".formatted(hazelcastInstanceMember));
+            var partitionService = hazelcastInstanceMember.getPartitionService();
+            partitionService.addMigrationListener(new ClientMigrationListener());
+        }
+    }
+
     public static void main(String[] args) throws MalformedURLException, URISyntaxException, InterruptedException {
         ClientConfig clientConfig = new ClientConfig();
 
@@ -205,6 +218,8 @@ class Main {
         clientNetworkConfig.setSmartRouting(true);
         ClientStateListener clientStateListener = new ClientStateListener(clientConfig);
         HazelcastInstance hazelcastInstanceClient = HazelcastClient.newHazelcastClient(clientConfig);
+
+        registerEventListeners(hazelcastInstanceClient);
 
         final long statsReportFrequency = 30000; // ms
         final long migrationsCheckFrequency = 5000; // ms
