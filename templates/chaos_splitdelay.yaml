@@ -1,22 +1,20 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: Workflow
 metadata:
-  name: workflow-network-chaos
+  name: workflow-splitdelay
   namespace: hazelcast
 spec:
-  entry: workflow-parallel-flipflopandnetworkchaos
+  entry: workflow-splitdelay-pl
   templates:
-    - name: workflow-parallel-flipflopandnetworkchaos
+    - name: workflow-splitdelay-pl
       templateType: Parallel
-      deadline: 4h
+      deadline: 28m
       children:
-        - workflow-network-intra-az-delay-0-to-1
-        - workflow-network-intra-az-delay-01-to-2
-        - workflow-serial-flipflop
-          #        - workflow-network-dev3-delay
-    - name: workflow-network-intra-az-delay-0-to-1
+        - workflow-splitdelay-dev3-delay
+        - workflow-splitdelay-sl-flipflop
+    - name: workflow-splitdelay-dev3-delay
       templateType: NetworkChaos
-      deadline: 4h
+      deadline: 2h
       networkChaos:
         direction: both
         action: delay
@@ -24,81 +22,26 @@ spec:
         selector:
           namespaces:
             - hazelcast
-          labelSelectors:
-            'apps.kubernetes.io/pod-index': '0'
-          labelSelectors:
+          expressionSelectors:
+            - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+            - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['2'] }
         target:
           mode: all
           selector:
             namespaces:
               - hazelcast
-            labelSelectors:
-              'apps.kubernetes.io/pod-index': '1'
-        delay:
-          latency: '2ms'
-          jitter: '1ms'
-          correlation: '75'
-    - name: workflow-network-intra-az-delay-01-to-2
-      templateType: NetworkChaos
-      deadline: 4h
-      networkChaos:
-        direction: both
-        action: delay
-        mode: all
-        selector:
-          namespaces:
-            - hazelcast
-          labelSelectors:
-            'apps.kubernetes.io/pod-index': '2'
-          labelSelectors:
-        target:
-          mode: all
-          selector:
-            namespaces:
-              - hazelcast
-            labelSelectors:
-              'apps.kubernetes.io/pod-index': '0'
-              'apps.kubernetes.io/pod-index': '1'
-        delay:
-          latency: '8ms'
-          jitter: '1ms'
-          correlation: '75'
-    - name: workflow-network-dev3-delay
-      templateType: NetworkChaos
-      deadline: 4h
-      networkChaos:
-        direction: both
-        action: delay
-        mode: all
-        selector:
-          namespaces:
-            - hazelcast
-          labelSelectors:
-            'apps.kubernetes.io/pod-index': '2'
-          labelSelectors:
-        target:
-          mode: all
-          selector:
-            namespaces:
-              - hazelcast
-            labelSelectors:
-              'apps.kubernetes.io/pod-index': '0'
-              'apps.kubernetes.io/pod-index': '1'
+            expressionSelectors:
+              - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+              - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['0', '1'] }
         delay:
           latency: '15ms'
           jitter: '5ms'
-          correlation: '90'
+          correlation: '75'
             #          reorder:
             #            gap: 1000
             #            reorder: '0.1'
             #            correlation: '90'
-    - name: workflow-serial-flipflop
-      templateType: Serial
-      deadline: 4h
-      children:
-        - workflow-network-partition
-        - workflow-network-suspend
-    - name: workflow-network-partition
+    - name: workflow-splitdelay-sl-flipflop
       templateType: NetworkChaos
       deadline: 70s
       networkChaos:
@@ -108,16 +51,14 @@ spec:
         selector:
           namespaces:
             - hazelcast
-          labelSelectors:
-            'apps.kubernetes.io/pod-index': '2'
+          expressionSelectors:
+            - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+            - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['2'] }
         target:
           mode: all
           selector:
             namespaces:
               - hazelcast
-            labelSelectors:
-              'apps.kubernetes.io/pod-index': '0'
-              'apps.kubernetes.io/pod-index': '1'
-    - name: workflow-network-suspend
-      templateType: Suspend
-      deadline: 60s
+            expressionSelectors:
+              - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+              - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['0', '1'] }

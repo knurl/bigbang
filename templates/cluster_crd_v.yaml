@@ -8,11 +8,6 @@ spec:
   licenseKeySecretName: license
   clusterSize: {{HzMemberCount}}
   clusterName: {{SrvNmCluster}}
-  exposeExternally:
-    type: Smart
-    discoveryServiceType: LoadBalancer
-    memberAccess: NodePortNodeName
   highAvailabilityMode: ZONE
-  properties:
-    "hazelcast.cluster.version.auto.upgrade.enabled": "false"
-      #    "hazelcast.invocation.max.retry.count": "10"
+    #  properties:
+    #    "hazelcast.invocation.max.retry.count": "10"

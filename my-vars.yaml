@@ -28,9 +28,8 @@ PreferredZones:
     - us-west1-b # GCP - Oregon, USA
 
 # Chart versions you want to install.
-AppVersion: 5.3.8-jdk17
-OperatorChartVersion: 5.11.0
-ChaosMeshChartVersion: 2.6.3
+AppVersion: 5.5.0
+OperatorChartVersion: 5.13.0
 
 # Number of nodes in K8S cluster.
 NodeCount: 4
@@ -73,7 +72,13 @@ GcpSmallMachineType: e2-standard-2
 HzHelmRepo: hazelcast
 HzHelmRepoLocation: https://hazelcast-charts.s3.amazonaws.com/
 
-# Chaos-Mesh helm repo
+#
+# Chaos-Mesh
+#
+# Chart version of chaos-mesh
+ChaosMeshChartVersion: 2.6.3
+#
+# Helm Repo
 ChaosHelmRepo: chaos-mesh
 ChaosHelmLocation: https://charts.chaos-mesh.org
 

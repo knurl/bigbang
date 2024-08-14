@@ -10,48 +10,47 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMembershipListener.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/artifacts/bbclient_jar.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/artifacts/bbclient_jar.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/randerson.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/encodings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketListenerThread.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketResponseResponder.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/artifacts/bbclient_jar.xml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/libraries/apache_commons_math3.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/libraries/fasterxml_jackson_core_databind.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/libraries/hazelcast.xml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/artifacts/bbclient_jar.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/codeStyles/codeStyleConfig.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/encodings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/material_theme_project_new.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/uiDesigner.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/vcs.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/.idea/workspace.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/bbclient/pom.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/pom.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aws/vpc.tf" beforeDir="false" afterPath="$PROJECT_DIR$/aws/vpc.tf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/META-INF/MANIFEST.MF" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/jar/commons-math3-3.6.1.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/jar/hazelcast-enterprise-5.3.7.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/jar/jackson-annotations-2.12.7.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/jar/jackson-core-2.12.7.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/jar/jackson-databind-2.12.7.2.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/lib/META-INF/MANIFEST.MF" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/lib/hazelcast-5.3.8.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/META-INF/MANIFEST.MF" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/META-INF/MANIFEST.MF" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMembershipListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMembershipListener.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Logger.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Logger.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/IMapMethodRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/IsEmptyRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/Logger.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/Main.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/ManCtrThread.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/MovingAverage.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/NotReadyException.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/PutIfAbsentRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/RandomStringBuilder.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/SetRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/main/java/com/bbclient/com/bbclient/Stopwatch.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ManCtrThread.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/MovingAverage.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/MovingAverage.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Stopwatch.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Stopwatch.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bigbang.py" beforeDir="false" afterPath="$PROJECT_DIR$/bigbang.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/capcalc.py" beforeDir="false" afterPath="$PROJECT_DIR$/capcalc.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/my-vars.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/bbclient_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/bbclient_crd_v.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/chaos_baselatency.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/chaos_baselatency.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/chaos_splitdelay.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/chaos_splitdelay.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/cluster_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/cluster_crd_v.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/manctr_crd_v.yaml" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CodeInsightWorkspaceSettings">
+    <option name="optimizeImportsOnTheFly" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -78,6 +77,9 @@
   <component name="HighlightingSettingsPerFile">
     <setting file="jar:///Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home/lib/src.zip!/java.base/java/lang/Thread.java" root0="FORCE_HIGHLIGHTING" />
   </component>
+  <component name="KotlinCodeInsightWorkspaceSettings">
+    <option name="optimizeImportsOnTheFly" value="true" />
+  </component>
   <component name="ProblemsViewState">
     <option name="selectedTabId" value="CurrentFile" />
   </component>
@@ -85,38 +87,42 @@
   &quot;associatedIndex&quot;: 2
 }</component>
   <component name="ProjectId" id="2j98ph2KYVoBWET2JeA8xpfjeY4" />
-  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_ADD_EXTERNAL_FILES": "true",
-    "Application.Main.executor": "Run",
-    "Application.bbclient.Main.executor": "Run",
-    "Docker.Docker.executor": "Run",
-    "Downloaded.Files.Path.Enabled": "false",
-    "Repository.Attach.Annotations": "false",
-    "Repository.Attach.JavaDocs": "false",
-    "Repository.Attach.Sources": "false",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "main",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "/Users/randerson/git/bigbang/bbclient",
-    "project.structure.last.edited": "Modules",
-    "project.structure.proportion": "0.15",
-    "project.structure.side.proportion": "0.37197357",
-    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
+    &quot;Application.Main.executor&quot;: &quot;Run&quot;,
+    &quot;Application.bbclient.Main.executor&quot;: &quot;Run&quot;,
+    &quot;Docker.Docker.executor&quot;: &quot;Run&quot;,
+    &quot;Downloaded.Files.Path&quot;: &quot;/Users/randerson/git/bigbang/bbclient/lib&quot;,
+    &quot;Downloaded.Files.Path.Enabled&quot;: &quot;true&quot;,
+    &quot;Repository.Attach.Annotations&quot;: &quot;false&quot;,
+    &quot;Repository.Attach.JavaDocs&quot;: &quot;false&quot;,
+    &quot;Repository.Attach.Sources&quot;: &quot;false&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;java.suggest.annotation.dependency&quot;: &quot;false&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/randerson/git/bigbang/bbclient&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.37197357&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager" selected="Docker.Docker">
     <configuration name="bbclient.Main" type="Application" factoryName="Application">
-      <option name="ALTERNATIVE_JRE_PATH" value="21 (2)" />
-      <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+      <option name="ALTERNATIVE_JRE_PATH" value="17" />
       <option name="MAIN_CLASS_NAME" value="com.bbclient.Main" />
       <module name="bbclient" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bbclient" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -128,7 +134,7 @@
           <option name="buildCliOptions" value="--platform linux/amd64" />
           <option name="buildOnly" value="true" />
           <option name="containerName" value="" />
-          <option name="sourceFilePath" value="Dockerfile" />
+          <option name="sourceFilePath" value="bbclient/Dockerfile" />
         </settings>
       </deployment>
       <method v="2">

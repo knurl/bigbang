@@ -2,24 +2,34 @@ package com.bbclient;
 
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
 public class MovingAverage {
     private final String name;
     private final DescriptiveStatistics stats;
     private long failedCount = 0;
     private final int population = 1 << 14;
     final int minPopulation = population >> 2;
+    private final Logger logger;
 
     public MovingAverage(String name) {
         this.name = name;
         this.stats = new DescriptiveStatistics(population);
+        this.logger = new Logger(name);
     }
 
-    static String toSeconds(double runtime) {
-        return "%,.3fs".formatted(runtime / 1000.0f);
+    public boolean hasReachedMinimumPopulation() {
+        return stats.getN() >= minPopulation;
+    }
+
+    static String millisToString(double runtime) {
+        return "%,.2fms".formatted(runtime);
     }
 
     public void add(double value, boolean operationFailed, boolean quiet) {
-        final int outlierNumStddev = 5; // * stddev from mean
+        final int outlierNumStddev = 10; // * stddev from mean
 
         stats.addValue(value);
         if (operationFailed)
@@ -33,40 +43,53 @@ public class MovingAverage {
         final var distanceFromMean = Math.abs(value - mean);
         final var numStdDev = (long)Math.floor(distanceFromMean / stddev);
         if (numStdDev >= outlierNumStddev) {
-            Logger.log("%s(): |T-µ| >= %dσ T=%s µ=%s σ=%s".formatted(
+            logger.log("%s(): |T-µ| >= %dσ T=%s µ=%s σ=%s".formatted(
                     name,
                     numStdDev,
-                    toSeconds(value),
-                    toSeconds(mean),
-                    toSeconds(stddev)));
+                    millisToString(value),
+                    millisToString(mean),
+                    millisToString(stddev)));
         }
     }
 
     public String toString() {
+        var stringList = new LinkedList<String>();
+        stringList.add(name + "() =>");
+
         final long N = stats.getN();
-        if (N == 0)
-            return "N=0";
+        stringList.add("N=%d".formatted(stats.getN()));
 
-        String fail = "@";
-        if (failedCount > 0)
-            fail = "[%,d FAIL] @".formatted(failedCount);
+        if (N > 0) {
+            if (failedCount > 0) {
+                var numFailed = "[%d FAIL]".formatted(failedCount);
+                stringList.add(numFailed);
+            }
 
-        if (N < minPopulation) {
-            final double MP = Math.min((double) N / (double) minPopulation, 1.0);
-            return "N=%,d MP=%d%% %s { MIN=%s | MAX=%s }".formatted(
-                    N,
-                    (int)(MP * 100.0),
-                    fail,
-                    toSeconds(stats.getMin()),
-                    toSeconds(stats.getMax()));
+            String descStat;
+            if (N >= minPopulation) {
+                descStat = "µ=%s σ=%s".formatted(
+                        millisToString(stats.getMean()),
+                        millisToString(stats.getStandardDeviation()));
+            } else {
+                final double MP = Math.min((double) N / (double) minPopulation, 1.0);
+                descStat = "MP=%d%%".formatted((int) (MP * 100.0));
+            }
+            stringList.add(descStat);
+
+            String range = "[%s ⇠⇢ %s]".formatted(
+                    millisToString(stats.getMin()),
+                    millisToString(stats.getMax()));
+            stringList.add(range);
         }
 
-        return "N=%,d %s { MIN=%s | µ=%s σ=%s | MAX=%s }".formatted(
-                N,
-                fail,
-                toSeconds(stats.getMin()),
-                toSeconds(stats.getMean()),
-                toSeconds(stats.getStandardDeviation()),
-                toSeconds(stats.getMax()));
+        return String.join(" ", stringList);
+    }
+
+    public String toCSV() {
+        List<String> stringList = new ArrayList<>();
+        stringList.add(name);
+        stringList.add("%d".formatted(Math.round(stats.getMean())));
+        stringList.add("%d".formatted(Math.round(stats.getStandardDeviation())));
+        return String.join(",", stringList);
     }
 }

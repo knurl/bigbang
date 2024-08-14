@@ -9,11 +9,16 @@ abstract class IMapMethodRunnable implements Runnable {
     private final String methodName;
     protected final IMap<Long, String> map;
     private final boolean quiet;
+    private final Logger logger;
 
     /*
      * Synchronized
      */
     private final MovingAverage ma;
+
+    public boolean hasReachedMinimumPopulation() {
+        return ma.hasReachedMinimumPopulation();
+    }
 
     IMapMethodRunnable(IMap<Long, String> map,
                        String methodName,
@@ -22,6 +27,7 @@ abstract class IMapMethodRunnable implements Runnable {
         this.methodName = methodName;
         this.ma = new MovingAverage(methodName);
         this.quiet = quiet;
+        this.logger = new Logger(methodName + "Runnable");
     }
 
     abstract void invokeMethod();
@@ -35,7 +41,7 @@ abstract class IMapMethodRunnable implements Runnable {
         } catch (Throwable ex) {
             finish = Instant.now();
             exceptionDuringOperation = true;
-            Logger.log("*** EXCEPTION [%s] *** %s".formatted(methodName,
+            logger.log("*** EXCEPTION [%s] *** %s".formatted(methodName,
                     ex.getClass().getSimpleName()));
         }
 
@@ -45,9 +51,11 @@ abstract class IMapMethodRunnable implements Runnable {
         }
     }
 
-    public String toString() {
-        synchronized (this) {
-            return "==> %s() %s".formatted(methodName, ma.toString());
-        }
+    public synchronized String toString() {
+        return ma.toString();
+    }
+
+    public synchronized String toCSV() {
+        return ma.toCSV();
     }
 }

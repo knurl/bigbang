@@ -17,6 +17,7 @@ import yaml # type: ignore
 import psutil # type: ignore
 import time
 import string
+import socket
 from threading import Thread
 from datetime import datetime
 from contextlib import ExitStack
@@ -34,7 +35,7 @@ import out
 import bbio
 import ready # local imports
 from cmdgrp import CommandGroup
-from capcalc import numberOfReplicas, numberOfContainers
+from capcalc import HazelcastContainers, ChaosMeshContainers
 from run import runShell, runTry, runStdout, runCollect, retryRun, runIgnore
 from timer import Timer
 
@@ -67,13 +68,18 @@ hostsf      = "/etc/hosts"
 clouds = ("aws", "az", "gcp")
 
 # Hosts, ports, services and associated creds
-dbports       = { "mysql": 3306, "postgres": 5432 }
-localhost     = "localhost"
-localhostip   = "127.0.0.1"
-domain        = "hazelcast.net" # cannot terminate with .; Azure will reject
-srvnm_manctr  = 'manctr'
-srvnm_cluster = 'dev'
-bastionuser   = 'ubuntu'
+dbports        = { "mysql": 3306, "postgres": 5432 }
+localhost      = "localhost"
+localhostip    = "127.0.0.1"
+domain         = "hazelcast.net" # cannot terminate with .; Azure will reject
+srvnm_cluster  = 'dev'
+srvnm_bbclient = 'bbclient'
+bbclientpodsel = 'app=bbclient'
+devpodsel      = 'app.kubernetes.io/instance=dev'
+depnm_bbclient = 'deployment/bbclient-depl'
+ssnm_dev       = 'statefulset/dev'
+bastionuser    = 'ubuntu'
+dns_bbclient   = srvnm_bbclient + domain
 
 # K8S / Helm
 hz_namespace    = "hazelcast"
@@ -99,10 +105,10 @@ p.add_argument('-c', '--skip-cluster-start', action="store_true",
                help="Skip checking to see if cluster needs to be started.")
 p.add_argument('-e', '--empty-nodes', action="store_true",
                help="Unload k8s cluster only. Used with stop.")
-p.add_argument('-s', '--summarise-ssh-tunnels', action="store_true",
-               help="Summarise the ssh tunnels.")
-p.add_argument('-t', '--target', action="store",
+p.add_argument('-g', '--target', action="store",
                help="Force cloud target to specified value.")
+p.add_argument('-t', '--test', action='store_true',
+               help='Run in chaos testing mode')
 p.add_argument('-z', '--zone', action="store",
                help="Force zone/region to specified value.")
 p.add_argument('command',
@@ -113,16 +119,16 @@ p.add_argument('-P', '--progmeter-test', action="store_true",
 
 ns = p.parse_args()
 
+# Options which can only be used with stop
+if ns.command != 'stop' and ns.empty_nodes:
+    p.error("empty_nodes is only used with stop")
+
 # Options which can only be used with start
 if ns.command != 'start':
     v = vars(ns)
-    for switch in {'skip_cluster_start'}:
+    for switch in {'skip_cluster_start', 'test'}:
         if switch in v and v[switch]:
             p.error(f"{switch} is only used with start")
-
-# Options which can only be used with stop
-if ns.command != "stop" and ns.empty_nodes:
-    p.error("empty_nodes is only used with stop")
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -162,7 +168,6 @@ try:
 
     appversion        = myvars[appversionlabel] # AppVersion
     oprchartversion   = myvars[oprchartvlabel] # OprChartVersion
-    chaoschartversion = myvars[chaoschartvlabel] # ChaosMeshChartVersion
     nk8snodes         = myvars[nk8snodeslabel] # NodeCount
     nhzmembers        = myvars[nhzmemberslabel] # HzNodeCount
     nhzclients        = myvars[nhzclientslabel] # HzClientCount
@@ -177,8 +182,11 @@ try:
 
     hz_helm_repo_name        = myvars["HzHelmRepo"]
     hz_helm_repo_location    = myvars["HzHelmRepoLocation"]
-    chaos_helm_repo_name     = myvars["ChaosHelmRepo"]
-    chaos_helm_repo_location = myvars["ChaosHelmLocation"]
+
+    if ns.test:
+        chaoschartversion        = myvars[chaoschartvlabel]
+        chaos_helm_repo_name     = myvars["ChaosHelmRepo"]
+        chaos_helm_repo_location = myvars["ChaosHelmLocation"]
 except KeyError as e:
     print(f"Unspecified configuration parameter {e} in {myvarsf}.")
     sys.exit(f"Consider running a git diff {myvarsf} to ensure no "
@@ -332,11 +340,13 @@ chaosmeshoptions=(
         '--set chaosDaemon.runtime=containerd '
         '--set chaosDaemon.socketPath=/run/containerd/containerd.sock')
 
-hz_crds = ['cluster', srvnm_manctr, 'bbclient', 'priclass']
+hz_crds = ['priclass', 'cluster', 'bbclient', 'bbclient_svc']
 for crd in hz_crds:
     templates[crd] = f'{crd}_crd_v.yaml'
 
-chaos_crds = ['chaos/workflow.yaml']
+chaos_baselatency_crd = 'templates/chaos_baselatency.yaml'
+chaos_splitdelay_crd = 'templates/chaos_splitdelay.yaml'
+chaos_crds = [chaos_splitdelay_crd, chaos_baselatency_crd]
 
 # Portfinder service
 
@@ -357,21 +367,14 @@ class Service:
     def get_uri(self):
         return f'{self.scheme}://{self.name}.{domain}:{self.lcl_port}'
 
+    def get_fqdn(self):
+        return f'{self.name}.{domain}'
+
 class Services:
     def __init__(self):
-        cluster_port = 5701
-
-        svcs_list: list[Service] = [
-                # FIXME tls should be enabled for manctr port 8443 it seems;
-                # but when I do so, I get this error back from requests.get:
-                # [SSL] record layer failure (_ssl.c:1006)
-                Service(srvnm_manctr, 'http', 8080, 8080),
-                Service(srvnm_cluster, 'hz', cluster_port, cluster_port)
-                ]
-
-#        for i in range(0, nhzmembers):
-#            svcs_list.append(Service(f'{srvnm_cluster}-{i}', 'hz', cluster_port
-#                                     + i, cluster_port))
+        svcs_list: set[Service] = {
+                Service(srvnm_bbclient, "bbclient", 4000, 4000)
+                }
 
         # Cluster services are more limited
         self.clust_svcs: dict[str, Service] = { i.name: i for i in svcs_list }
@@ -398,6 +401,9 @@ class Services:
 
     def get_rmt_port(self, name: str) -> int:
         return self.svcs[name].rmt_port
+
+    def get_uri(self, name: str) -> str:
+        return self.svcs[name].get_fqdn()
 
 svcs = Services()
 
@@ -641,13 +647,8 @@ def loadBalancerResponding(svc_name: str) -> bool:
     # It is assumed this function will only be called once the ssh tunnels
     # have been established between the localhost and the bastion host
     try:
-        svc = svcs.get(svc_name)
-        if svc_name == srvnm_manctr:
-            url = svc.get_uri()
-            r = requests.get(url, verify=svc.tls, timeout=5)
-            return r.status_code == 200
-        else:
-            return True
+        # TODO: Need to check bbclient connection to test if it's responding
+        return True
     except requests.exceptions.ConnectionError:
         return False
     except requests.exceptions.Timeout:
@@ -655,8 +656,6 @@ def loadBalancerResponding(svc_name: str) -> bool:
     except Exception as e:
         print(f'Unexpected exception {e}')
         return False
-
-all_get_svc = dict()
 
 # Get a list of load balancers, in the form of a dictionary mapping service
 # names to load balancer hostname or IP address. This function takes a list of
@@ -671,9 +670,6 @@ def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:
         r = runTry(f"{kube}{namesp} get svc -ojson {serv}".split())
         if r.returncode == 0:
             jout = json.loads(r.stdout)
-            if serv == 'manctr':
-                global all_get_svc
-                all_get_svc[time.time() * 1000] = jout
             assert "items" not in jout
             s = jout
 
@@ -745,32 +741,40 @@ class Tunnel:
         self.command = ("ssh -N -L{p}:{a}:{k} {bu}@{b}"
                         .format(p=lPort, a=rAddr, k=rPort, bu=bastionuser,
                                 b=bastionIp))
+        self.p: Optional[subprocess.Popen] = None
+
+    def open(self):
         print(self.command)
-        self.p = subprocess.Popen(self.command.split())
+        self.p = subprocess.Popen(self.command.split(),
+                                  stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.STDOUT)
         assert self.p is not None
         out.announce("Created tunnel " + str(self))
 
-    def __del__(self):
+    def close(self):
         out.announce("Terminating tunnel " + str(self))
-        if ns.summarise_ssh_tunnels:
-            print(self.command)
         assert self.p is not None
         self.p.terminate()
+        self.p = None
+
+    def __enter__(self):
+        self.open()
+        print(f'Tunnel OPENED: {self}')
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+        print(f'Tunnel CLOSED: {self}')
+        return False
 
     def __str__(self):
         tgtname = self.shortname
         if len(self.raddr) < 16:
             tgtname = "[{n}]{h}".format(n = self.shortname, h = self.raddr)
-        return "{l} -> {ra}:{rp} (PID {p})".format(l = self.lport, ra =
-                                                   tgtname, rp = self.rport, p = self.p.pid if self.p else "?")
-
-    def __enter__(self):
-        print(f'Tunnel OPENED: {self}')
-        return self
-
-    def __exit__(self, *_):
-        print(f'Tunnel CLOSED: {self}')
-        return False
+        s = '{l} -> {ra}:{rp}'.format(l=self.lport, ra=tgtname, rp=self.rport)
+        if self.p:
+            s += ' (PID {})'.format(self.p.pid)
+        return s
 
 # A class for logging pods
 class PodLog:
@@ -815,7 +819,7 @@ class PodLog:
 
             if subprocess_terminated:
                 msg=('Previous log ended w/ RC={rc}. '
-					 'Log restarting @{ts}: {me}'.format(
+                     'Log restarting @{ts}: {me}'.format(
                          rc=return_code,
                          ts=str(datetime.now().time()),
                          me=str(self)))
@@ -866,6 +870,7 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
     # Start up the tunnel to the Kubernetes API server
     tun = Tunnel("k8s-apiserver", bastion_ip, svcs.get_lcl_port("apiserv"),
                  k8s_server_name, svcs.get_rmt_port("apiserv"))
+    tun.open()
 
     # Now that the tunnel is in place, update our kubecfg with the address to
     # the tunnel, keeping everything else in place
@@ -877,48 +882,44 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
 
     return tun
 
-def ensure_cluster_is_started(skipClusterStart: bool,
-                              my_pub_ip: ipaddress.IPv4Address,
-                              my_ssh_pub_key: str) -> tuple[Tunnel, dict]:
-    env = {"ClusterName":         clustname,
-           "Domain":              domain,
-           "InstanceTypes":       instanceTypes,
-           "MaxPodsPerNode":      maxpodpnode,
-           "MyCIDR":              mySubnetCidr,
-           "MyPublicIP":          my_pub_ip,
-           'NetwkName':           netwkname,
-           "NodeCount":           nk8snodes,
-           "SmallInstanceType":   smallInstanceType,
-           "SshPublicKey":        my_ssh_pub_key,
-           "Region":              region,
-           "Target":              target,
-           "UserName":            username,
-           "ShortName":           shortname,
-           "Zone":                zone}
+def terraform_start() -> None:
+    # Get my public IP and SSH public key
+    #
+    my_pub_ip = get_my_pub_ip()
+    my_ssh_pub_key = get_ssh_pub_key()
+
+    # The terraform run. Perform an init, then an apply.
+    tfenv = {"ClusterName":         clustname,
+             "Domain":              domain,
+             "InstanceTypes":       instanceTypes,
+             "MaxPodsPerNode":      maxpodpnode,
+             "MyCIDR":              mySubnetCidr,
+             "MyPublicIP":          my_pub_ip,
+             'NetwkName':           netwkname,
+             "NodeCount":           nk8snodes,
+             "SmallInstanceType":   smallInstanceType,
+             "SshPublicKey":        my_ssh_pub_key,
+             "Region":              region,
+             "Target":              target,
+             "UserName":            username,
+             "ShortName":           shortname,
+             "Zone":                zone}
 
     assert target in clouds
 
     if target == "az":
-        env["ResourceGroup"] = resourcegrp
+        tfenv["ResourceGroup"] = resourcegrp
     elif target == "gcp":
-        env["GcpProjectId"] = gcpproject
-        env["GcpAccount"] = gcpaccount
+        tfenv["GcpProjectId"] = gcpproject
+        tfenv["GcpAccount"] = gcpaccount
 
-    parameteriseTemplate(tfvars, tfdir, env)
+    parameteriseTemplate(tfvars, tfdir, tfenv)
 
-    # The terraform run. Perform an init, then an apply.
-    if not skipClusterStart:
-        out.announce('running terraform init & apply')
-        runStdout(f"{tf} init -upgrade -input=false".split())
-        runStdout(f"{tf} apply -auto-approve -input=false".split())
+    out.announce('running terraform init & apply')
+    runStdout(f"{tf} init -upgrade -input=false".split())
+    runStdout(f"{tf} apply -auto-approve -input=false".split())
 
-    # Get variables returned from terraform run
-    env = get_output_vars()
-
-    # Start up ssh tunnels via the bastion, so we can run kubectl locally from
-    # the workstation
-    tun = setup_bastion_tunnel(env['bastion_address'], env['k8s_api_server'])
-
+def wait_until_k8s_is_ready() -> None:
     # Don't continue until all nodes are ready
     out.announce("Waiting for nodes to come online")
     out.spinWait(lambda: waitUntilNodesReady(nk8snodes))
@@ -926,7 +927,6 @@ def ensure_cluster_is_started(skipClusterStart: bool,
     # Don't continue until all K8S system pods are ready
     out.announce("Waiting for K8S system pods to come online")
     out.spinWait(lambda: waitUntilPodsReady("kube-system"))
-    return tun, env
 
 # Pods sometimes get stuck in Terminating phase after a helm upgrade.
 # Kill these off immediately to save time and they will restart quickly.
@@ -942,6 +942,12 @@ def killAllTerminatingPods(namespace: str) -> None:
                        "--grace-period=60".split())
             if r.returncode == 0:
                 print(f"Cleaning up terminating pod {name}")
+
+def kube_force_delete_all_pods_for_selector(namespace: str,
+                                            selector: str) -> None:
+    out.announce(f"Force-deleting all pods for {selector}")
+    runStdout(f"{kube} -n {namespace} delete pod -l{selector} --force "
+              "--grace-period=0".split())
 
 # We run this command in 'delete' mode to get rid of the DNS record sets right
 # before shutdown. Technically it shouldn't be needed for AWS or GCP, both of
@@ -1011,44 +1017,55 @@ def set_dns_for_lbs(zid: str, # Zone ID
                    '--no-cli-pager').split())
     # Nothing more to do for Azure or GCP
 
-def start_tunnel_to_lbs(bastionIp: str) -> tuple[list[Tunnel], dict[str, str]]:
-    tuns: list[Tunnel] = []
+def wait_for_chaosmesh_pods() -> None:
+    namespace = chaos_namespace
+    cm_containers = ChaosMeshContainers()
 
-    out.announce("Waiting for pods to be ready")
-    expectedContainers = numberOfContainers(nhzmembers, nhzclients)
+    out.announce(f"Waiting for {namespace} pods to be ready")
+    expectedContainers = cm_containers.numberOfContainers(nhzmembers, nhzclients)
     out.spinWait(lambda: waitUntilPodsReady(hz_namespace,
                                             expectedContainers))
 
-    out.announce("Waiting for deployments to be available")
-    expectedReplicas = numberOfReplicas(nhzmembers, nhzclients)
-    out.spinWait(lambda: waitUntilDeploymentsAvail(hz_namespace,
-                                                   expectedReplicas))
+    out.announce(f"Waiting for {namespace} deployments to be available")
+    out.spinWait(lambda: waitUntilDeploymentsAvail(hz_namespace))
 
+def wait_for_hazelcast_pods() -> None:
+    hz_containers = HazelcastContainers()
+
+    out.announce(f"Waiting for {hz_namespace} pods to be ready")
+    expectedContainers = hz_containers.numberOfContainers(nhzmembers, nhzclients)
+    out.spinWait(lambda: waitUntilPodsReady(hz_namespace, expectedContainers))
+
+    out.announce(f"Waiting for {hz_namespace} deployments to be available")
+    out.spinWait(lambda: waitUntilDeploymentsAvail(hz_namespace))
+
+def wait_for_hazelcast_svcs(check_responding: bool = False) -> None:
     # now the load balancers need to be running with their IPs assigned
-    out.announce("Waiting for load-balancers to launch")
-    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_clust_svc_names(),
-                                                  hz_namespace))
+    verb = 'respond' if check_responding else 'launch'
+    svcnames = list(svcs.get_clust_svc_names())
+    svcnamesstr = ", ".join(svcnames)
+    out.announce(f'Waiting for {hz_namespace} LBs to {verb}: {svcnamesstr}')
+    out.spinWait(lambda: waitUntilLoadBalancersUp(svcnames, hz_namespace,
+                                                  check_responding))
+
+def create_tunnels_to_hz_svcs(bastion_addr: str) -> tuple[list[Tunnel],
+                                                          dict[str, str]]:
+    tuns: list[Tunnel] = []
+    svcnames = list(svcs.get_clust_svc_names())
 
     #
     # Get the DNS name of the load balancers we've created
     #
-    lbs = getLoadBalancers(svcs.get_clust_svc_names(), hz_namespace)
+    lbs = getLoadBalancers(svcnames, hz_namespace)
 
     # we should have a load balancer for every service we'll forward
-    assert len(lbs) == len(svcs.get_clust_svc_names())
-    for svcname in svcs.get_clust_svc_names():
+    assert len(lbs) == len(svcnames)
+    for svcname in svcnames:
         assert svcname in lbs
-        tuns.append(Tunnel(svcname,
-                           ipaddress.IPv4Address(bastionIp),
-                           svcs.get_lcl_port(svcname),
-                           lbs[svcname],
-                           svcs.get_rmt_port(svcname)))
-
-    # make sure the load balancers are actually responding
-    out.announce("Waiting for load-balancers to start responding")
-    out.spinWait(lambda: waitUntilLoadBalancersUp(svcs.get_clust_svc_names(),
-                                                  hz_namespace,
-                                                  checkConnectivity = True))
+        tun = Tunnel(svcname, ipaddress.IPv4Address(bastion_addr),
+                     svcs.get_lcl_port(svcname), lbs[svcname],
+                     svcs.get_rmt_port(svcname))
+        tuns.append(tun)
 
     return tuns, lbs
 
@@ -1062,8 +1079,8 @@ def convert_zulu_time_to_timestamp(datetimestr: str) -> float:
 def k8s_secrets_list(namespace: str):
     installed_secrets = {}
     x = runCollect([kube, '-n', namespace, 'get', 'secrets',
-                   '-o=jsonpath={range $.items[*].metadata}'
-                   '{.name}{" "}{.creationTimestamp}{" "}{end}'])
+                    '-o=jsonpath={range $.items[*].metadata}'
+                    '{.name}{" "}{.creationTimestamp}{" "}{end}'])
     if x:
         s = x.split()
         z = zip(s[0::2], s[1::2])
@@ -1071,8 +1088,7 @@ def k8s_secrets_list(namespace: str):
     return installed_secrets
 
 def k8s_secrets_create(namespace: str,
-                       secrets_to_add: dict[str, dict[str, str]]) \
-        -> dict[str, str]:
+                       secrets_to_add: dict[str, dict[str, str]]) -> dict[str, str]:
     out.announce('Ensuring secrets are installed in K8S')
     env = {}
     installed_secrets = k8s_secrets_list(namespace)
@@ -1135,7 +1151,15 @@ def k8s_pvc_delete(namespace: str):
                                   'pvc', '-ojson']))
     for pvc in pvcs['items']:
         pvcname = pvc['metadata']['name']
-        runStdout(f'{kube} -n {namespace} delete pvc {pvcname}'.split())
+        runStdout(f'{kube} -n {namespace} delete pvc {pvcname} '
+                  '--grace-period=0 --force'.split())
+
+def k8s_restart(namespace: str, deployment: str):
+    out.announce(f'Restarting and waiting for {deployment}...')
+    runStdout([kube, "-n", namespace, "rollout", "restart", deployment])
+    runStdout([kube, "rollout", "status", "--timeout=0", "--watch",
+               deployment])
+    print(f'Rolling restart of {deployment} complete')
 
 def helmTry(namespace: str, cmd: str) -> subprocess.CompletedProcess:
     return runTry(['helm', '-n', namespace] + cmd.split())
@@ -1179,7 +1203,7 @@ def helm_set_up_repo(namespace: str,
     crepouser = ''
     crepopass = ''
     helmCmd(namespace, f'repo add {crepouser} {crepopass} '
-         f'{helm_repo_name} {helm_repo_location}')
+            f'{helm_repo_name} {helm_repo_location}')
 
 def helmGetNamespaces() -> list:
     n = []
@@ -1228,9 +1252,9 @@ def helmWhichChartInstalled(namespace: str, module: str) -> Optional[str]:
 
 def helm_install_release(namespace: str,
                          reponame: str,
-						 module: str,
-						 version: str,
-						 options: str = "") -> None:
+                         module: str,
+                         version: str,
+                         options: str = "") -> None:
     chart = helmWhichChartInstalled(namespace, module)
     newchart = charts[module] + "-" + version # which one to install?
 
@@ -1246,8 +1270,9 @@ def helm_install_release(namespace: str,
         astr = "Upgrading {ns}/{r} v{v}".format(ns=namespace,
                                                 r=releases[module],
                                                 v=version)
-        if chart != newchart:
-            astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
+
+    if chart != newchart:
+        astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
         out.announce(astr)
         helmIgnore(namespace, 'upgrade {r} {repo}/{c} --version {v} {o}'
                    .format(r=releases[module], repo=reponame, c=charts[module],
@@ -1255,12 +1280,14 @@ def helm_install_release(namespace: str,
     else:
         print(f'{namespace}/{chart} values unchanged ➼ avoiding helm upgrade')
 
-def KubeApplyCrd(crd: str, namespace: str, env: dict = {}) -> None:
+def kube_crd_apply(crd: str, namespace: str) -> None:
+    out.announce(f'Applying CRD "{crd}"')
+    runStdout(f'{kube} -n {namespace} apply -f {crd}'.split())
+
+def kube_crd_apply_templated(crd: str, namespace: str, env: dict = {}) -> None:
     # Ignore changes, apply every time
     _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
-
-    out.announce(f'Applying CRD "{crd}"')
-    runStdout(f'{kube} -n {namespace} apply -f {yamltmp}'.split())
+    kube_crd_apply(yamltmp, namespace)
 
 def k8s_crd_delete(filename: str, namespace: str):
     if bbio.readableFile(filename):
@@ -1284,7 +1311,7 @@ def delete_all_services(namespace: str) -> bool:
     # https://github.com/kubernetes/kubernetes/issues/93390
     out.announce(f"Deleting all k8s services for namespace {namespace}")
     lbs_before: dict[str, str] = getLoadBalancers(svcs.get_clust_svc_names(),
-                                           namespace)
+                                                  namespace)
 
     # Summarize which LBs were there before attempt to kill services
     if len(lbs_before) == 0:
@@ -1318,27 +1345,8 @@ def helm_uninstall_releases_and_kill_pods(namespace: str):
             print(f"Unable to uninstall release {release}: {e}")
     killAllTerminatingPods(namespace)
 
-def svcStart(secrets: dict[str, dict[str, str]],
-             skipClusterStart: bool = False) -> list[Tunnel]:
-    tuns: list[Tunnel] = []
-
-    env: dict[str, str] = {}
-
-    # Get my public IP and SSH public key
-    #
-    my_pub_ip = get_my_pub_ip()
-    my_ssh_pub_key = get_ssh_pub_key()
-
-    #
-    # Infrastructure first. Create the cluster using Terraform.
-    #
-    with Timer('set up infrastructure'):
-        tun, env = ensure_cluster_is_started(skipClusterStart, my_pub_ip,
-                                             my_ssh_pub_key)
-        tuns.append(tun)
-
-    bastion = env['bastion_address']
-
+def start_await_hz_and_chaos_pods_srvcs(env: dict[str, str],
+                                        secrets: dict[str, dict[str, str]]) -> None:
     # Do this first so all resources install into the namespace
     with Timer(f'set up {hz_namespace} namespace objects in K8S'):
         #
@@ -1348,12 +1356,11 @@ def svcStart(secrets: dict[str, dict[str, str]],
         k8s_set_context_namespace(hz_namespace) # default namespace
 
         env |= {
-            appversionlabel: appversion,
-            'HzClientCount': nhzclients,
-            'HzMemberCount': nhzmembers,
-            'SrvNmCluster': srvnm_cluster,
-            'SrvNmManctr': srvnm_manctr
-            }
+                appversionlabel: appversion,
+                'HzClientCount': nhzclients,
+                'HzMemberCount': nhzmembers,
+                'SrvNmCluster': srvnm_cluster
+                }
 
         env |= k8s_secrets_create(hz_namespace, secrets)
 
@@ -1364,50 +1371,55 @@ def svcStart(secrets: dict[str, dict[str, str]],
         helm_install_release(hz_namespace, hz_helm_repo_name, operator_module,
                              oprchartversion)
         for crd in hz_crds:
-            KubeApplyCrd(crd, hz_namespace, env)
+            kube_crd_apply_templated(crd, hz_namespace, env)
+
+        kube_force_delete_all_pods_for_selector(hz_namespace, devpodsel)
+        kube_force_delete_all_pods_for_selector(hz_namespace, bbclientpodsel)
 
         # Speed up the deployment of the updated pods by killing the old ones
         killAllTerminatingPods(hz_namespace)
+        wait_for_hazelcast_pods()
+        wait_for_hazelcast_svcs()
 
-    with Timer(f'set up {chaos_namespace} namespace objects in K8S'):
-        #
-        # Chaos-Mesh namespace objects
-        #
-        k8s_create_namespace(chaos_namespace)
+    if ns.test:
+        with Timer(f'set up {chaos_namespace} namespace objects in K8S'):
+            #
+            # Chaos-Mesh namespace objects
+            #
+            k8s_create_namespace(chaos_namespace)
 
-        # Set up the Chaos Mesh repo if not already done
-        helm_set_up_repo(chaos_namespace, chaos_helm_repo_name,
-                         chaos_helm_repo_location)
+            # Set up the Chaos Mesh repo if not already done
+            helm_set_up_repo(chaos_namespace, chaos_helm_repo_name,
+                             chaos_helm_repo_location)
 
-        helm_install_release(chaos_namespace, chaos_helm_repo_name,
-                             chaosmesh_module, chaoschartversion,
-                             chaosmeshoptions)
+            helm_install_release(chaos_namespace, chaos_helm_repo_name,
+                                 chaosmesh_module, chaoschartversion,
+                                 chaosmeshoptions)
 
-        # TODO: There is a bug in chaos-mesh in the auth module, that prevents
-        # chaos-mesh from working across namespaces. This is the workaround:
-        runIgnore(f'{kube} -n {chaos_namespace} delete '
-                  '--ignore-not-found=true '
-                  'validatingwebhookconfigurations.admissionregistration.k8s.io '
-                  'chaos-mesh-validation-auth'.split())
+            # TODO: There is a bug in chaos-mesh in the auth module, that prevents
+            # chaos-mesh from working across namespaces. This is the workaround:
+            runIgnore(f'{kube} -n {chaos_namespace} delete '
+                      '--ignore-not-found=true '
+                      'validatingwebhookconfigurations.admissionregistration.k8s.io '
+                      'chaos-mesh-validation-auth'.split())
 
-        # Speed up the deployment of the updated pods by killing the old ones
-        killAllTerminatingPods(chaos_namespace)
+            # Speed up the deployment of the updated pods by killing the old ones
+            killAllTerminatingPods(chaos_namespace)
 
-    # Wait for pods & LBs to become ready
-    # Set up port forward tunnels for LBs
-    new_tuns, lbs = start_tunnel_to_lbs(bastion)
+            wait_for_chaosmesh_pods()
 
-    # Add CNAMES or A records for DNS for new LBs
-    set_dns_for_lbs(env['zone_id'], lbs)
-
-    tuns.extend(new_tuns)
-    return tuns
+            # Get rid of any existing split-delay workflow, then apply the
+            # chaos-mesh workflow for some (small) increased latency between
+            # members. Note that this must be applied in the Hazelcast namespace,
+            # not in the chaos-mesh namespace.
+            k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
+            kube_crd_apply(chaos_baselatency_crd, hz_namespace)
 
 def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion to allow our commands to flow
     # through to the K8S cluster.
     out.announce("Re-establishing bastion tunnel")
-    lbs_were_cleaned = False
+    lbs_were_cleaned = True
 
     try:
         env = get_output_vars()
@@ -1425,33 +1437,37 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
             except CalledProcessError:
                 print('Unable to delete DNS record sets (do they exist?)')
 
-            with Timer('teardown of K8S resources'):
-                # tunnel established. Now delete things in reverse order to how
-                # they were created.
+            # tunnel established. Now delete things in reverse order to how
+            # they were created.
 
-                # Delete all the CRDs applied. Note that the chaos-mesh
-                # workflow is installed in the Hz namespace!
-                for crd in chaos_crds:
-                    k8s_crd_delete(crd, hz_namespace)
+            if ns.test:
+                with Timer('teardown of chaos-mesh K8S resources'):
+                    # Delete all the CRDs applied. Note that the chaos-mesh
+                    # workflow is installed in the Hazelcast namespace, not the
+                    # chaos-mesh namespace.
+                    for crd in chaos_crds:
+                        k8s_crd_delete(crd, hz_namespace)
+                    helm_uninstall_releases_and_kill_pods(chaos_namespace)
+                    if ns.test:
+                        lbs_were_cleaned = (lbs_were_cleaned and
+                                            delete_all_services(chaos_namespace))
+                    k8s_secrets_delete(chaos_namespace)
+                    k8s_pvc_delete(chaos_namespace)
+                    k8s_delete_namespace(chaos_namespace)
+
+            with Timer('teardown of K8S resources'):
                 for crd in hz_crds:
                     k8s_crd_delete_templated(crd, hz_namespace, env)
 
                 helm_uninstall_releases_and_kill_pods(hz_namespace)
-                helm_uninstall_releases_and_kill_pods(chaos_namespace)
 
                 # Make sure to get rid of all services, in case they weren't
                 # already removed. We need to make sure we don't leak LBs.
-                lbs_were_cleaned = delete_all_services(hz_namespace)
                 lbs_were_cleaned = (lbs_were_cleaned and
-                                    delete_all_services(chaos_namespace))
+                                    delete_all_services(hz_namespace))
 
-                k8s_secrets_delete(chaos_namespace)
                 k8s_secrets_delete(hz_namespace)
-
-                k8s_pvc_delete(chaos_namespace)
                 k8s_pvc_delete(hz_namespace)
-
-                k8s_delete_namespace(chaos_namespace)
                 k8s_delete_namespace(hz_namespace)
     except (MissingTerraformOutput):
         out.announce('Terraform objects partly or fully destroyed')
@@ -1468,10 +1484,6 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
     out.announce(f"Ensuring cluster {clustname} is deleted")
     with Timer('stopping cluster'):
         runStdout(f"{tf} destroy -auto-approve".split())
-
-def fqdnToDc(fqdn: str) -> str:
-    dcs = fqdn.split('.')
-    return ",".join([f"dc={d}" for d in dcs])
 
 def getCloudSummary() -> List[str]:
     if target == "aws":
@@ -1535,13 +1547,14 @@ def load_secrets_from_file() -> dict[str, dict[str, str]]:
             # openssl always returns 0 as the return code, so we have to
             # actually parse the output to see if the certificate is valid
             try:
-                output = runCollect("openssl verify -untrusted {ch} {c}".format(ch
-                                                                                = values["chain"], c = values["cert"]).split()).splitlines()
+                output = runCollect("openssl verify -untrusted {ch} {c}"
+                                    .format(ch=values["chain"],
+                                            c=values["cert"]).split()).splitlines()
                 if output[-1] == values['cert'] + ': OK':
                     print('Verified certificate ' + values["cert"])
             except CalledProcessError:
-                print("Unable to verify cert {c} & chain {ch}".format(c =
-                                                                      values["cert"], ch = values["chain"]))
+                print("Unable to verify cert {c} & chain {ch}"
+                      .format(c=values["cert"], ch=values["chain"]))
                 sys.exit(-1)
         secrets[groupname] = values
 
@@ -1752,6 +1765,132 @@ def log_hz_cluster_member(ss_selector: str, podname: str) -> PodLog:
                   ",".join(selectors),
                   container='hazelcast')
 
+def bbclient_communicate() -> str:
+    dev0_pod_ip = runCollect([kube, 'get', 'pods',
+                              '-o=jsonpath={.items[?(@.metadata.name=="' +
+                              srvnm_cluster + "-0" +
+                              '")].status.podIP}'])
+    def send_and_check_resp(command: str,
+                            can_retry: bool,
+                            verbose: bool = True) -> tuple[bool, str]:
+        rc_is_ok = False
+        return_val: str = ""
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((svcs.get_uri(srvnm_bbclient),
+                       svcs.get_lcl_port(srvnm_bbclient)))
+
+            # Client always initiates send...
+            f = s.makefile("rw")
+            if verbose:
+                print(f'Sending: {command}')
+            f.write(command + "\n")
+            f.flush()
+            # ...then awaits the response
+            line = f.readline()
+
+            if line.startswith("BB 200 OK"):
+                rc_is_ok = True
+                slices = line.split(":", 1)
+                if len(slices) == 2:
+                    return_val = slices[1].strip()
+                    print(f'Got back: {return_val}')
+            elif line.startswith("BB 408 TIMEOUT") and can_retry:
+                rc_is_ok = False
+            else:
+                sys.exit("Got unexpected result: " + line)
+            s.close()
+
+        return rc_is_ok, return_val
+
+    stages: list[dict] = [{'command': 'HELO', 'can_retry': False},
+                          {'command': f'ADDR {dev0_pod_ip}', 'can_retry': False},
+                          {'command': 'TEST', 'can_retry': True},
+                          {'command': 'STRT', 'can_retry': False},
+                          {'command': 'WTST', 'can_retry': True},
+                          {'command': 'STOP', 'can_retry': False}]
+
+    return_val: str = ""
+
+    for stage in stages:
+        verbose = True
+        while True:
+            if stage['command'] == 'STRT':
+                kube_crd_apply(chaos_splitdelay_crd, hz_namespace)
+            elif stage['command'] == 'STOP':
+                k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
+
+            rc_is_ok, rval = send_and_check_resp(stage['command'],
+                                                 stage['can_retry'],
+                                                 verbose)
+
+            if rc_is_ok:
+                print('SUCCESS')
+                if rval:
+                    print(f'RETURN VALUE: {rval}')
+                    return_val = rval
+                break
+            else: # retry
+                if verbose:
+                    print("Waiting on server...", end='', flush=True)
+                    verbose = False
+                else:
+                    print('.', end='', flush=True)
+                time.sleep(5)
+                continue
+
+    return return_val
+
+#def main_test() -> None:
+#    test_output_fn = tmp_filename('test_output', 'out', random=True)
+#    print(f'Writing test output to {test_output_fn}')
+#    with open(test_output_fn, 'w') as test_output_fh:
+#        for i in range(0, 10):
+#            if not ns.skip_cluster_start:
+#                with Timer('set up infrastructure in Terraform'):
+#                    terraform_start()
+#            env = get_output_vars()
+#            bastion_addr = env['bastion_address']
+#            k8s_api_addr = env['k8s_api_server']
+#            with setup_bastion_tunnel(bastion_addr,
+#                                      k8s_api_addr) as bastion_tun:
+#            start_await_hz_and_chaos_pods_srvcs(secrets, ns.skip_cluster_start)
+#
+#            # Wait for pods & LBs to become ready
+#            # Set up port forward tunnels for LBs
+#            hz_tuns, hz_srv_lbs = create_tunnels_to_hz_svcs(bastion_addr)
+#            wait_for_hazelcast_svcs(check_responding = True)
+#
+#            # Set up DNS to new Hazelcast services
+#            set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
+#
+#            with ExitStack() as stack:
+#                for tun in hz_tuns:
+#                    stack.enter_context(tun)
+#                podnames = get_hz_cluster_podnames(ss_selector)
+#                logs = [stack.enter_context(log_hz_cluster_member(ss_selector,
+#                                                                  podname))
+#                        for podname in podnames]
+#                for log in logs:
+#                    out.announce("Log started for " + str(log))
+#
+#                out.announceBox(f'Your {rsaPub} public key has been installed into '
+#                                f'the bastion server, so you can ssh there now '
+#                                f'(user "{bastionuser}").')
+#                y = cloud_summary + (['Service is started on:'] +
+#                                     [f'[{s.name}] {s.get_uri()}' for s in svcs.get_clust_all()])
+#                out.announceLoud(y)
+#                return_val = bbclient_communicate()
+#                if return_val:
+#                    print(f'Writing return_val={return_val} '
+#                          f'to {test_output_fn}')
+#                    test_output_fh.write(return_val + '\n')
+#                    test_output_fh.flush()
+#                #input("Press return key to quit and terminate tunnels!")
+#                #out.announceLoud(["Terminating all tunnels and logging"])
+#            for tun in tuns:
+#                tun.close()
+
 def main() -> None:
     if ns.progmeter_test:
         spinWaitCGTest()
@@ -1767,43 +1906,53 @@ def main() -> None:
     if target == "gcp":
         out.announce(f"GCP project is {gcpproject}")
     print(f"Your CIDR is {mySubnetCidr}")
-    tuns: list[Tunnel] = []
 
-    y = getCloudSummary()
+    cloud_summary = getCloudSummary()
 
     if ns.command not in ('start', 'stop'):
         sys.exit(f'Invalid command {ns.command}')
 
     if ns.command == 'stop':
         svcStop(ns.empty_nodes)
-        y += ['Service is stopped']
+        y = cloud_summary + ['Service is stopped']
         out.announceLoud(y)
         return
 
     # ns.command == 'start'
 
-    tuns = svcStart(secrets, ns.skip_cluster_start)
-    ss_selector = 'app.kubernetes.io/instance=dev'
-    podnames = get_hz_cluster_podnames(ss_selector)
-    with ExitStack() as stack:
-        logs = [stack.enter_context(log_hz_cluster_member(ss_selector,
-                                                          podname))
-                                    for podname in podnames]
-        for log in logs:
-            out.announce("Log started for " + str(log))
+    if not ns.skip_cluster_start:
+        with Timer('set up infrastructure in Terraform'):
+            terraform_start()
 
-        out.announceBox(f'Your {rsaPub} public key has been installed into '
-                        f'the bastion server, so you can ssh there now '
-                        f'(user "{bastionuser}").')
-        y += (['Service is started on:'] +
-              [f'[{s.name}] {s.get_uri()}' for s in svcs.get_clust_all()])
-        out.announceLoud(y)
-        input("Press return key to quit and terminate tunnels!\n")
+    env = get_output_vars()
+    bastion_addr = env['bastion_address']
+    k8s_api_addr = env['k8s_api_server']
+    with setup_bastion_tunnel(bastion_addr,
+                              k8s_api_addr):
+        start_await_hz_and_chaos_pods_srvcs(env, secrets)
 
-    if ns.summarise_ssh_tunnels:
-        lines: list[str] = ['Summary of tunnels:']
-        for tun in tuns:
-            lines.append(tun.command)
-        out.announceLoud(lines)
+        # Create--but do not start--port-forward tuns for Hazelcast svc LBs
+        hz_tuns, hz_srv_lbs = create_tunnels_to_hz_svcs(bastion_addr)
+
+        # Wait until Hz svc LBs start responding
+        wait_for_hazelcast_svcs(check_responding = True)
+
+        # Set up cloud DNS to new Hazelcast services
+        set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
+
+        with ExitStack() as stack:
+            # Now actually open the tunnels using a resource manager
+            for tun in hz_tuns:
+                stack.enter_context(tun)
+
+            out.announceBox(f'Your {rsaPub} public key has been installed into '
+                            f'the bastion server {bastion_addr}, so you can '
+                            f'ssh there now (user "{bastionuser}").')
+            y = cloud_summary + (['Service is started on:'] +
+                                 [f'[{s.name}] {s.get_uri()}'
+                                  for s in svcs.get_clust_all()])
+            out.announceLoud(y)
+            input("Press return key to quit and terminate tunnels!")
+            out.announceLoud(["Terminating all tunnels and logging"])
 
 main()

@@ -1,20 +1,20 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: Workflow
 metadata:
-  name: workflow-network-chaos
+  name: workflow-baselatency
   namespace: hazelcast
 spec:
-  entry: baselatency
+  entry: workflow-baselatency-pl-01-and-01to2
   templates:
-    - name: baselatency
+    - name: workflow-baselatency-pl-01-and-01to2
       templateType: Parallel
       deadline: 4h
       children:
-        - workflow-network-intra-az-delay-0-to-1
-        - workflow-network-intra-az-delay-01-to-2
-    - name: workflow-network-intra-az-delay-0-to-1
+        - workflow-baselatency-intra-az-delay-0-to-1
+        - workflow-baselatency-intra-az-delay-01-to-2
+    - name: workflow-baselatency-intra-az-delay-0-to-1
       templateType: NetworkChaos
-      deadline: 4h
+      deadline: 2h
       networkChaos:
         direction: both
         action: delay
@@ -22,23 +22,24 @@ spec:
         selector:
           namespaces:
             - hazelcast
-          labelSelectors:
-            'apps.kubernetes.io/pod-index': '0'
-          labelSelectors:
+          expressionSelectors:
+            - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+            - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['0'] }
         target:
           mode: all
           selector:
             namespaces:
               - hazelcast
-            labelSelectors:
-              'apps.kubernetes.io/pod-index': '1'
+            expressionSelectors:
+              - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+              - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['1'] }
         delay:
           latency: '2ms'
           jitter: '1ms'
           correlation: '75'
-    - name: workflow-network-intra-az-delay-01-to-2
+    - name: workflow-baselatency-intra-az-delay-01-to-2
       templateType: NetworkChaos
-      deadline: 4h
+      deadline: 2h
       networkChaos:
         direction: both
         action: delay
@@ -46,17 +47,17 @@ spec:
         selector:
           namespaces:
             - hazelcast
-          labelSelectors:
-            'apps.kubernetes.io/pod-index': '2'
-          labelSelectors:
+          expressionSelectors:
+            - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+            - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['2'] }
         target:
           mode: all
           selector:
             namespaces:
               - hazelcast
-            labelSelectors:
-              'apps.kubernetes.io/pod-index': '0'
-              'apps.kubernetes.io/pod-index': '1'
+            expressionSelectors:
+              - { key: 'app.kubernetes.io/instance', operator: In, values: ['dev'] }
+              - { key: 'apps.kubernetes.io/pod-index', operator: In, values: ['0', '1'] }
         delay:
           latency: '8ms'
           jitter: '1ms'

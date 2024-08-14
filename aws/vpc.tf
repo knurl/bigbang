@@ -67,7 +67,7 @@ module "vpc_endpoints" {
   vpc_id = module.vpc.vpc_id
 
   create_security_group      = true
-  security_group_name_prefix = "${var.network_name}-vpcep-"
+  security_group_name_prefix = "${var.network_name}-vpcep"
   security_group_description = "VPC endpoint security group"
   security_group_rules = {
     ingress_https = {
