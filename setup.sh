@@ -68,6 +68,10 @@ if is_ubuntu ; then
     curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
     tar -xf google-cloud-cli-linux-x86_64.tar.gz
     ./google-cloud-sdk/install.sh -q
+    echo "source completion.bash.inc" >> ~/.bashrc
+    echo "source path.bash.inc" >> ~/.bashrc
+    echo "source completion.zsh.inc" >> ~/.zshrc
+    echo "source path.zsh.inc" >> ~/.zshrc
     popd
 else
     p "installing brew"
@@ -127,31 +131,33 @@ pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor mypy type
 
 # Configure AWS
 #
-#p "configuring AWS profile"
-#if [[ ! -f $HOME/.aws/config ]]; then
-#    echo Configuring SSO login. When prompted below...
-#    echo --> SSO Start URL as https://hazelcast.awsapps.com/start
-#    echo --> When prompted below, specify SSO Region as us-east-1
-#    aws configure sso
-#else
-#    echo "AWS config file already exists"
-#fi
+p "configuring AWS profile"
+if [[ ! -f $HOME/.aws/config ]]; then
+    echo Configuring SSO login. When prompted below...
+    echo --> SSO Start URL as https://hazelcast.awsapps.com/start
+    echo --> When prompted below, specify SSO Region as us-east-1
+    aws configure sso
+else
+    echo "AWS config file already exists"
+fi
 
-# Configure Azure
-#
-#p "configuring Azure profile"
-#az configure
-#az login
+ Configure Azure
+
+p "configuring Azure profile"
+if [[ ! -d $HOME/.azure ]]; then
+    az configure
+    az login
+else
+    echo "Azure config files already exist"
 
 pip install google-cloud-bigquery google-cloud-storage
-gcloud components install gke-gcloud-auth-plugin
+gcloud components update
+gcloud components install gke-gcloud-auth-plugin --quiet
 if [[ ! -d $HOME/.config/gcloud ]]; then
     gcloud init
 else
-    echo "GCP config already set up"
+    echo "GCP config files already exist"
 fi
-
-gcloud components update
 
 p "***BIGBANG INSTALLATION COMPLETE***"
 
