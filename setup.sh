@@ -66,6 +66,11 @@ if is_ubuntu ; then
     sudo snap install terraform --classic
 
     p "Installing google-cloud-cli"
+
+    # First, remove any gcloud installation done by snap
+    sudo snap remove gcloud-cloud-cli
+
+    # Now install it without a package manager
     GCLOUDDIR=$HOME/gcloud-sdk
     mkdir -p $GCLOUDDIR
     pushd $GCLOUDDIR
@@ -139,8 +144,8 @@ pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor mypy type
 p "configuring AWS profile"
 if [[ ! -f $HOME/.aws/config ]]; then
     echo Configuring SSO login. When prompted below...
-    echo --> SSO Start URL as https://hazelcast.awsapps.com/start
-    echo --> When prompted below, specify SSO Region as us-east-1
+    echo SSO Start URL as https://hazelcast.awsapps.com/start
+    echo When prompted below, specify SSO Region as us-east-1
     aws configure sso
 else
     echo "AWS config file already exists"
