@@ -6,15 +6,19 @@ function p {
     echo -e "${BPurple}==> $*${Color_Off}"
 }
 
-function ensure_in_profile {
+function ensure_in_file {
     LINE=$1
-    FILE=~/.profile
+    FILE=$2
     if ! grep -qF -- "$LINE" "$FILE"; then
 	echo Inserting "$LINE" into "$FILE"
 	echo "$LINE" >> "$FILE"
     else
 	echo "$FILE" already has "$LINE"
     fi
+}
+
+function ensure_in_profile {
+    ensure_in_file $1 ~/.profile
 }
 
 unameOut=$(uname -s)
@@ -68,10 +72,10 @@ if is_ubuntu ; then
     curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
     tar -xf google-cloud-cli-linux-x86_64.tar.gz
     ./google-cloud-sdk/install.sh -q
-    echo "source completion.bash.inc" >> ~/.bashrc
-    echo "source path.bash.inc" >> ~/.bashrc
-    echo "source completion.zsh.inc" >> ~/.zshrc
-    echo "source path.zsh.inc" >> ~/.zshrc
+    ensure_in_file "source $GCLOUDDIR/completion.bash.inc" ~/.bashrc
+    ensure_in_file "source $GCLOUDDIR/path.bash.inc" ~/.bashrc
+    ensure_in_file "source $GCLOUDDIR/completion.zsh.inc" ~/.zshrc
+    ensure_in_file "source $GCLOUDDIR/path.zsh.inc" ~/.zshrc
     popd
 else
     p "installing brew"
@@ -129,6 +133,7 @@ fi
 p "installing python dependencies for bigbang"
 pip install --upgrade jinja2 pyyaml psutil requests tabulate termcolor mypy types-requests
 
+#
 # Configure AWS
 #
 p "configuring AWS profile"
@@ -141,15 +146,20 @@ else
     echo "AWS config file already exists"
 fi
 
- Configure Azure
-
+#
+# Configure Azure
+#
 p "configuring Azure profile"
 if [[ ! -d $HOME/.azure ]]; then
     az configure
     az login
 else
     echo "Azure config files already exist"
+fi
 
+# 
+# Configure GCP
+#
 pip install google-cloud-bigquery google-cloud-storage
 gcloud components update
 gcloud components install gke-gcloud-auth-plugin --quiet
