@@ -71,9 +71,10 @@ if is_ubuntu ; then
     sudo snap remove gcloud-cloud-cli
 
     # Now install it without a package manager
-    GCLOUDDIR=$HOME/gcloud-sdk
-    mkdir -p $GCLOUDDIR
-    pushd $GCLOUDDIR
+    GCLOUDINSTALLDIR=$HOME/gcloud-sdk
+    GCLOUDDIR=$GCLOUDINSTALLDIR/google-cloud-sdk
+    mkdir -p $GCLOUDINSTALLDIR
+    pushd $GCLOUDINSTALLDIR
     curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
     tar -xf google-cloud-cli-linux-x86_64.tar.gz
     ./google-cloud-sdk/install.sh -q
@@ -166,6 +167,7 @@ fi
 # Configure GCP
 #
 pip install google-cloud-bigquery google-cloud-storage
+bash -l
 gcloud components update
 gcloud components install gke-gcloud-auth-plugin --quiet
 if [[ ! -d $HOME/.config/gcloud ]]; then
