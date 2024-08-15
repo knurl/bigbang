@@ -62,7 +62,9 @@ if is_ubuntu ; then
     sudo snap install terraform --classic
 
     p "Installing google-cloud-cli"
-    pushd /tmp
+    GCLOUDDIR=$HOME/gcloud-sdk
+    mkdir -p $GCLOUDDIR
+    pushd $GCLOUDDIR
     curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
     tar -xf google-cloud-cli-linux-x86_64.tar.gz
     ./google-cloud-sdk/install.sh -q
