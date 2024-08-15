@@ -130,6 +130,9 @@ if ns.command != 'start':
         if switch in v and v[switch]:
             p.error(f"{switch} is only used with start")
 
+if ns.command not in ('start', 'stop'):
+    p.error('Command can only be start or stop')
+
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
 # is the main configuration file one needs to edit. There is a 2nd config file,
@@ -243,9 +246,10 @@ for d in [templatedir, tmpdir, tfdir]:
 #
 # NodeCount
 #
-if nk8snodes <= nhzmembers:
-    sys.exit(f'To accommodate clients, {nk8snodeslabel} must be greater '
-             f'than {nhzmemberslabel}.')
+if nk8snodes < nhzmembers:
+    sys.exit(f'Must have at least {nhzmembers} nodes to accommodate '
+             f'{nhzmembers} members, so set {nk8snodeslabel} > {nhzmembers}'
+             f'in {myvarsf}.')
 if nhzmembers < minNodes:
     sys.exit(f"Must have at least {minNodes} nodes; {nhzmembers} set for "
              f"{nhzmemberslabel} in {myvarsf}.")
@@ -340,7 +344,10 @@ chaosmeshoptions=(
         '--set chaosDaemon.runtime=containerd '
         '--set chaosDaemon.socketPath=/run/containerd/containerd.sock')
 
-hz_crds = ['priclass', 'cluster', 'bbclient', 'bbclient_svc']
+hz_crds = ['priclass', 'cluster']
+if ns.test:
+    hz_crds += ['bbclient', 'bbclient_svc']
+
 for crd in hz_crds:
     templates[crd] = f'{crd}_crd_v.yaml'
 
@@ -371,21 +378,29 @@ class Service:
         return f'{self.name}.{domain}'
 
 class Services:
-    def __init__(self):
-        svcs_list: set[Service] = {
-                Service(srvnm_bbclient, "bbclient", 4000, 4000)
-                }
+    def __init__(self, test_mode: bool = False):
+        # Cluster services are k8s services that are only attributable to
+        # Hazelcast itself
+        self.clust_svcs: dict[str, Service] = {}
 
-        # Cluster services are more limited
-        self.clust_svcs: dict[str, Service] = { i.name: i for i in svcs_list }
+        # k8s services also include the client, if any
+        self.k8s_svcs = self.clust_svcs
+        if test_mode:
+            self.k8s_svcs |= {
+                    srvnm_bbclient: Service(srvnm_bbclient, 'bb', 4000, 4000)
+                    }
 
-        # Total list of services includes the K8S API service
-        self.svcs: dict[str, Service] = self.clust_svcs | {
+        # The overall services list is a superset of the k8s services and
+        # includes the k8s API Server (which is not itself a k8s service!)
+        self.svcs = self.k8s_svcs | {
                 'apiserv': Service('apiserv', 'https', 2153, 443)
                 }
 
     def get_all_svc_names(self):
         return self.svcs.keys()
+
+    def get_k8s_svc_names(self):
+        return self.k8s_svcs.keys()
 
     def get_clust_svc_names(self):
         return self.clust_svcs.keys()
@@ -393,8 +408,8 @@ class Services:
     def get(self, name: str):
         return self.svcs[name]
 
-    def get_clust_all(self):
-        return iter(self.clust_svcs.values())
+    def get_k8s_svc_all(self):
+        return iter(self.k8s_svcs.values())
 
     def get_lcl_port(self, name: str) -> int:
         return self.svcs[name].lcl_port
@@ -601,10 +616,10 @@ def get_ssh_pub_key() -> str:
     except IOError:
         sys.exit(f"Unable to read your public RSA key {rsaPub}")
 
-def divideOrZero(x: int, y: int) -> float:
+def safeDivide(x: int, y: int) -> float:
     assert x <= y, f"{x}, {y}"
     if y == 0:
-        return 0.0
+        return 1.0
     else:
         return float(x) / float(y)
 
@@ -612,13 +627,13 @@ def waitUntilNodesReady(minNodes: int) -> float:
     ready_nodes, all_nodes = ready.get_nodes()
     numer = len(ready_nodes)
     denom = min(minNodes, len(all_nodes))
-    return divideOrZero(numer, denom)
+    return safeDivide(numer, denom)
 
 def waitUntilPodsReady(namespace: str, mincontainers: int = 0) -> float:
     ready_containers, all_containers = ready.summarize_containers(namespace)
     numer = len(ready_containers)
     denom = max(len(all_containers), mincontainers)
-    return divideOrZero(numer, denom)
+    return safeDivide(numer, denom)
 
 def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:
     numer = 0
@@ -639,23 +654,7 @@ def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:
             denom += reptotal
     if minreplicas:
         denom = min(minreplicas, denom)
-    return divideOrZero(numer, denom)
-
-def loadBalancerResponding(svc_name: str) -> bool:
-    assert svc_name in svcs.get_clust_svc_names()
-
-    # It is assumed this function will only be called once the ssh tunnels
-    # have been established between the localhost and the bastion host
-    try:
-        # TODO: Need to check bbclient connection to test if it's responding
-        return True
-    except requests.exceptions.ConnectionError:
-        return False
-    except requests.exceptions.Timeout:
-        return False
-    except Exception as e:
-        print(f'Unexpected exception {e}')
-        return False
+    return safeDivide(numer, denom)
 
 # Get a list of load balancers, in the form of a dictionary mapping service
 # names to load balancer hostname or IP address. This function takes a list of
@@ -700,20 +699,14 @@ def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:
                 lbs[name] = ingress0["ip"]
             elif "hostname" in ingress0:
                 lbs[name] = ingress0["hostname"]
+    assert len(lbs) == len(services)
     return lbs
 
-def waitUntilLoadBalancersUp(services: list, namespace: str,
-                             checkConnectivity: bool = False) -> float:
-    numer = 0
+def waitUntilLoadBalancersUp(services: list, namespace: str) -> float:
     denom = len(services)
     lbs = getLoadBalancers(services, namespace)
-    for name in lbs.keys():
-        if checkConnectivity and not loadBalancerResponding(name):
-            continue
-
-        # Found one service load balancer running
-        numer += 1
-    return divideOrZero(numer, denom)
+    numer = len(lbs.keys())
+    return safeDivide(numer, denom)
 
 def waitUntilApiServerResponding() -> float:
     # It is assumed this function will only be called once the ssh tunnels
@@ -743,28 +736,20 @@ class Tunnel:
                                 b=bastionIp))
         self.p: Optional[subprocess.Popen] = None
 
-    def open(self):
+    def __enter__(self):
         print(self.command)
         self.p = subprocess.Popen(self.command.split(),
                                   stdout=subprocess.DEVNULL,
                                   stderr=subprocess.STDOUT)
         assert self.p is not None
         out.announce("Created tunnel " + str(self))
+        return self
 
-    def close(self):
+    def __exit__(self, *_):
         out.announce("Terminating tunnel " + str(self))
         assert self.p is not None
         self.p.terminate()
         self.p = None
-
-    def __enter__(self):
-        self.open()
-        print(f'Tunnel OPENED: {self}')
-        return self
-
-    def __exit__(self, *_):
-        self.close()
-        print(f'Tunnel CLOSED: {self}')
         return False
 
     def __str__(self):
@@ -847,7 +832,7 @@ class PodLog:
         return False
 
 # Input dictionary is the output variables from Terraform.
-def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
+def setup_k8s_api_tunnel(bastion_ip: ipaddress.IPv4Address,
                          k8s_server_name: str) -> Tunnel:
     assert(bastion_ip)
     assert(k8s_server_name)
@@ -868,19 +853,8 @@ def setup_bastion_tunnel(bastion_ip: ipaddress.IPv4Address,
     appendToFile(knownhosts, hostkeys)
 
     # Start up the tunnel to the Kubernetes API server
-    tun = Tunnel("k8s-apiserver", bastion_ip, svcs.get_lcl_port("apiserv"),
-                 k8s_server_name, svcs.get_rmt_port("apiserv"))
-    tun.open()
-
-    # Now that the tunnel is in place, update our kubecfg with the address to
-    # the tunnel, keeping everything else in place
-    updateKubeConfig()
-
-    # Ensure that we can talk to the api server
-    out.announce("Waiting for api server to respond")
-    out.spinWait(waitUntilApiServerResponding)
-
-    return tun
+    return Tunnel("k8s-apiserver", bastion_ip, svcs.get_lcl_port("apiserv"),
+                  k8s_server_name, svcs.get_rmt_port("apiserv"))
 
 def terraform_start() -> None:
     # Get my public IP and SSH public key
@@ -920,6 +894,14 @@ def terraform_start() -> None:
     runStdout(f"{tf} apply -auto-approve -input=false".split())
 
 def wait_until_k8s_is_ready() -> None:
+    # Now that the tunnel is in place, update our kubecfg with the address to
+    # the tunnel, keeping everything else in place
+    updateKubeConfig()
+
+    # Ensure that we can talk to the api server
+    out.announce("Waiting for api server to respond")
+    out.spinWait(waitUntilApiServerResponding)
+
     # Don't continue until all nodes are ready
     out.announce("Waiting for nodes to come online")
     out.spinWait(lambda: waitUntilNodesReady(nk8snodes))
@@ -973,7 +955,7 @@ def set_dns_for_lbs(zid: str, # Zone ID
     # for Azure & GCP, we will run commands as we go
 
     for svcname, host in lbs.items():
-        assert svcname == 'bastion' or svcname in svcs.get_clust_svc_names()
+        assert svcname in svcs.get_clust_svc_names()
         fqn = f'{svcname}.{domain}.'
 
         if target == 'aws':
@@ -1039,19 +1021,24 @@ def wait_for_hazelcast_pods() -> None:
     out.announce(f"Waiting for {hz_namespace} deployments to be available")
     out.spinWait(lambda: waitUntilDeploymentsAvail(hz_namespace))
 
-def wait_for_hazelcast_svcs(check_responding: bool = False) -> None:
+def wait_for_hazelcast_svcs() -> None:
     # now the load balancers need to be running with their IPs assigned
-    verb = 'respond' if check_responding else 'launch'
     svcnames = list(svcs.get_clust_svc_names())
     svcnamesstr = ", ".join(svcnames)
-    out.announce(f'Waiting for {hz_namespace} LBs to {verb}: {svcnamesstr}')
-    out.spinWait(lambda: waitUntilLoadBalancersUp(svcnames, hz_namespace,
-                                                  check_responding))
+    out.announce(f'Waiting for {hz_namespace} LBs to launch: {svcnamesstr}')
+    out.spinWait(lambda: waitUntilLoadBalancersUp(svcnames, hz_namespace))
 
-def create_tunnels_to_hz_svcs(bastion_addr: str) -> tuple[list[Tunnel],
-                                                          dict[str, str]]:
+def wait_for_k8s_svcs() -> None:
+    # now the load balancers need to be running with their IPs assigned
+    svcnames = list(svcs.get_k8s_svc_names())
+    svcnamesstr = ", ".join(svcnames)
+    out.announce(f'Waiting for LBs to launch: {svcnamesstr}')
+    out.spinWait(lambda: waitUntilLoadBalancersUp(svcnames, hz_namespace))
+
+def create_tunnels_to_k8s_svcs(bastion_addr: str) -> tuple[list[Tunnel],
+                                                           dict[str, str]]:
     tuns: list[Tunnel] = []
-    svcnames = list(svcs.get_clust_svc_names())
+    svcnames = list(svcs.get_k8s_svc_names())
 
     #
     # Get the DNS name of the load balancers we've created
@@ -1059,7 +1046,6 @@ def create_tunnels_to_hz_svcs(bastion_addr: str) -> tuple[list[Tunnel],
     lbs = getLoadBalancers(svcnames, hz_namespace)
 
     # we should have a load balancer for every service we'll forward
-    assert len(lbs) == len(svcnames)
     for svcname in svcnames:
         assert svcname in lbs
         tun = Tunnel(svcname, ipaddress.IPv4Address(bastion_addr),
@@ -1243,42 +1229,35 @@ def helmGetReleases(namespace: str) -> dict:
     return rls
 
 def helmWhichChartInstalled(namespace: str, module: str) -> Optional[str]:
-    chart = None
+    chart = ""
     release = releases[module] # Get release name for module name
     installed = helmGetReleases(namespace)
     if release in installed:
         chart = installed[release] # Get chart for release
     return chart
 
-def helm_install_release(namespace: str,
-                         reponame: str,
-                         module: str,
-                         version: str,
-                         options: str = "") -> None:
-    chart = helmWhichChartInstalled(namespace, module)
-    newchart = charts[module] + "-" + version # which one to install?
+def helm_install_release(namespace: str, reponame: str, module: str,
+                         version: str, options: str = "") -> None:
+    existing_chart = helmWhichChartInstalled(namespace, module)
+    requested_chart = charts[module] + "-" + version # which one to install?
 
-    if chart is None: # Nothing installed yet, so we need to install
+    if not existing_chart:
         out.announce("Installing {ns}/{r} v{v}"
                      .format(ns=namespace, r=releases[module], v=version))
         helmIgnore(namespace, 'install {r} {repo}/{c} --version {v} {o}'
                    .format(r=releases[module], repo=reponame, c=charts[module],
                            v=version, o=options))
-    # If either the chart values file changed, or we need to update to a
-    # different version of the chart, then we have to upgrade
-    elif chart != newchart:
-        astr = "Upgrading {ns}/{r} v{v}".format(ns=namespace,
-                                                r=releases[module],
-                                                v=version)
-
-    if chart != newchart:
-        astr += ": {oc} -> {nc}".format(oc = chart, nc = newchart)
-        out.announce(astr)
+    elif existing_chart != requested_chart:
+        # If the vesion of the chart has changed, then we need to upgrade
+        # different version of the chart, then we have to upgrade
+        out.announce("Upgrading {ns}/{r} v{v}: {oc} -> {rc}"
+                     .format(ns=namespace, r=releases[module], v=version,
+                             oc=existing_chart, rc=requested_chart))
         helmIgnore(namespace, 'upgrade {r} {repo}/{c} --version {v} {o}'
-                   .format(r=releases[module], repo=reponame, c=charts[module],
-                           v=version, o=options))
-    else:
-        print(f'{namespace}/{chart} values unchanged ➼ avoiding helm upgrade')
+                   .format(r=releases[module], repo=reponame,
+                           c=charts[module], v=version, o=options))
+    else: # existing_chart != None and existing_chart == requested_chart
+        print(f'{namespace}/{existing_chart} unchanged')
 
 def kube_crd_apply(crd: str, namespace: str) -> None:
     out.announce(f'Applying CRD "{crd}"')
@@ -1310,7 +1289,7 @@ def delete_all_services(namespace: str) -> bool:
     # the ENIs and preventing the deletion of the associated subnets
     # https://github.com/kubernetes/kubernetes/issues/93390
     out.announce(f"Deleting all k8s services for namespace {namespace}")
-    lbs_before: dict[str, str] = getLoadBalancers(svcs.get_clust_svc_names(),
+    lbs_before: dict[str, str] = getLoadBalancers(svcs.get_k8s_svc_names(),
                                                   namespace)
 
     # Summarize which LBs were there before attempt to kill services
@@ -1323,8 +1302,7 @@ def delete_all_services(namespace: str) -> bool:
     # Destroy all services!
     runStdout(f'{kube} -n {namespace} delete '
               '--grace-period=60 svc --all'.split())
-    lbs_after = getLoadBalancers(svcs.get_clust_svc_names(),
-                                 namespace)
+    lbs_after = getLoadBalancers(svcs.get_k8s_svc_names(), namespace)
 
     # Indicate if any LBs remain after killing services
     if len(lbs_after) != 0:
@@ -1345,75 +1323,73 @@ def helm_uninstall_releases_and_kill_pods(namespace: str):
             print(f"Unable to uninstall release {release}: {e}")
     killAllTerminatingPods(namespace)
 
-def start_await_hz_and_chaos_pods_srvcs(env: dict[str, str],
-                                        secrets: dict[str, dict[str, str]]) -> None:
-    # Do this first so all resources install into the namespace
-    with Timer(f'set up {hz_namespace} namespace objects in K8S'):
-        #
-        # Hazelcast namespace objects
-        #
-        k8s_create_namespace(hz_namespace)
-        k8s_set_context_namespace(hz_namespace) # default namespace
+def start_hz_pods_svcs(env: dict[str, str],
+                       secrets: dict[str, dict[str, str]]) -> None:
+    # Create Hazelcast namespace and set as *default namespace*
+    k8s_create_namespace(hz_namespace)
+    k8s_set_context_namespace(hz_namespace) # default namespace
 
-        env |= {
-                appversionlabel: appversion,
-                'HzClientCount': nhzclients,
-                'HzMemberCount': nhzmembers,
-                'SrvNmCluster': srvnm_cluster
-                }
+    env |= {
+            appversionlabel: appversion,
+            'HzClientCount': nhzclients,
+            'HzMemberCount': nhzmembers,
+            'SrvNmCluster': srvnm_cluster
+            }
 
-        env |= k8s_secrets_create(hz_namespace, secrets)
+    env |= k8s_secrets_create(hz_namespace, secrets)
 
-        # Set up the Helm repo if not already done
-        helm_set_up_repo(hz_namespace, hz_helm_repo_name,
-                         hz_helm_repo_location)
+    # Set up the Helm repo if not already done
+    helm_set_up_repo(hz_namespace, hz_helm_repo_name, hz_helm_repo_location)
 
-        helm_install_release(hz_namespace, hz_helm_repo_name, operator_module,
-                             oprchartversion)
-        for crd in hz_crds:
-            kube_crd_apply_templated(crd, hz_namespace, env)
+    # Now, install the Hazelcast operator
+    helm_install_release(hz_namespace, hz_helm_repo_name, operator_module,
+                         oprchartversion)
 
-        kube_force_delete_all_pods_for_selector(hz_namespace, devpodsel)
+    # Apply all the Hz CRD templates
+    for crd in hz_crds:
+        kube_crd_apply_templated(crd, hz_namespace, env)
+
+    # Speed up the deployment of the updated pods by killing the old ones
+    killAllTerminatingPods(hz_namespace)
+
+    # Wait for pods and services to start up.
+    wait_for_hazelcast_pods()
+    wait_for_hazelcast_svcs()
+
+def start_chaos_pods_svcs() -> None:
+        # Before we create the chaos-mesh objects, we want to force-restart the
+        # clients, in order to ensure that they reload the latest image.
         kube_force_delete_all_pods_for_selector(hz_namespace, bbclientpodsel)
 
+        k8s_create_namespace(chaos_namespace)
+
+        # Set up the Chaos Mesh repo if not already done
+        helm_set_up_repo(chaos_namespace, chaos_helm_repo_name,
+                         chaos_helm_repo_location)
+
+        helm_install_release(chaos_namespace, chaos_helm_repo_name,
+                             chaosmesh_module, chaoschartversion,
+                             chaosmeshoptions)
+
+        # TODO: There is a bug in chaos-mesh in the auth module, that prevents
+        # chaos-mesh from working across namespaces. This is the workaround:
+        runIgnore(f'{kube} -n {chaos_namespace} delete '
+                  '--ignore-not-found=true '
+                  'validatingwebhookconfigurations.admissionregistration.k8s.io '
+                  'chaos-mesh-validation-auth'.split())
+
         # Speed up the deployment of the updated pods by killing the old ones
-        killAllTerminatingPods(hz_namespace)
-        wait_for_hazelcast_pods()
-        wait_for_hazelcast_svcs()
+        killAllTerminatingPods(chaos_namespace)
 
-    if ns.test:
-        with Timer(f'set up {chaos_namespace} namespace objects in K8S'):
-            #
-            # Chaos-Mesh namespace objects
-            #
-            k8s_create_namespace(chaos_namespace)
+        # Wait for pods. There are no chaosmesh services to wait for
+        wait_for_chaosmesh_pods()
 
-            # Set up the Chaos Mesh repo if not already done
-            helm_set_up_repo(chaos_namespace, chaos_helm_repo_name,
-                             chaos_helm_repo_location)
-
-            helm_install_release(chaos_namespace, chaos_helm_repo_name,
-                                 chaosmesh_module, chaoschartversion,
-                                 chaosmeshoptions)
-
-            # TODO: There is a bug in chaos-mesh in the auth module, that prevents
-            # chaos-mesh from working across namespaces. This is the workaround:
-            runIgnore(f'{kube} -n {chaos_namespace} delete '
-                      '--ignore-not-found=true '
-                      'validatingwebhookconfigurations.admissionregistration.k8s.io '
-                      'chaos-mesh-validation-auth'.split())
-
-            # Speed up the deployment of the updated pods by killing the old ones
-            killAllTerminatingPods(chaos_namespace)
-
-            wait_for_chaosmesh_pods()
-
-            # Get rid of any existing split-delay workflow, then apply the
-            # chaos-mesh workflow for some (small) increased latency between
-            # members. Note that this must be applied in the Hazelcast namespace,
-            # not in the chaos-mesh namespace.
-            k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
-            kube_crd_apply(chaos_baselatency_crd, hz_namespace)
+        # Get rid of any existing split-delay workflow, then apply the
+        # chaos-mesh workflow for some (small) increased latency between
+        # members. Note that this must be applied in the *Hazelcast* namespace,
+        # not in the chaos-mesh namespace.
+        k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
+        kube_crd_apply(chaos_baselatency_crd, hz_namespace)
 
 def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion to allow our commands to flow
@@ -1428,10 +1404,10 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
         k8s_server_name = env['k8s_api_server']
 
         # We need the bastion tunnel up in order to fetch the LBs
-        with setup_bastion_tunnel(bastion_ip, k8s_server_name):
+        with setup_k8s_api_tunnel(bastion_ip, k8s_server_name):
             # NOTE: DNS *must* be removed since Terraform will complain about any
             # records it didn't create at the time the zone is destroyed.
-            lbs = getLoadBalancers(svcs.get_clust_svc_names(), hz_namespace)
+            lbs = getLoadBalancers(svcs.get_k8s_svc_names(), hz_namespace)
             try:
                 set_dns_for_lbs(zone_id, lbs, delete=True)
             except CalledProcessError:
@@ -1469,7 +1445,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 k8s_secrets_delete(hz_namespace)
                 k8s_pvc_delete(hz_namespace)
                 k8s_delete_namespace(hz_namespace)
-    except (MissingTerraformOutput):
+    except MissingTerraformOutput:
         out.announce('Terraform objects partly or fully destroyed')
 
     if onlyEmptyNodes:
@@ -1842,31 +1818,18 @@ def bbclient_communicate() -> str:
     return return_val
 
 #def main_test() -> None:
-#    test_output_fn = tmp_filename('test_output', 'out', random=True)
-#    print(f'Writing test output to {test_output_fn}')
-#    with open(test_output_fn, 'w') as test_output_fh:
-#        for i in range(0, 10):
-#            if not ns.skip_cluster_start:
-#                with Timer('set up infrastructure in Terraform'):
-#                    terraform_start()
-#            env = get_output_vars()
-#            bastion_addr = env['bastion_address']
-#            k8s_api_addr = env['k8s_api_server']
-#            with setup_bastion_tunnel(bastion_addr,
-#                                      k8s_api_addr) as bastion_tun:
-#            start_await_hz_and_chaos_pods_srvcs(secrets, ns.skip_cluster_start)
-#
 #            # Wait for pods & LBs to become ready
 #            # Set up port forward tunnels for LBs
 #            hz_tuns, hz_srv_lbs = create_tunnels_to_hz_svcs(bastion_addr)
-#            wait_for_hazelcast_svcs(check_responding = True)
-#
-#            # Set up DNS to new Hazelcast services
-#            set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
 #
 #            with ExitStack() as stack:
+#                # Now actually open the tunnels using a resource manager
 #                for tun in hz_tuns:
 #                    stack.enter_context(tun)
+#
+#                # Set up DNS to new Hazelcast services
+#                set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
+#
 #                podnames = get_hz_cluster_podnames(ss_selector)
 #                logs = [stack.enter_context(log_hz_cluster_member(ss_selector,
 #                                                                  podname))
@@ -1888,8 +1851,6 @@ def bbclient_communicate() -> str:
 #                    test_output_fh.flush()
 #                #input("Press return key to quit and terminate tunnels!")
 #                #out.announceLoud(["Terminating all tunnels and logging"])
-#            for tun in tuns:
-#                tun.close()
 
 def main() -> None:
     if ns.progmeter_test:
@@ -1904,55 +1865,75 @@ def main() -> None:
     checkEtcHosts()
     cleanOldTunnels()
     if target == "gcp":
-        out.announce(f"GCP project is {gcpproject}")
+        out.announce(f'GCP project / account = {gcpproject} / {gcpaccount}')
     print(f"Your CIDR is {mySubnetCidr}")
 
     cloud_summary = getCloudSummary()
 
-    if ns.command not in ('start', 'stop'):
-        sys.exit(f'Invalid command {ns.command}')
+    assert ns.command in ('start', 'stop') # already enforced above
+
+    #################
+    # STOP SERVICES #
+    #################
 
     if ns.command == 'stop':
         svcStop(ns.empty_nodes)
-        y = cloud_summary + ['Service is stopped']
-        out.announceLoud(y)
+        setup_summary = cloud_summary + ['Service is stopped']
+        out.announceLoud(setup_summary)
         return
 
-    # ns.command == 'start'
+    ##################
+    # START SERVICES #
+    ##################
 
+#    if ns.test:
+#        test_output_fn = tmp_filename('test_output', 'out', random=True)
+
+    # First start up the K8S cluster and other cloud resources using Terraform
     if not ns.skip_cluster_start:
         with Timer('set up infrastructure in Terraform'):
             terraform_start()
 
+    # Collect back the output from the Terraform apply
     env = get_output_vars()
     bastion_addr = env['bastion_address']
     k8s_api_addr = env['k8s_api_server']
-    with setup_bastion_tunnel(bastion_addr,
-                              k8s_api_addr):
-        start_await_hz_and_chaos_pods_srvcs(env, secrets)
 
-        # Create--but do not start--port-forward tuns for Hazelcast svc LBs
-        hz_tuns, hz_srv_lbs = create_tunnels_to_hz_svcs(bastion_addr)
+    # Open the SSH tunnel to the K8S API Server
+    with setup_k8s_api_tunnel(bastion_addr, k8s_api_addr):
+        wait_until_k8s_is_ready()
 
-        # Wait until Hz svc LBs start responding
-        wait_for_hazelcast_svcs(check_responding = True)
+        if ns.test:
+            with Timer(f'set up {chaos_namespace} namespace objects'):
+                start_chaos_pods_svcs()
 
-        # Set up cloud DNS to new Hazelcast services
-        set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
+        with Timer(f'set up {hz_namespace} namespace objects'):
+            start_hz_pods_svcs(env, secrets)
+
+        # Create--but do not start--port-forward tuns for k8s svc LBs
+        hz_tuns, hz_srv_lbs = create_tunnels_to_k8s_svcs(bastion_addr)
 
         with ExitStack() as stack:
-            # Now actually open the tunnels using a resource manager
+            # Now open those tunnels for k8s svc LBs using resource manager
             for tun in hz_tuns:
                 stack.enter_context(tun)
+#            if ns.test:
+#                test_output_fh = stack.enter_context(open(test_output_fn, 'w'))
 
-            out.announceBox(f'Your {rsaPub} public key has been installed into '
-                            f'the bastion server {bastion_addr}, so you can '
-                            f'ssh there now (user "{bastionuser}").')
-            y = cloud_summary + (['Service is started on:'] +
-                                 [f'[{s.name}] {s.get_uri()}'
-                                  for s in svcs.get_clust_all()])
-            out.announceLoud(y)
+            # Set up cloud DNS to new Hazelcast services
+            set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
+
+#            if not ns.test:
+            out.announceBox(f'Your {rsaPub} public key has been installed '
+                            f'into the bastion server {bastion_addr}, so '
+                            f'you can ssh there now (user {bastionuser}).')
+            setup_summary = cloud_summary + \
+                    (['Service is started on:'] +
+                     [f'[{s.name}] {s.get_uri()}'
+                      for s in svcs.get_k8s_svc_all()])
+            out.announceLoud(setup_summary)
             input("Press return key to quit and terminate tunnels!")
             out.announceLoud(["Terminating all tunnels and logging"])
+
 
 main()
