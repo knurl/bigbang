@@ -2,6 +2,10 @@
  * We need to create a service account with authority to access our storage
  * bucket, and associate with our GKE cluster nodes.
  */
+data "google_project" "project" {
+  project_id = var.gcp_project_id
+}
+
 resource "google_service_account" "gke_servacct" {
   project    = data.google_project.project.project_id
   account_id = "${var.cluster_name}-servacct"
