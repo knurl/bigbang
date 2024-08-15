@@ -93,7 +93,7 @@ if is_ubuntu ; then
     popd
 
     p "installing Python $PYVERSION"
-    sudo add-apt-repository ppa:deadsnakes/ppa
+    sudo add-apt-repository -y ppa:deadsnakes/ppa
     sudo apt-get install -y python3.11
     sudo apt-get install -y python3.11-venv
 
