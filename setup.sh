@@ -61,13 +61,12 @@ if is_ubuntu ; then
     sudo snap install helm --classic
     sudo snap install terraform --classic
 
-    p "Installing apt packages for gcloud"
-    sudo apt-get install -y apt-transport-https ca-certificates gnupg curl
-
     p "Installing google-cloud-cli"
-    sudo curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg --batch --yes
-    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-    sudo apt-get install -y google-cloud-cli
+    pushd /tmp
+    curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
+    tar -xf google-cloud-cli-linux-x86_64.tar.gz
+    ./google-cloud-sdk/install.sh -q
+    popd
 else
     p "installing brew"
     if [ ! $(which brew) ]; then
