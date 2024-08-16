@@ -167,6 +167,7 @@ gcloud components update
 gcloud components install gke-gcloud-auth-plugin --quiet
 if [[ ! -d $HOME/.config/gcloud ]]; then
     gcloud init
+    gcloud auth application-default login
 else
     echo "GCP config files already exist"
 fi
