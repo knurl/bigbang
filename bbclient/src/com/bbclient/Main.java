@@ -19,8 +19,8 @@ class Main {
     static final int portNumber = 4000;
 
     static final int numThreads = 6;
-    static final int numThreadsMax = 2*numThreads;
-    static final int threadQueueSize = 4*numThreads;
+    static final int numThreadsMax = 3*numThreads;
+    static final int threadQueueSize = 2*numThreadsMax;
     static final int keepAliveTimeSec = 60; // seconds
 
     private final static String mapName = "map";
@@ -94,54 +94,47 @@ class Main {
         double opsRateAverage = 0.0;
         KeyBoundary keyBoundary = null;
 
-        while (opsRateAverage < 100.0) {
-            if (opsRateAverage > 0.0) {
-                logger.log("OpsRateAverage = %,f too low; Trying again".formatted(opsRateAverage));
-                Thread.sleep(createMapPauseMillis);
-            }
+        logger.log("Clearing map");
+        awaitConnected(listener);
+        map.clear();
+        logger.log("Map is cleared");
 
-            logger.log("Clearing map");
-            awaitConnected(listener);
-            map.clear();
-            logger.log("Map is cleared");
+        DescriptiveStatistics opsRateStats = new DescriptiveStatistics();
 
-            DescriptiveStatistics opsRateStats = new DescriptiveStatistics();
+        logger.log("+++ TARGET MAP SIZE -> %,d +++".formatted(maxEntries));
 
-            logger.log("+++ TARGET MAP SIZE -> %,d +++".formatted(maxEntries));
+        var random = new Random();
+        final var firstKey = random.nextLong(Long.MIN_VALUE, Long.MAX_VALUE >> 1);
+        SetRunnable setRunnable = new SetRunnable(map, mapValueSize, firstKey);
 
-            var random = new Random();
-            final var firstKey = random.nextLong(Long.MIN_VALUE, Long.MAX_VALUE >> 1);
-            SetRunnable setRunnable = new SetRunnable(map, mapValueSize, firstKey);
+        long mapSize = 0;
 
-            long mapSize = 0;
+        try (var threadPool = new ThreadPool()) {
+            final long executorSubmitBackoff = 250; // ms
+            final long fullnessCheckTimeout = 2_000; // ms
+            var fullnessCheckStopwatch = new Stopwatch(fullnessCheckTimeout); // ms
 
-            try (var threadPool = new ThreadPool()) {
-                final long executorSubmitBackoff = 250; // ms
-                final long fullnessCheckTimeout = 2_000; // ms
-                var fullnessCheckStopwatch = new Stopwatch(fullnessCheckTimeout); // ms
+            while (mapSize < maxEntries) {
+                awaitConnected(listener);
 
-                while (mapSize < maxEntries) {
-                    awaitConnected(listener);
-
-                    if (fullnessCheckStopwatch.isTimeOver()) {
-                        mapSize = map.size();
-                        var opsRate = fullnessCheckStopwatch.ratePerSecond();
-                        opsRateStats.addValue(opsRate);
-                        logger.log("MAPSIZE=%,d OPSRATE=%,.2f/s".formatted(mapSize, opsRate));
-                        continue;
-                    }
-
-                    if (threadPool.submit(setRunnable))
-                        fullnessCheckStopwatch.addUnit();
-                    else
-                        Thread.sleep(executorSubmitBackoff);
+                if (fullnessCheckStopwatch.isTimeOver()) {
+                    mapSize = map.size();
+                    var opsRate = fullnessCheckStopwatch.ratePerSecond();
+                    opsRateStats.addValue(opsRate);
+                    logger.log("MAPSIZE=%,d OPSRATE=%,.2f/s".formatted(mapSize, opsRate));
+                    continue;
                 }
-            }
 
-            logger.log("+++ ACTUAL MAP SIZE -> %,d +++".formatted(mapSize));
-            opsRateAverage = opsRateStats.getMean();
-            keyBoundary = new KeyBoundary(firstKey, setRunnable.getLastKey());
+                if (threadPool.submit(setRunnable))
+                    fullnessCheckStopwatch.addUnit();
+                else
+                    Thread.sleep(executorSubmitBackoff);
+            }
         }
+
+        logger.log("+++ ACTUAL MAP SIZE -> %,d +++".formatted(mapSize));
+        opsRateAverage = opsRateStats.getMean();
+        keyBoundary = new KeyBoundary(firstKey, setRunnable.getLastKey());
 
         return keyBoundary;
     }
@@ -159,6 +152,8 @@ class Main {
     }
 
     public static void main(String[] args) throws InterruptedException {
+        logger.log("v1.0");
+
         var socketResponseResponder = new SocketResponseResponder();
 
         /* Spawn a thread to take input on a port */
@@ -226,7 +221,7 @@ class Main {
                     logger.log("OPSRATE -> %,.2f/s / STATS -> %s".formatted(opsRate, listRunnablesToString(runnables)));
 
                     // See if we're ready to start testing
-                    if (!setIsReadyForTesting && opsRate >= 100.0 &&
+                    if (!setIsReadyForTesting &&
                             runnables.stream().allMatch(IMapMethodRunnable::hasReachedMinimumPopulation)) {
                         logger.log("We are ready for chaos testing to start");
                         socketResponseResponder.setIsReadyForTesting();

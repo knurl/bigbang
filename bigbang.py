@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.11
 
-#import pdb
+import pdb
 import os
 import hashlib
 import argparse
@@ -107,8 +107,8 @@ p.add_argument('-e', '--empty-nodes', action="store_true",
                help="Unload k8s cluster only. Used with stop.")
 p.add_argument('-g', '--target', action="store",
                help="Force cloud target to specified value.")
-p.add_argument('-t', '--test', action='store_true',
-               help='Run in chaos testing mode')
+p.add_argument('-t', '--test', action='store', metavar='RUNS', type=int,
+               help='Run in chaos testing mode for specified number of runs')
 p.add_argument('-z', '--zone', action="store",
                help="Force zone/region to specified value.")
 p.add_argument('command',
@@ -246,13 +246,19 @@ for d in [templatedir, tmpdir, tfdir]:
 #
 # NodeCount
 #
-if nk8snodes < nhzmembers:
-    sys.exit(f'Must have at least {nhzmembers} nodes to accommodate '
-             f'{nhzmembers} members, so set {nk8snodeslabel} > {nhzmembers}'
-             f'in {myvarsf}.')
 if nhzmembers < minNodes:
     sys.exit(f"Must have at least {minNodes} nodes; {nhzmembers} set for "
              f"{nhzmemberslabel} in {myvarsf}.")
+if nk8snodes < nhzmembers:
+    sys.exit(f'Must have at least {nhzmembers} nodes to accommodate '
+             f'{nhzmembers} members, so set {nk8snodeslabel} >= {nhzmembers} '
+             f'in {myvarsf}.')
+minnodeswithclients = nhzmembers + max(1, nhzclients)
+if nk8snodes < nhzmembers + max(1, nhzclients):
+    sys.exit(f'Must have at least {minnodeswithclients} nodes to accommodate '
+             f'{nhzmembers} members plus at least one client, '
+             f'so set {nk8snodeslabel} >= {minnodeswithclients} '
+             f'in {myvarsf}.')
 
 def tlsenabled() -> bool: return tlscoord
 
@@ -345,7 +351,7 @@ chaosmeshoptions=(
         '--set chaosDaemon.socketPath=/run/containerd/containerd.sock')
 
 hz_crds = ['priclass', 'cluster']
-if ns.test:
+if nhzclients > 0:
     hz_crds += ['bbclient', 'bbclient_svc']
 
 for crd in hz_crds:
@@ -417,10 +423,10 @@ class Services:
     def get_rmt_port(self, name: str) -> int:
         return self.svcs[name].rmt_port
 
-    def get_uri(self, name: str) -> str:
+    def get_fqdn(self, name: str) -> str:
         return self.svcs[name].get_fqdn()
 
-svcs = Services()
+svcs = Services(test_mode=(ns.test and ns.test > 0))
 
 def random_string(length: int) -> str:
     chars = string.ascii_letters + string.digits
@@ -1004,18 +1010,20 @@ def wait_for_chaosmesh_pods() -> None:
     cm_containers = ChaosMeshContainers()
 
     out.announce(f"Waiting for {namespace} pods to be ready")
-    expectedContainers = cm_containers.numberOfContainers(nhzmembers, nhzclients)
-    out.spinWait(lambda: waitUntilPodsReady(hz_namespace,
+    expectedContainers = cm_containers.numberOfContainers(nk8snodes,
+                                                          nhzclients)
+    out.spinWait(lambda: waitUntilPodsReady(chaos_namespace,
                                             expectedContainers))
 
     out.announce(f"Waiting for {namespace} deployments to be available")
-    out.spinWait(lambda: waitUntilDeploymentsAvail(hz_namespace))
+    out.spinWait(lambda: waitUntilDeploymentsAvail(chaos_namespace))
 
 def wait_for_hazelcast_pods() -> None:
     hz_containers = HazelcastContainers()
 
     out.announce(f"Waiting for {hz_namespace} pods to be ready")
-    expectedContainers = hz_containers.numberOfContainers(nhzmembers, nhzclients)
+    expectedContainers = hz_containers.numberOfContainers(nhzmembers,
+                                                          nhzclients)
     out.spinWait(lambda: waitUntilPodsReady(hz_namespace, expectedContainers))
 
     out.announce(f"Waiting for {hz_namespace} deployments to be available")
@@ -1140,12 +1148,13 @@ def k8s_pvc_delete(namespace: str):
         runStdout(f'{kube} -n {namespace} delete pvc {pvcname} '
                   '--grace-period=0 --force'.split())
 
-def k8s_restart(namespace: str, deployment: str):
-    out.announce(f'Restarting and waiting for {deployment}...')
+def k8s_restart(namespace: str, deployment: str, watch: bool = False):
+    out.announce(f'Performing restart of {deployment}...')
     runStdout([kube, "-n", namespace, "rollout", "restart", deployment])
-    runStdout([kube, "rollout", "status", "--timeout=0", "--watch",
-               deployment])
-    print(f'Rolling restart of {deployment} complete')
+    if watch:
+        runStdout([kube, "-n", namespace, "rollout", "status", "--timeout=0",
+                   "--watch", deployment])
+        print(f'Rolling restart of {deployment} complete')
 
 def helmTry(namespace: str, cmd: str) -> subprocess.CompletedProcess:
     return runTry(['helm', '-n', namespace] + cmd.split())
@@ -1359,7 +1368,7 @@ def start_hz_pods_svcs(env: dict[str, str],
 def start_chaos_pods_svcs() -> None:
         # Before we create the chaos-mesh objects, we want to force-restart the
         # clients, in order to ensure that they reload the latest image.
-        kube_force_delete_all_pods_for_selector(hz_namespace, bbclientpodsel)
+        k8s_restart(hz_namespace, depnm_bbclient)
 
         k8s_create_namespace(chaos_namespace)
 
@@ -1398,6 +1407,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
     lbs_were_cleaned = True
 
     try:
+        pdb.set_trace()
         env = get_output_vars()
         zone_id = env['zone_id']
         bastion_ip = env['bastion_address']
@@ -1416,21 +1426,6 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
             # tunnel established. Now delete things in reverse order to how
             # they were created.
 
-            if ns.test:
-                with Timer('teardown of chaos-mesh K8S resources'):
-                    # Delete all the CRDs applied. Note that the chaos-mesh
-                    # workflow is installed in the Hazelcast namespace, not the
-                    # chaos-mesh namespace.
-                    for crd in chaos_crds:
-                        k8s_crd_delete(crd, hz_namespace)
-                    helm_uninstall_releases_and_kill_pods(chaos_namespace)
-                    if ns.test:
-                        lbs_were_cleaned = (lbs_were_cleaned and
-                                            delete_all_services(chaos_namespace))
-                    k8s_secrets_delete(chaos_namespace)
-                    k8s_pvc_delete(chaos_namespace)
-                    k8s_delete_namespace(chaos_namespace)
-
             with Timer('teardown of K8S resources'):
                 for crd in hz_crds:
                     k8s_crd_delete_templated(crd, hz_namespace, env)
@@ -1445,6 +1440,20 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
                 k8s_secrets_delete(hz_namespace)
                 k8s_pvc_delete(hz_namespace)
                 k8s_delete_namespace(hz_namespace)
+
+            with Timer('teardown of chaos-mesh K8S resources'):
+                # Delete all the CRDs applied. Note that the chaos-mesh
+                # workflow is installed in the Hazelcast namespace, not the
+                # chaos-mesh namespace.
+                for crd in chaos_crds:
+                    k8s_crd_delete(crd, hz_namespace)
+                helm_uninstall_releases_and_kill_pods(chaos_namespace)
+                lbs_were_cleaned = (lbs_were_cleaned and
+                                    delete_all_services(chaos_namespace))
+                k8s_secrets_delete(chaos_namespace)
+                k8s_pvc_delete(chaos_namespace)
+                k8s_delete_namespace(chaos_namespace)
+
     except MissingTerraformOutput:
         out.announce('Terraform objects partly or fully destroyed')
 
@@ -1753,7 +1762,7 @@ def bbclient_communicate() -> str:
         return_val: str = ""
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((svcs.get_uri(srvnm_bbclient),
+            s.connect((svcs.get_fqdn(srvnm_bbclient),
                        svcs.get_lcl_port(srvnm_bbclient)))
 
             # Client always initiates send...
@@ -1763,23 +1772,29 @@ def bbclient_communicate() -> str:
             f.write(command + "\n")
             f.flush()
             # ...then awaits the response
-            line = f.readline()
+            try:
+                line = f.readline()
 
-            if line.startswith("BB 200 OK"):
-                rc_is_ok = True
-                slices = line.split(":", 1)
-                if len(slices) == 2:
-                    return_val = slices[1].strip()
-                    print(f'Got back: {return_val}')
-            elif line.startswith("BB 408 TIMEOUT") and can_retry:
+                if line.startswith("BB 200 OK"):
+                    rc_is_ok = True
+                    slices = line.split(":", 1)
+                    if len(slices) == 2:
+                        return_val = slices[1].strip()
+                        print(f'Got back: {return_val}')
+                elif line.startswith("BB 408 TIMEOUT") and can_retry:
+                    rc_is_ok = False
+                else:
+                    sys.exit("Got unexpected result: " + line)
+
+            except ConnectionResetError as e:
+                print(f"Got connection reset {e}; trying again")
                 rc_is_ok = False
-            else:
-                sys.exit("Got unexpected result: " + line)
+
             s.close()
 
         return rc_is_ok, return_val
 
-    stages: list[dict] = [{'command': 'HELO', 'can_retry': False},
+    stages: list[dict] = [{'command': 'HELO', 'can_retry': True},
                           {'command': f'ADDR {dev0_pod_ip}', 'can_retry': False},
                           {'command': 'TEST', 'can_retry': True},
                           {'command': 'STRT', 'can_retry': False},
@@ -1817,41 +1832,6 @@ def bbclient_communicate() -> str:
 
     return return_val
 
-#def main_test() -> None:
-#            # Wait for pods & LBs to become ready
-#            # Set up port forward tunnels for LBs
-#            hz_tuns, hz_srv_lbs = create_tunnels_to_hz_svcs(bastion_addr)
-#
-#            with ExitStack() as stack:
-#                # Now actually open the tunnels using a resource manager
-#                for tun in hz_tuns:
-#                    stack.enter_context(tun)
-#
-#                # Set up DNS to new Hazelcast services
-#                set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
-#
-#                podnames = get_hz_cluster_podnames(ss_selector)
-#                logs = [stack.enter_context(log_hz_cluster_member(ss_selector,
-#                                                                  podname))
-#                        for podname in podnames]
-#                for log in logs:
-#                    out.announce("Log started for " + str(log))
-#
-#                out.announceBox(f'Your {rsaPub} public key has been installed into '
-#                                f'the bastion server, so you can ssh there now '
-#                                f'(user "{bastionuser}").')
-#                y = cloud_summary + (['Service is started on:'] +
-#                                     [f'[{s.name}] {s.get_uri()}' for s in svcs.get_clust_all()])
-#                out.announceLoud(y)
-#                return_val = bbclient_communicate()
-#                if return_val:
-#                    print(f'Writing return_val={return_val} '
-#                          f'to {test_output_fn}')
-#                    test_output_fh.write(return_val + '\n')
-#                    test_output_fh.flush()
-#                #input("Press return key to quit and terminate tunnels!")
-#                #out.announceLoud(["Terminating all tunnels and logging"])
-
 def main() -> None:
     if ns.progmeter_test:
         spinWaitCGTest()
@@ -1886,8 +1866,8 @@ def main() -> None:
     # START SERVICES #
     ##################
 
-#    if ns.test:
-#        test_output_fn = tmp_filename('test_output', 'out', random=True)
+    if ns.test:
+        test_output_fn = tmp_filename('test_output', 'out', random=True)
 
     # First start up the K8S cluster and other cloud resources using Terraform
     if not ns.skip_cluster_start:
@@ -1903,37 +1883,50 @@ def main() -> None:
     with setup_k8s_api_tunnel(bastion_addr, k8s_api_addr):
         wait_until_k8s_is_ready()
 
+        with Timer(f'set up {hz_namespace} namespace objects'):
+            start_hz_pods_svcs(env, secrets)
+
         if ns.test:
             with Timer(f'set up {chaos_namespace} namespace objects'):
                 start_chaos_pods_svcs()
 
-        with Timer(f'set up {hz_namespace} namespace objects'):
-            start_hz_pods_svcs(env, secrets)
-
-        # Create--but do not start--port-forward tuns for k8s svc LBs
+        # Create--but do not start--port-forward tuns for k8s svc LBs, meaning
+        # any Hazelcast service LBs plus any client service LBs
         hz_tuns, hz_srv_lbs = create_tunnels_to_k8s_svcs(bastion_addr)
+
+        if ns.test:
+            podnames = get_hz_cluster_podnames(devpodsel)
 
         with ExitStack() as stack:
             # Now open those tunnels for k8s svc LBs using resource manager
             for tun in hz_tuns:
                 stack.enter_context(tun)
-#            if ns.test:
-#                test_output_fh = stack.enter_context(open(test_output_fn, 'w'))
+            if ns.test:
+                test_output_fh = stack.enter_context(open(test_output_fn, 'w'))
+                logs = [stack.enter_context(
+                    log_hz_cluster_member(devpodsel, podname)
+                    ) for podname in podnames]
+                for log in logs:
+                    out.announce("Log started for " + str(log))
 
             # Set up cloud DNS to new Hazelcast services
             set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
 
-#            if not ns.test:
-            out.announceBox(f'Your {rsaPub} public key has been installed '
-                            f'into the bastion server {bastion_addr}, so '
-                            f'you can ssh there now (user {bastionuser}).')
-            setup_summary = cloud_summary + \
-                    (['Service is started on:'] +
-                     [f'[{s.name}] {s.get_uri()}'
-                      for s in svcs.get_k8s_svc_all()])
-            out.announceLoud(setup_summary)
-            input("Press return key to quit and terminate tunnels!")
-            out.announceLoud(["Terminating all tunnels and logging"])
-
+            if not ns.test:
+                out.announceBox(f'Your {rsaPub} public key has been installed '
+                                f'into the bastion server {bastion_addr}, so '
+                                f'you can ssh there now (user {bastionuser}).')
+                setup_summary = cloud_summary + \
+                        (['Service is started on:'] +
+                         [f'[{s.name}] {s.get_uri()}'
+                          for s in svcs.get_k8s_svc_all()])
+                out.announceLoud(setup_summary)
+                input("Press return key to quit and terminate tunnels!")
+                out.announceLoud(["Terminating all tunnels and logging"])
+            else:
+                for i in range(0, ns.test):
+                    csv_output = bbclient_communicate()
+                    test_output_fh.write(csv_output + '\n')
+                    test_output_fh.flush()
 
 main()

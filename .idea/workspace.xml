@@ -10,39 +10,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketListenerThread.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketResponseResponder.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/artifacts/bbclient_jar.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/aws/vpc.tf" beforeDir="false" afterPath="$PROJECT_DIR$/aws/vpc.tf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/META-INF/MANIFEST.MF" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/jar/commons-math3-3.6.1.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/jar/hazelcast-enterprise-5.3.7.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/jar/jackson-annotations-2.12.7.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/jar/jackson-core-2.12.7.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/jar/jackson-databind-2.12.7.2.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/lib/META-INF/MANIFEST.MF" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/lib/hazelcast-5.3.8.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/META-INF/MANIFEST.MF" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/META-INF/MANIFEST.MF" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMembershipListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMembershipListener.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Logger.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Logger.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ManCtrThread.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/MovingAverage.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/MovingAverage.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Stopwatch.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Stopwatch.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bigbang.py" beforeDir="false" afterPath="$PROJECT_DIR$/bigbang.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/capcalc.py" beforeDir="false" afterPath="$PROJECT_DIR$/capcalc.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/my-vars.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/bbclient_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/bbclient_crd_v.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/chaos_baselatency.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/chaos_baselatency.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/chaos_splitdelay.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/chaos_splitdelay.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/cluster_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/cluster_crd_v.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/manctr_crd_v.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/setup.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -142,6 +115,10 @@
           <artifact name="bbclient:jar" />
         </option>
       </method>
+    </configuration>
+    <configuration default="true" type="docker-deploy" factoryName="docker-image" temporary="true">
+      <deployment type="docker-image" />
+      <method v="2" />
     </configuration>
     <list>
       <item itemvalue="Application.bbclient.Main" />

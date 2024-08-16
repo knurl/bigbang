@@ -32,13 +32,13 @@ AppVersion: 5.5.0
 OperatorChartVersion: 5.13.0
 
 # Number of nodes in K8S cluster.
-NodeCount: 3
+NodeCount: 4
 
 # Number of nodes in Hz cluster.
 HzMemberCount: 3
 
 # Number of clients
-HzClientCount: 0
+HzClientCount: 1
 
 # Require TLS on client <-> coordinator connection.
 RequireCoordTls: False

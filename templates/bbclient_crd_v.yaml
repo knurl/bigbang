@@ -22,11 +22,13 @@ spec:
       containers:
       - name: bbclient
         image: robhazelcast/robhz:latest
+        ports:
+          - containerPort: 80
         imagePullPolicy: Always
         resources:
           requests:
-            memory: "24Gi"
-            cpu: "7"
+            memory: "16Gi"
+            cpu: "4"
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

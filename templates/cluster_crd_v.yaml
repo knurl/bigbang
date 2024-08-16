@@ -9,5 +9,18 @@ spec:
   clusterSize: {{HzMemberCount}}
   clusterName: {{SrvNmCluster}}
   highAvailabilityMode: ZONE
-    #  properties:
-    #    "hazelcast.invocation.max.retry.count": "10"
+  scheduling:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/instance
+                    operator: In
+                    values:
+                      - dev
+              topologyKey: kubernetes.io/hostname
+              #  properties:
+              #    "hazelcast.invocation.max.retry.count": "10"
