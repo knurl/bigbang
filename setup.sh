@@ -164,7 +164,7 @@ fi
 pip install google-cloud-bigquery google-cloud-storage
 source ~/.bashrc
 gcloud components update
-gcloud components install gke-gcloud-auth-plugin --quiet
+gcloud components install gke-gcloud-auth-plugin
 if [[ ! -d $HOME/.config/gcloud ]]; then
     gcloud init
     gcloud auth application-default login
