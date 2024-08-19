@@ -6,10 +6,12 @@ import com.hazelcast.partition.ReplicaMigrationEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
+import java.util.function.Supplier;
 
 public class ClientMigrationListener implements MigrationListener {
     private final Logger logger = new Logger("Migrating");
     private record MigrationProgress(int numPlanned, int numCompleted) {}
+    Supplier<String> migrationEndReportingSupplier = null;
 
     /*
      * Synchronized
@@ -17,22 +19,29 @@ public class ClientMigrationListener implements MigrationListener {
     private boolean isMigrationActive = false;
     private MigrationProgress migrationProgress = null;
     private Instant instantEndOfLastMigration = null;
+    private String migrationEndInfoSupplied = null;
 
     public synchronized boolean isMigrationActive() {
-        return this.isMigrationActive;
+        return isMigrationActive;
+    }
+
+    public synchronized void clearLastMigration() {
+        isMigrationActive = false;
+        migrationProgress = null;
+        instantEndOfLastMigration = null;
+        migrationEndInfoSupplied = null;
     }
 
     private synchronized MigrationProgress getIsMigrationActive() {
-        if (this.isMigrationActive) {
-            assert this.migrationProgress != null;
-            return this.migrationProgress;
+        if (isMigrationActive) {
+            assert migrationProgress != null;
+            return migrationProgress;
         } else {
-            assert this.migrationProgress == null;
+            assert migrationProgress == null;
             return null;
         }
     }
 
-    // synchronized inside method
     /**
      * @param numPlanned Sets the new number of planned migrations
      * @param numCompleted Sets the new number of completed migrations
@@ -43,18 +52,27 @@ public class ClientMigrationListener implements MigrationListener {
             throw new IllegalArgumentException("setMigrationActive: planned %d < completed %d"
                     .formatted(numPlanned, numCompleted));
 
-        this.migrationProgress = new MigrationProgress(numPlanned, numCompleted);
-        this.isMigrationActive = true;
+        migrationProgress = new MigrationProgress(numPlanned, numCompleted);
+        isMigrationActive = true;
+        instantEndOfLastMigration = null;
+        migrationEndInfoSupplied = null;
     }
 
     private synchronized void setMigrationFinished() {
-        this.isMigrationActive = false;
-        this.migrationProgress = null;
-        this.instantEndOfLastMigration = Instant.now();
+        isMigrationActive = false;
+        migrationProgress = null;
+        instantEndOfLastMigration = Instant.now();
+        logger.log("End of last migration=%s".formatted(instantEndOfLastMigration));
+        migrationEndInfoSupplied = migrationEndReportingSupplier.get();
+        logger.log("Test results (if last migration)=%s".formatted(migrationEndInfoSupplied));
     }
 
     public synchronized Instant getInstantEndOfLastMigration() {
-        return this.instantEndOfLastMigration;
+        return instantEndOfLastMigration;
+    }
+
+    public synchronized String getMigrationEndInfoSupplied() {
+        return migrationEndInfoSupplied;
     }
 
     /*
@@ -63,6 +81,10 @@ public class ClientMigrationListener implements MigrationListener {
 
     public ClientMigrationListener() {
         logger.log("Initializing new %s()".formatted(this.getClass().getSimpleName()));
+    }
+
+    public void setMigrationEndReportingSupplier(Supplier<String> supplier) {
+        migrationEndReportingSupplier = supplier;
     }
 
     public void logAnyActiveMigrations() {

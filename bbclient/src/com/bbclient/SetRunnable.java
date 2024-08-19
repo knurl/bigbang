@@ -10,22 +10,22 @@ class SetRunnable extends IMapMethodRunnable {
     /*
      * synchronized
      */
-    private long nextKey;
-    private long lastKey;
+    private int nextKey;
+    private int lastKey;
 
-    private synchronized long getNextKey() {
+    private synchronized int getNextKey() {
         lastKey = nextKey;
         nextKey++;
         return lastKey;
     }
 
-    synchronized long getLastKey() {
+    synchronized int getLastKey() {
         return lastKey;
     }
 
-    SetRunnable(IMap<Long, String> map,
+    SetRunnable(IMap<Integer, String> map,
                 int mapValueSize,
-                long firstKey) {
+                int firstKey) {
         super(map, "setAsync", true);
         this.value = generateRandomString(mapValueSize);
         this.nextKey = firstKey;

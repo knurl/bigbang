@@ -21,6 +21,20 @@ public class ClientMembershipListener implements MembershipListener {
         }
     }
 
+    public synchronized boolean clusterIsMissingMembers() {
+        return currentNumMembers < originalNumMembers;
+    }
+
+    public void logCurrentMembershipIfMissingMembers() {
+        String r = null;
+        synchronized (this) {
+            if (currentNumMembers < originalNumMembers)
+                r = String.format("%d/%d members remain in cluster", currentNumMembers, originalNumMembers);
+        }
+        if (r != null)
+            logger.log(r);
+    }
+
     @Override
     public void memberRemoved(MembershipEvent membershipEvent) {
         synchronized (this) {
@@ -42,15 +56,5 @@ public class ClientMembershipListener implements MembershipListener {
                 sb.append(", up to %d/%d members".formatted(currentNumMembers, originalNumMembers));
         }
         logger.log(sb.toString());
-    }
-
-    public void logCurrentMembershipIfMissingMembers() {
-        String r = null;
-        synchronized (this) {
-            if (currentNumMembers < originalNumMembers)
-                r = String.format("%d/%d members remain in cluster", currentNumMembers, originalNumMembers);
-        }
-        if (r != null)
-            logger.log(r);
     }
 }

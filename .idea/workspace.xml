@@ -11,11 +11,24 @@
   <component name="ChangeListManager">
     <list default="true" id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/lib/hazelcast-5.5.0.jar" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/lib/hazelcast-5.5.0.jar" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/META-INF/MANIFEST.MF" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/META-INF/MANIFEST.MF" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMembershipListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMembershipListener.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/IsEmptyRunnable.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/IsEmptyRunnable.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/MovingAverage.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/MovingAverage.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/PutIfAbsentRunnable.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/PutIfAbsentRunnable.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/SetRunnable.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SetRunnable.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketResponseResponder.java" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketResponseResponder.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bigbang.py" beforeDir="false" afterPath="$PROJECT_DIR$/bigbang.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcp/gke.tf" beforeDir="false" afterPath="$PROJECT_DIR$/gcp/gke.tf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcp/versions.tf" beforeDir="false" afterPath="$PROJECT_DIR$/gcp/versions.tf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/my-vars.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/setup.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/bbclient_crd_v.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/bbclient_crd_v.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/chaos_splitdelay.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/templates/chaos_splitdelay.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,6 +37,9 @@
   </component>
   <component name="CodeInsightWorkspaceSettings">
     <option name="optimizeImportsOnTheFly" value="true" />
+  </component>
+  <component name="CompilerWorkspaceConfiguration">
+    <option name="MAKE_PROJECT_ON_SAVE" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -67,29 +83,29 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
-    &quot;Application.Main.executor&quot;: &quot;Run&quot;,
-    &quot;Application.bbclient.Main.executor&quot;: &quot;Run&quot;,
-    &quot;Docker.Docker.executor&quot;: &quot;Run&quot;,
-    &quot;Downloaded.Files.Path&quot;: &quot;/Users/randerson/git/bigbang/bbclient/lib&quot;,
-    &quot;Downloaded.Files.Path.Enabled&quot;: &quot;true&quot;,
-    &quot;Repository.Attach.Annotations&quot;: &quot;false&quot;,
-    &quot;Repository.Attach.JavaDocs&quot;: &quot;false&quot;,
-    &quot;Repository.Attach.Sources&quot;: &quot;false&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;java.suggest.annotation.dependency&quot;: &quot;false&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/randerson/git/bigbang/bbclient&quot;,
-    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
-    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
-    &quot;project.structure.side.proportion&quot;: &quot;0.37197357&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
+    "Application.Main.executor": "Run",
+    "Application.bbclient.Main.executor": "Run",
+    "Docker.Docker.executor": "Run",
+    "Downloaded.Files.Path": "/Users/randerson/git/bigbang/bbclient/lib",
+    "Downloaded.Files.Path.Enabled": "true",
+    "Repository.Attach.Annotations": "false",
+    "Repository.Attach.JavaDocs": "false",
+    "Repository.Attach.Sources": "false",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "main",
+    "java.suggest.annotation.dependency": "false",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/randerson/git/bigbang/bbclient",
+    "project.structure.last.edited": "Artifacts",
+    "project.structure.proportion": "0.15",
+    "project.structure.side.proportion": "0.37197357",
+    "settings.editor.selected.configurable": "preferences.lookFeel"
   }
-}</component>
+}]]></component>
   <component name="RunManager" selected="Docker.Docker">
     <configuration name="bbclient.Main" type="Application" factoryName="Application">
       <option name="ALTERNATIVE_JRE_PATH" value="17" />
@@ -117,7 +133,9 @@
       </method>
     </configuration>
     <configuration default="true" type="docker-deploy" factoryName="docker-image" temporary="true">
-      <deployment type="docker-image" />
+      <deployment type="docker-image">
+        <settings />
+      </deployment>
       <method v="2" />
     </configuration>
     <list>

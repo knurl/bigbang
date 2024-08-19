@@ -1,9 +1,8 @@
-FROM openjdk:17-jdk-slim
-
+FROM openjdk:22-jdk-slim
 
 ARG HZ_HOME="/tmp"
 
-ENV CLASSPATH_DEFAULT="${HZ_HOME}/*"
+ENV CLASSPATH_DEFAULT='*'
 
 ENV LANG=C.UTF-8 \
     JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true -Dfile.encoding=UTF8" \
@@ -34,4 +33,5 @@ CMD ["bash", "-c", "set -euo pipefail \
       && java $JAVA_OPTS \
  -Dlogback.statusListenerClass=ch.qos.logback.core.status.NopStatusListener \
  -XX:+UseZGC \
+ -cp '*' \
  -jar bbclient.jar"]

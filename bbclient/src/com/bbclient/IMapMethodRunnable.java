@@ -7,7 +7,7 @@ import java.time.Instant;
 
 abstract class IMapMethodRunnable implements Runnable {
     private final String methodName;
-    protected final IMap<Long, String> map;
+    protected final IMap<Integer, String> map;
     private final boolean quiet;
     private final Logger logger;
 
@@ -16,11 +16,30 @@ abstract class IMapMethodRunnable implements Runnable {
      */
     private final MovingAverage ma;
 
-    public boolean hasReachedMinimumPopulation() {
+    private synchronized void add(double value, boolean operationFailed, boolean quiet) {
+        ma.add(value, operationFailed, quiet);
+    }
+
+    public synchronized boolean hasReachedMinimumPopulation() {
         return ma.hasReachedMinimumPopulation();
     }
 
-    IMapMethodRunnable(IMap<Long, String> map,
+    public synchronized void clearStats() {
+        ma.clearStats();
+    }
+
+    public synchronized String toString() {
+        return ma.toString();
+    }
+
+    public synchronized String toCSV() {
+        return ma.toCSV();
+    }
+
+    /*
+     * Constructor and non-synchronized methods
+     */
+    IMapMethodRunnable(IMap<Integer, String> map,
                        String methodName,
                        boolean quiet) {
         this.map = map;
@@ -46,16 +65,6 @@ abstract class IMapMethodRunnable implements Runnable {
         }
 
         var runtime = Duration.between(start, finish).toMillis();
-        synchronized (this) {
-            ma.add(runtime, exceptionDuringOperation, quiet);
-        }
-    }
-
-    public synchronized String toString() {
-        return ma.toString();
-    }
-
-    public synchronized String toCSV() {
-        return ma.toCSV();
+        add(runtime, exceptionDuringOperation, quiet);
     }
 }

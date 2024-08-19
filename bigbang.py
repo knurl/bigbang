@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.11
 
-import pdb
+#import pdb
 import os
 import hashlib
 import argparse
@@ -387,14 +387,14 @@ class Services:
     def __init__(self, test_mode: bool = False):
         # Cluster services are k8s services that are only attributable to
         # Hazelcast itself
+        self.test_mode = test_mode
         self.clust_svcs: dict[str, Service] = {}
 
         # k8s services also include the client, if any
         self.k8s_svcs = self.clust_svcs
-        if test_mode:
-            self.k8s_svcs |= {
-                    srvnm_bbclient: Service(srvnm_bbclient, 'bb', 4000, 4000)
-                    }
+        self.k8s_svcs |= {
+                srvnm_bbclient: Service(srvnm_bbclient, 'bb', 4000, 4000)
+                }
 
         # The overall services list is a superset of the k8s services and
         # includes the k8s API Server (which is not itself a k8s service!)
@@ -406,7 +406,10 @@ class Services:
         return self.svcs.keys()
 
     def get_k8s_svc_names(self):
-        return self.k8s_svcs.keys()
+        if not self.test_mode:
+            return [k for k in self.k8s_svcs.keys() if k != srvnm_bbclient]
+        else:
+            return list(self.k8s_svcs.keys())
 
     def get_clust_svc_names(self):
         return self.clust_svcs.keys()
@@ -415,7 +418,11 @@ class Services:
         return self.svcs[name]
 
     def get_k8s_svc_all(self):
-        return iter(self.k8s_svcs.values())
+        if not self.test_mode:
+            return iter([v for k, v in self.k8s_svcs.items() if k !=
+                         srvnm_bbclient])
+        else:
+            return iter(self.k8s_svcs.values())
 
     def get_lcl_port(self, name: str) -> int:
         return self.svcs[name].lcl_port
@@ -776,8 +783,8 @@ class PodLog:
                  container: str = ""):
         self.name = name
         self.pod_selector = pod_selector
-        self.filename = tmp_filename(name, "log", random=True)
-        self.fh = open(self.filename, "w+")
+        self.filename = tmp_filename(name, "log")
+        self.fh = open(self.filename, "a")
         self.thread: Optional[Thread] = None
         self.terminate = False
         container_switch = "--all-containers"
@@ -1274,6 +1281,7 @@ def kube_crd_apply(crd: str, namespace: str) -> None:
 
 def kube_crd_apply_templated(crd: str, namespace: str, env: dict = {}) -> None:
     # Ignore changes, apply every time
+    # TODO: Seems like if there are no changes, we shouldn't apply?
     _, yamltmp = parameteriseTemplate(templates[crd], tmpdir, env)
     kube_crd_apply(yamltmp, namespace)
 
@@ -1407,7 +1415,6 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
     lbs_were_cleaned = True
 
     try:
-        pdb.set_trace()
         env = get_output_vars()
         zone_id = env['zone_id']
         bastion_ip = env['bastion_address']
@@ -1415,6 +1422,8 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
 
         # We need the bastion tunnel up in order to fetch the LBs
         with setup_k8s_api_tunnel(bastion_ip, k8s_server_name):
+            wait_until_k8s_is_ready()
+
             # NOTE: DNS *must* be removed since Terraform will complain about any
             # records it didn't create at the time the zone is destroyed.
             lbs = getLoadBalancers(svcs.get_k8s_svc_names(), hz_namespace)
@@ -1750,69 +1759,80 @@ def log_hz_cluster_member(ss_selector: str, podname: str) -> PodLog:
                   ",".join(selectors),
                   container='hazelcast')
 
-def bbclient_communicate() -> str:
+def send_and_check_resp(command: str,
+                        can_retry: bool,
+                        verbose: bool = True) -> tuple[bool, str]:
+    rc_is_ok = False
+    return_val: str = ""
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((svcs.get_fqdn(srvnm_bbclient),
+                   svcs.get_lcl_port(srvnm_bbclient)))
+
+        # Client always initiates send...
+        f = s.makefile("rw")
+        if verbose:
+            print(f'Sending: {command}')
+        f.write(command + "\n")
+        f.flush()
+        # ...then awaits the response
+        try:
+            line = f.readline()
+
+            if line.startswith("BB 200 OK"):
+                rc_is_ok = True
+                slices = line.split(":", 1)
+                if len(slices) == 2:
+                    return_val = slices[1].strip()
+                    print(f'Got back: {return_val}')
+            elif line.startswith("BB 408 TIMEOUT") and can_retry:
+                rc_is_ok = False
+            else:
+                sys.exit("Got unexpected result: " + line)
+
+        except ConnectionResetError as e:
+            print(f"Got connection reset {e}; trying again")
+            rc_is_ok = False
+
+        s.close()
+
+    return rc_is_ok, return_val
+
+stage_can_retry = {
+        'HELLO': True,
+        'MADDR': False,
+        'WLOAD': True,
+        'CHSTR': False,
+        'WCSTR': True,
+        'CHSTP': False,
+        'WTRES': True,
+        'ACKTR': False
+        }
+
+init_stages = ['HELLO', 'MADDR']
+test_stages = ['WLOAD', 'CHSTR', 'WCSTR', 'CHSTP', 'WTRES', 'ACKTR']
+
+def bbclient_communicate(stages: list[str]) -> str:
     dev0_pod_ip = runCollect([kube, 'get', 'pods',
                               '-o=jsonpath={.items[?(@.metadata.name=="' +
                               srvnm_cluster + "-0" +
                               '")].status.podIP}'])
-    def send_and_check_resp(command: str,
-                            can_retry: bool,
-                            verbose: bool = True) -> tuple[bool, str]:
-        rc_is_ok = False
-        return_val: str = ""
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((svcs.get_fqdn(srvnm_bbclient),
-                       svcs.get_lcl_port(srvnm_bbclient)))
-
-            # Client always initiates send...
-            f = s.makefile("rw")
-            if verbose:
-                print(f'Sending: {command}')
-            f.write(command + "\n")
-            f.flush()
-            # ...then awaits the response
-            try:
-                line = f.readline()
-
-                if line.startswith("BB 200 OK"):
-                    rc_is_ok = True
-                    slices = line.split(":", 1)
-                    if len(slices) == 2:
-                        return_val = slices[1].strip()
-                        print(f'Got back: {return_val}')
-                elif line.startswith("BB 408 TIMEOUT") and can_retry:
-                    rc_is_ok = False
-                else:
-                    sys.exit("Got unexpected result: " + line)
-
-            except ConnectionResetError as e:
-                print(f"Got connection reset {e}; trying again")
-                rc_is_ok = False
-
-            s.close()
-
-        return rc_is_ok, return_val
-
-    stages: list[dict] = [{'command': 'HELO', 'can_retry': True},
-                          {'command': f'ADDR {dev0_pod_ip}', 'can_retry': False},
-                          {'command': 'TEST', 'can_retry': True},
-                          {'command': 'STRT', 'can_retry': False},
-                          {'command': 'WTST', 'can_retry': True},
-                          {'command': 'STOP', 'can_retry': False}]
 
     return_val: str = ""
 
     for stage in stages:
+        command = stage
         verbose = True
         while True:
-            if stage['command'] == 'STRT':
+            if stage == 'MADDR':
+                command += f' {dev0_pod_ip}'
+            elif stage == 'CHSTR':
                 kube_crd_apply(chaos_splitdelay_crd, hz_namespace)
-            elif stage['command'] == 'STOP':
+            elif stage == 'CHSTP':
                 k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
 
-            rc_is_ok, rval = send_and_check_resp(stage['command'],
-                                                 stage['can_retry'],
+            rc_is_ok, rval = send_and_check_resp(command,
+                                                 stage_can_retry[stage],
                                                  verbose)
 
             if rc_is_ok:
@@ -1924,9 +1944,15 @@ def main() -> None:
                 input("Press return key to quit and terminate tunnels!")
                 out.announceLoud(["Terminating all tunnels and logging"])
             else:
+                bbclient_communicate(init_stages)
+
                 for i in range(0, ns.test):
-                    csv_output = bbclient_communicate()
-                    test_output_fh.write(csv_output + '\n')
-                    test_output_fh.flush()
+                    csv_output = bbclient_communicate(test_stages)
+                    if csv_output:
+                        print(f'Got back csv_output={csv_output}')
+                        test_output_fh.write(csv_output + '\n')
+                        test_output_fh.flush()
+                    else:
+                        print("Didn't get any CSV output?")
 
 main()

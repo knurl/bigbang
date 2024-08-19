@@ -56,6 +56,14 @@ resource "google_container_cluster" "gke" {
     }
   }
 
+  logging_service = "none"
+
+  monitoring_config {
+    managed_prometheus {
+      enabled = false
+    }
+  }
+
   resource_labels = var.tags
 
 }

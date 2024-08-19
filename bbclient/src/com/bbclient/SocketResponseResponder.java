@@ -15,10 +15,21 @@ public class SocketResponseResponder {
      * Synchronized
      */
     private String memberAddress = null;
-    boolean isReadyForTesting = false;
-    boolean isTestingComplete = false;
-    String testResults = null;
+    boolean isReadyForChaosStart = false;
     private Instant chaosStartTime = null;
+    boolean isReadyForChaosStop = false;
+    private boolean isChaosStopped = false;
+    String testResults = null;
+    private boolean isTestResultReceived = false;
+
+    public synchronized void resetTest() {
+        isReadyForChaosStart = false;
+        chaosStartTime = null;
+        isReadyForChaosStop = false;
+        isChaosStopped = false;
+        testResults = null;
+        isTestResultReceived = false;
+    }
 
     public synchronized void setMemberAddress(String memberAddress) {
         this.memberAddress = memberAddress;
@@ -40,44 +51,26 @@ public class SocketResponseResponder {
         return this.memberAddress != null;
     }
 
-    public synchronized void setIsReadyForTesting() {
-        this.isReadyForTesting = true;
+    public synchronized void setIsNotReadyForChaosStart() {
+        this.isReadyForChaosStart = false;
+    }
+
+    public synchronized void setIsReadyForChaosStart() {
+        this.isReadyForChaosStart = true;
         this.notifyAll();
     }
 
-    private synchronized boolean awaitIsReadyForTesting() {
-        if (isReadyForTesting)
-            return true;
+    private synchronized boolean awaitIsReadyForChaosStart() {
         try {
             this.wait(2000);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        return isReadyForTesting;
+
+        return isReadyForChaosStart;
     }
 
-    public synchronized void setIsTestingComplete(String testResults) {
-        this.isTestingComplete = true;
-        this.testResults = testResults;
-        this.notifyAll();
-    }
-
-    private synchronized boolean awaitIsTestingComplete() {
-        if (isTestingComplete)
-            return true;
-        try {
-            this.wait(2000);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        return isTestingComplete;
-    }
-
-    private synchronized String getTestResults() {
-        return this.testResults;
-    }
-
-    public synchronized void setChaosStartTime() {
+    private synchronized void setChaosStartTime() {
         this.chaosStartTime = Instant.now();
     }
 
@@ -85,9 +78,59 @@ public class SocketResponseResponder {
         return this.chaosStartTime;
     }
 
-    private void bbLog(String msg) {
-        logger.log(msg);
+    public synchronized void setIsNotReadyForChaosStop() {
+        this.isReadyForChaosStop = false;
     }
+
+    public synchronized void setIsReadyForChaosStop() {
+        this.isReadyForChaosStop = true;
+        this.notifyAll();
+    }
+
+    private synchronized boolean awaitIsReadyForChaosStop() {
+        try {
+            this.wait(2000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        return isReadyForChaosStop;
+    }
+
+    private synchronized void setIsChaosStopped() {
+        this.isChaosStopped = true;
+    }
+
+    public synchronized boolean getIsChaosStopped() {
+        return this.isChaosStopped;
+    }
+
+    public synchronized void setTestResult(String testResults) {
+        this.testResults = testResults;
+        this.notifyAll();
+    }
+
+    private synchronized String awaitTestResult() {
+        try {
+            this.wait(2000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        return this.testResults;
+    }
+
+    private synchronized void setIsTestResultReceived() {
+        this.isTestResultReceived = true;
+    }
+
+    public synchronized boolean getIsTestResultReceived() {
+        return this.isTestResultReceived;
+    }
+
+    /*
+     * End synchronized
+     */
 
     public static boolean isValidIp(String testIp) {
         var ip = testIp;
@@ -114,34 +157,46 @@ public class SocketResponseResponder {
 
         if (atoms.length == 1) {
             returnCode = switch (verb) {
-                case "HELO" -> {
-                    retVal = "HELLO TO YOU";
-                    yield respOk;
-                }
-                case "TEST" -> {
-                    var isReady = awaitIsReadyForTesting();
-                    if (isReady) {
+                case "HELLO" -> respOk;
+                case "WLOAD" -> {
+                    if (awaitIsReadyForChaosStart()) {
+                        logger.log("*** READY TO MOVE TO CHAOS START ***");
                         yield respOk;
                     } else {
                         yield respTimeout;
                     }
                 }
-                case "WTST" -> {
-                    var isComplete = awaitIsTestingComplete();
-                    if (isComplete) {
-                        retVal = getTestResults();
-                        yield respOk;
-                    } else {
-                        yield respTimeout;
-                    }
-                }
-                case "STRT" -> {
+                case "CHSTR" -> {
                     setChaosStartTime();
-                    bbLog("*** CHAOS START ***");
+                    logger.log("*** CHAOS START ***");
                     yield respOk;
                 }
-                case "STOP" -> {
-                    bbLog("*** CHAOS STOP ***");
+                case "WCSTR" -> {
+                    if (awaitIsReadyForChaosStop()) {
+                        logger.log("*** READY TO MOVE TO CHAOS STOP ***");
+                        yield respOk;
+                    } else {
+                        yield respTimeout;
+                    }
+                }
+                case "CHSTP" -> {
+                    setIsChaosStopped();
+                    logger.log("*** CHAOS STOP ***");
+                    yield respOk;
+                }
+                case "WTRES" -> {
+                    String testResults;
+                    if ((testResults = awaitTestResult()) != null) {
+                        logger.log("*** TRANSMIT TEST RESULTS ***");
+                        retVal = testResults;
+                        yield respOk;
+                    } else {
+                        yield respTimeout;
+                    }
+                }
+                case "ACKTR" -> {
+                    setIsTestResultReceived();
+                    logger.log("*** TEST RESULTS ACK FROM CLIENT ***");
                     yield respOk;
                 }
                 default -> respFail;
@@ -150,8 +205,8 @@ public class SocketResponseResponder {
             String object = atoms[1];
             returnCode = respFail;
 
-            if (verb.equals("ADDR") && !isMemberAddressSet() && isValidIp(object)) {
-                bbLog("Setting memberAddress to " + object);
+            if (verb.equals("MADDR") && !isMemberAddressSet() && isValidIp(object)) {
+                logger.log("Setting memberAddress to " + object);
                 this.setMemberAddress(object);
                 returnCode = respOk;
             }

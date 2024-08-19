@@ -7,26 +7,26 @@ import static com.bbclient.RandomStringBuilder.generateRandomString;
 class PutIfAbsentRunnable extends IMapMethodRunnable {
     private final String value;
 
-    private final long firstKey;
-    private final long lastKey;
+    private final int firstKey;
+    private final int lastKey;
 
     /*
      * synchronized
      */
-    private long nextKey;
+    private int nextKey;
 
-    private synchronized long getNextKey() {
+    private synchronized int getNextKey() {
         var nextKey = this.nextKey;
         this.nextKey++;
-        if (this.nextKey > this.lastKey)
+        if (this.nextKey == this.lastKey)
             this.nextKey = this.firstKey;
         return nextKey;
     }
 
-    PutIfAbsentRunnable(IMap<Long, String> map,
+    PutIfAbsentRunnable(IMap<Integer, String> map,
                         int mapValueSize,
-                        long firstKey,
-                        long lastKey) {
+                        int firstKey,
+                        int lastKey) {
         super(map, "putIfAbsent", false);
         this.value = generateRandomString(mapValueSize);
         this.firstKey = firstKey;

@@ -43,7 +43,7 @@ spec:
             #            correlation: '90'
     - name: workflow-splitdelay-sl-flipflop
       templateType: NetworkChaos
-      deadline: 70s
+      deadline: 2h
       networkChaos:
         direction: both
         action: partition

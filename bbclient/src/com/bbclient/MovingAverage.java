@@ -10,14 +10,25 @@ public class MovingAverage {
     private final String name;
     private final DescriptiveStatistics stats;
     private long failedCount = 0;
-    private final int population = 1 << 14;
-    final int minPopulation = population >> 2;
     private final Logger logger;
+    private final int minPopulation;
 
     public MovingAverage(String name) {
+        int population;
+        if (!Main.rapidTestMode) {
+            population = 1 << 12;
+        } else {
+            population = 1 << 7;
+        }
+        this.minPopulation = population >> 2;
+
         this.name = name;
         this.stats = new DescriptiveStatistics(population);
         this.logger = new Logger(name);
+    }
+
+    public void clearStats() {
+        stats.clear();
     }
 
     public boolean hasReachedMinimumPopulation() {
@@ -88,8 +99,11 @@ public class MovingAverage {
     public String toCSV() {
         List<String> stringList = new ArrayList<>();
         stringList.add(name);
+        stringList.add("%d".formatted(stats.getN()));
         stringList.add("%d".formatted(Math.round(stats.getMean())));
         stringList.add("%d".formatted(Math.round(stats.getStandardDeviation())));
+        stringList.add("%d".formatted(Math.round(stats.getMin())));
+        stringList.add("%d".formatted(Math.round(stats.getMax())));
         return String.join(",", stringList);
     }
 }
