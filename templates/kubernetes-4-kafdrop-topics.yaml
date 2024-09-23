@@ -1,0 +1,95 @@
+---
+# Creates Kafka topics, and Kafdrop UI
+---
+############################################################################
+# Services
+############################################################################
+---
+# Kafdrop : DNS will be "gartner-kafdrop.default.svc.cluster.local".
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-kafdrop
+spec:
+  selector:
+    app: gartner-kafdrop
+  ports:
+  - port: 8080
+    targetPort: 9000
+  type: LoadBalancer
+---
+############################################################################
+# Jobs - runs immediately
+############################################################################
+---
+# Topics Create
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: gartner-job-topics-create
+  name: gartner-job-topics-create
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: gartner-job-topics-create
+    spec:
+      containers:
+        - env:
+          - name: "MY_BOOTSTRAP_SERVERS"
+            value: "gartner-kafka-broker-0.gartner-kafka-broker.default.svc.cluster.local:9092,gartner-kafka-broker-1.gartner-kafka-broker.default.svc.cluster.local:9092,gartner-kafka-broker-2.gartner-kafka-broker.default.svc.cluster.local:9092"
+          image: "hazelcast-platform-demos/gartner-topics-create"
+          imagePullPolicy: Never
+          name: gartner-job-topics-create-container
+      restartPolicy: Never
+---
+############################################################################
+# Deployments - wait to allow jobs to run, then create
+############################################################################
+---
+# Kafdrop
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: kafdrop
+  name: gartner-kafdrop
+spec:
+  selector:
+    matchLabels:
+      app: gartner-kafdrop
+  template:
+    metadata:
+      labels:
+        app: gartner-kafdrop
+        app.kubernetes.io/component: kafdrop
+    spec:
+      initContainers:
+        - name: wait-for-topics-create
+          image: busybox
+          command: ['sh', '-c', 'sleep 60']
+      containers:
+        - env:
+          # Internal port 19092
+          - name: "KAFKA_BROKERCONNECT"
+            value: "gartner-kafka-broker-0.gartner-kafka-broker.default.svc.cluster.local:19092,gartner-kafka-broker-1.gartner-kafka-broker.default.svc.cluster.local:19092,gartner-kafka-broker-2.gartner-kafka-broker.default.svc.cluster.local:19092"
+          image: "hazelcast-platform-demos/gartner-kafdrop"
+          imagePullPolicy: Never
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9000
+          name: gartner-kafdrop-container
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9000
+            initialDelaySeconds: 30
+--- 

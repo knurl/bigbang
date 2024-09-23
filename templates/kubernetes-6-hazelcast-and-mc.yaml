@@ -1,0 +1,96 @@
+---
+# Service for Management Center external access
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-management-center
+spec:
+  selector:
+    app: gartner-management-center
+  ports:
+    - name: gartner-management-center
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer
+---
+# Service for HZ
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-hazelcast-server
+spec:
+  clusterIP: None
+  selector:
+    app: gartner-hazelcast-server
+  ports:
+  - port: 5701
+############################################################################
+# Deployments
+############################################################################
+---
+# Management Center
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gartner-management-center
+spec:
+  selector:
+    matchLabels:
+      app: gartner-management-center
+  template:
+    metadata:
+      labels:
+        app: gartner-management-center
+    spec:
+      containers:
+        - env:
+          - name: "MC_CLUSTER1_SERVICE_OVERRIDE"
+            value: "gartner-hazelcast-server.default.svc.cluster.local"
+          image: "hazelcast-platform-demos/gartner-management-center"
+          imagePullPolicy: Never
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 60
+          name: gartner-management-center-container
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 60
+--- 
+############################################################################
+# Stateful sets
+############################################################################
+---
+# Hazelcast
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gartner-hazelcast-server
+spec:
+  replicas: 3
+  serviceName: gartner-hazelcast-server
+  selector:
+    matchLabels:
+      app: gartner-hazelcast-server
+  template:
+    metadata:
+      labels:
+        app: gartner-hazelcast-server
+    spec:
+      containers:
+        - env:
+          - name: "HZ_NETWORK_JOIN_KUBERNETES_ENABLED"
+            value: "true"
+          - name: "HZ_NETWORK_JOIN_KUBERNETES_SERVICEDNS"
+            value: "gartner-hazelcast-server.default.svc.cluster.local"
+          image: "hazelcast-platform-demos/gartner-hazelcast-server"
+          imagePullPolicy: Never
+          name: gartner-hazelcast-server-container
+

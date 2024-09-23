@@ -26,7 +26,7 @@ class SetRunnable extends IMapMethodRunnable {
     SetRunnable(IMap<Integer, String> map,
                 int mapValueSize,
                 int firstKey) {
-        super(map, "setAsync", true);
+        super(map, "set", true);
         this.value = generateRandomString(mapValueSize);
         this.nextKey = firstKey;
         this.lastKey = this.nextKey;

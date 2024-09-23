@@ -109,6 +109,8 @@ p.add_argument('-g', '--target', action="store",
                help="Force cloud target to specified value.")
 p.add_argument('-t', '--test', action='store', metavar='RUNS', type=int,
                help='Run in chaos testing mode for specified number of runs')
+p.add_argument('-T', '--local-test', action='store_true', 
+               help="Run test as local-only test (not client/server)")
 p.add_argument('-z', '--zone', action="store",
                help="Force zone/region to specified value.")
 p.add_argument('command',
@@ -132,6 +134,9 @@ if ns.command != 'start':
 
 if ns.command not in ('start', 'stop'):
     p.error('Command can only be start or stop')
+
+if ns.local_test and not ns.test:
+    p.error('Local-test mode can only be used with test mode')
 
 #
 # Read the configuration yaml for _this_ Python script ("my-vars.yaml"). This
@@ -350,12 +355,13 @@ chaosmeshoptions=(
         '--set chaosDaemon.runtime=containerd '
         '--set chaosDaemon.socketPath=/run/containerd/containerd.sock')
 
-hz_crds = ['priclass', 'cluster']
+hz_crds = ['hzcluster']
+
 if nhzclients > 0:
-    hz_crds += ['bbclient', 'bbclient_svc']
+    hz_crds += ['bbclient_priclass', 'bbclient_depl', 'bbclient_svc']
 
 for crd in hz_crds:
-    templates[crd] = f'{crd}_crd_v.yaml'
+    templates[crd] = f'{crd}.yaml'
 
 chaos_baselatency_crd = 'templates/chaos_baselatency.yaml'
 chaos_splitdelay_crd = 'templates/chaos_splitdelay.yaml'
@@ -613,9 +619,10 @@ def get_my_pub_ip() -> ipaddress.IPv4Address:
 
     try:
         myIp = ipaddress.IPv4Address(i)
-        out.announceBox(f"Your visible IP address is {myIp}. Ingress to your "
-                        "newly-created bastion server will be limited to this address "
-                        "exclusively.")
+        out.announceBox(f"""\
+                Your visible IP address is {myIp}. Ingress to your
+                newly-created bastion server will be limited to this
+                address exclusively.""")
         return myIp
     except ValueError:
         print(f"Unable to retrieve my public IP address; got {i}")
@@ -675,49 +682,68 @@ def waitUntilDeploymentsAvail(namespace: str, minreplicas: int = 0) -> float:
 # not cover all the services presented, notably in the case when the load
 # balancers aren't yet ready. The caller needs to be prepared for this
 # possibility.
-def getLoadBalancers(services: list, namespace: str) -> dict[str, str]:
-    lbs: dict[str, str] = {}
-    namesp = f" --namespace {namespace}" if namespace else ""
-    for serv in services:
-        r = runTry(f"{kube}{namesp} get svc -ojson {serv}".split())
-        if r.returncode == 0:
-            jout = json.loads(r.stdout)
-            assert "items" not in jout
-            s = jout
+def get_lbs(load_balancer_names: list[str], namespace: str) -> dict[str, str]:
+    found_lbs: dict[str, str] = {}
 
-            # Metadata section
-            meta = s["metadata"] # this should always be present
-            assert meta["namespace"] == namespace # we only asked for this
-            if "name" not in meta:
-                continue
-            name = meta["name"]
-            assert name == serv, f"Unexpected service {name}"
+    # Get only load balancers
+    r = runTry(f"{kube} -n {namespace} get svc -ojson".split())
+    if r.returncode != 0:
+        return found_lbs
 
-            # Status section - now see if its IP is allocated yet
-            if "status" not in s:
-                continue
-            status = s["status"]
+    items = json.loads(r.stdout)["items"]
+    for item in items:
+        # Spec section
+        #
+        spec = item.get('spec')
+        if not spec:
+            continue
 
-            if "loadBalancer" not in status:
-                continue
-            lb = status["loadBalancer"]
-            if "ingress" not in lb:
-                continue
-            ingress = lb["ingress"]
-            assert len(ingress) == 1
-            ingress0 = ingress[0]
+        servtype = spec.get('type')
+        if not servtype:
+            continue
 
-            # Key could be either ip or hostname, both valid
-            if "ip" in ingress0:
-                lbs[name] = ingress0["ip"]
-            elif "hostname" in ingress0:
-                lbs[name] = ingress0["hostname"]
-    assert len(lbs) == len(services)
-    return lbs
+        if servtype != "LoadBalancer":
+            continue
+
+        # Metadata section
+        #
+        meta = item["metadata"] # this should always be present
+        assert meta["namespace"] == namespace # we only asked for this ns
+        name = meta["name"]
+        if name not in load_balancer_names:
+            print(f'Unexpected load balancer {name} found!')
+
+        # Status section - now see if its IP is allocated yet
+        #
+        status = item.get('status')
+        if not status:
+            continue
+
+        lb = status.get('loadBalancer')
+        if not lb:
+            continue
+
+        ingress = lb.get('ingress')
+        if not ingress:
+            continue
+
+        assert len(ingress) == 1
+        ingress0 = ingress[0]
+
+        # Key could be either ip or hostname, both valid
+        ip = ingress0.get('ip')
+        hostname = ingress0.get('hostname')
+
+        if ip:
+            found_lbs[name] = ip
+        elif hostname:
+            found_lbs[name] = hostname
+
+    return found_lbs
 
 def waitUntilLoadBalancersUp(services: list, namespace: str) -> float:
     denom = len(services)
-    lbs = getLoadBalancers(services, namespace)
+    lbs = get_lbs(services, namespace)
     numer = len(lbs.keys())
     return safeDivide(numer, denom)
 
@@ -1058,7 +1084,7 @@ def create_tunnels_to_k8s_svcs(bastion_addr: str) -> tuple[list[Tunnel],
     #
     # Get the DNS name of the load balancers we've created
     #
-    lbs = getLoadBalancers(svcnames, hz_namespace)
+    lbs = get_lbs(svcnames, hz_namespace)
 
     # we should have a load balancer for every service we'll forward
     for svcname in svcnames:
@@ -1306,7 +1332,7 @@ def delete_all_services(namespace: str) -> bool:
     # the ENIs and preventing the deletion of the associated subnets
     # https://github.com/kubernetes/kubernetes/issues/93390
     out.announce(f"Deleting all k8s services for namespace {namespace}")
-    lbs_before: dict[str, str] = getLoadBalancers(svcs.get_k8s_svc_names(),
+    lbs_before: dict[str, str] = get_lbs(svcs.get_k8s_svc_names(),
                                                   namespace)
 
     # Summarize which LBs were there before attempt to kill services
@@ -1319,7 +1345,7 @@ def delete_all_services(namespace: str) -> bool:
     # Destroy all services!
     runStdout(f'{kube} -n {namespace} delete '
               '--grace-period=60 svc --all'.split())
-    lbs_after = getLoadBalancers(svcs.get_k8s_svc_names(), namespace)
+    lbs_after = get_lbs(svcs.get_k8s_svc_names(), namespace)
 
     # Indicate if any LBs remain after killing services
     if len(lbs_after) != 0:
@@ -1340,8 +1366,16 @@ def helm_uninstall_releases_and_kill_pods(namespace: str):
             print(f"Unable to uninstall release {release}: {e}")
     killAllTerminatingPods(namespace)
 
+def docker_push_latest_tag(tag: str) -> None:
+    docker_repo = "robhazelcast/robhz"
+    out.announce(f"pushing {srvnm_bbclient} {docker_repo}:{tag} container image")
+    runStdout(f"docker tag {docker_repo}:latest {docker_repo}:{tag}".split())
+    runStdout(f"docker push {docker_repo}:{tag}".split())
+
 def start_hz_pods_svcs(env: dict[str, str],
                        secrets: dict[str, dict[str, str]]) -> None:
+    docker_img_tag = random_string(8)
+
     # Create Hazelcast namespace and set as *default namespace*
     k8s_create_namespace(hz_namespace)
     k8s_set_context_namespace(hz_namespace) # default namespace
@@ -1350,7 +1384,8 @@ def start_hz_pods_svcs(env: dict[str, str],
             appversionlabel: appversion,
             'HzClientCount': nhzclients,
             'HzMemberCount': nhzmembers,
-            'SrvNmCluster': srvnm_cluster
+            'SrvNmCluster': srvnm_cluster,
+            'LatestTag': docker_img_tag
             }
 
     env |= k8s_secrets_create(hz_namespace, secrets)
@@ -1361,6 +1396,8 @@ def start_hz_pods_svcs(env: dict[str, str],
     # Now, install the Hazelcast operator
     helm_install_release(hz_namespace, hz_helm_repo_name, operator_module,
                          oprchartversion)
+
+    docker_push_latest_tag(docker_img_tag)
 
     # Apply all the Hz CRD templates
     for crd in hz_crds:
@@ -1374,39 +1411,35 @@ def start_hz_pods_svcs(env: dict[str, str],
     wait_for_hazelcast_svcs()
 
 def start_chaos_pods_svcs() -> None:
-        # Before we create the chaos-mesh objects, we want to force-restart the
-        # clients, in order to ensure that they reload the latest image.
-        k8s_restart(hz_namespace, depnm_bbclient)
+    k8s_create_namespace(chaos_namespace)
 
-        k8s_create_namespace(chaos_namespace)
+    # Set up the Chaos Mesh repo if not already done
+    helm_set_up_repo(chaos_namespace, chaos_helm_repo_name,
+                     chaos_helm_repo_location)
 
-        # Set up the Chaos Mesh repo if not already done
-        helm_set_up_repo(chaos_namespace, chaos_helm_repo_name,
-                         chaos_helm_repo_location)
+    helm_install_release(chaos_namespace, chaos_helm_repo_name,
+                         chaosmesh_module, chaoschartversion,
+                         chaosmeshoptions)
 
-        helm_install_release(chaos_namespace, chaos_helm_repo_name,
-                             chaosmesh_module, chaoschartversion,
-                             chaosmeshoptions)
+    # TODO: There is a bug in chaos-mesh in the auth module, that prevents
+    # chaos-mesh from working across namespaces. This is the workaround:
+    runIgnore(f'{kube} -n {chaos_namespace} delete '
+              '--ignore-not-found=true '
+              'validatingwebhookconfigurations.admissionregistration.k8s.io '
+              'chaos-mesh-validation-auth'.split())
 
-        # TODO: There is a bug in chaos-mesh in the auth module, that prevents
-        # chaos-mesh from working across namespaces. This is the workaround:
-        runIgnore(f'{kube} -n {chaos_namespace} delete '
-                  '--ignore-not-found=true '
-                  'validatingwebhookconfigurations.admissionregistration.k8s.io '
-                  'chaos-mesh-validation-auth'.split())
+    # Speed up the deployment of the updated pods by killing the old ones
+    killAllTerminatingPods(chaos_namespace)
 
-        # Speed up the deployment of the updated pods by killing the old ones
-        killAllTerminatingPods(chaos_namespace)
+    # Wait for pods. There are no chaosmesh services to wait for
+    wait_for_chaosmesh_pods()
 
-        # Wait for pods. There are no chaosmesh services to wait for
-        wait_for_chaosmesh_pods()
-
-        # Get rid of any existing split-delay workflow, then apply the
-        # chaos-mesh workflow for some (small) increased latency between
-        # members. Note that this must be applied in the *Hazelcast* namespace,
-        # not in the chaos-mesh namespace.
-        k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
-        kube_crd_apply(chaos_baselatency_crd, hz_namespace)
+    # Get rid of any existing split-delay workflow, then apply the
+    # chaos-mesh workflow for some (small) increased latency between
+    # members. Note that this must be applied in the *Hazelcast* namespace,
+    # not in the chaos-mesh namespace.
+    k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
+    kube_crd_apply(chaos_baselatency_crd, hz_namespace)
 
 def svcStop(onlyEmptyNodes: bool = False) -> None:
     # Re-establish the tunnel with the bastion to allow our commands to flow
@@ -1426,7 +1459,7 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
 
             # NOTE: DNS *must* be removed since Terraform will complain about any
             # records it didn't create at the time the zone is destroyed.
-            lbs = getLoadBalancers(svcs.get_k8s_svc_names(), hz_namespace)
+            lbs = get_lbs(svcs.get_k8s_svc_names(), hz_namespace)
             try:
                 set_dns_for_lbs(zone_id, lbs, delete=True)
             except CalledProcessError:
@@ -1470,10 +1503,10 @@ def svcStop(onlyEmptyNodes: bool = False) -> None:
         return
 
     if not lbs_were_cleaned:
-        out.announceBox(textwrap.dedent("""\
+        out.announceBox("""\
                 I was unable to clear away load balancers. I will try to destroy
                 your terraform, but you might have trouble on the destroy with
-                leaked LBs."""))
+                leaked LBs.""")
 
     out.announce(f"Ensuring cluster {clustname} is deleted")
     with Timer('stopping cluster'):
@@ -1787,6 +1820,10 @@ def send_and_check_resp(command: str,
                     print(f'Got back: {return_val}')
             elif line.startswith("BB 408 TIMEOUT") and can_retry:
                 rc_is_ok = False
+            elif line.startswith("BB 400 BADREQUEST"):
+                sys.exit("Got unexpected result: " + line)
+            elif line == "":
+                rc_is_ok = False
             else:
                 sys.exit("Got unexpected result: " + line)
 
@@ -1800,7 +1837,7 @@ def send_and_check_resp(command: str,
 
 stage_can_retry = {
         'HELLO': True,
-        'MADDR': False,
+        'MADDR': True,
         'WLOAD': True,
         'CHSTR': False,
         'WCSTR': True,
@@ -1809,15 +1846,15 @@ stage_can_retry = {
         'ACKTR': False
         }
 
-init_stages = ['HELLO', 'MADDR']
-test_stages = ['WLOAD', 'CHSTR', 'WCSTR', 'CHSTP', 'WTRES', 'ACKTR']
+test_stages = ['HELLO', 'MADDR', 'WLOAD', 'CHSTR', 'WCSTR', 'CHSTP', 'WTRES', 'ACKTR']
 
-def bbclient_communicate(stages: list[str]) -> str:
-    dev0_pod_ip = runCollect([kube, 'get', 'pods',
-                              '-o=jsonpath={.items[?(@.metadata.name=="' +
-                              srvnm_cluster + "-0" +
-                              '")].status.podIP}'])
+def get_dev0_ip() -> str:
+    return runCollect([kube, 'get', 'pods',
+                       '-o=jsonpath={.items[?(@.metadata.name=="' +
+                       srvnm_cluster + "-0" +
+                       '")].status.podIP}'])
 
+def bbclient_communicate(stages: list[str], dev0_ip: str) -> str:
     return_val: str = ""
 
     for stage in stages:
@@ -1825,11 +1862,12 @@ def bbclient_communicate(stages: list[str]) -> str:
         verbose = True
         while True:
             if stage == 'MADDR':
-                command += f' {dev0_pod_ip}'
-            elif stage == 'CHSTR':
-                kube_crd_apply(chaos_splitdelay_crd, hz_namespace)
-            elif stage == 'CHSTP':
-                k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
+                command += f' {dev0_ip}'
+            elif not ns.local_test:
+                if stage == 'CHSTR':
+                    kube_crd_apply(chaos_splitdelay_crd, hz_namespace)
+                elif stage == 'CHSTP':
+                    k8s_crd_delete(chaos_splitdelay_crd, hz_namespace)
 
             rc_is_ok, rval = send_and_check_resp(command,
                                                  stage_can_retry[stage],
@@ -1855,6 +1893,11 @@ def bbclient_communicate(stages: list[str]) -> str:
 def main() -> None:
     if ns.progmeter_test:
         spinWaitCGTest()
+        sys.exit(0)
+
+    if ns.test and ns.local_test:
+        for i in range(0, ns.test):
+            bbclient_communicate(test_stages, "0.0.0.0")
         sys.exit(0)
 
     out.announce("Verifying environment")
@@ -1895,9 +1938,12 @@ def main() -> None:
             terraform_start()
 
     # Collect back the output from the Terraform apply
-    env = get_output_vars()
-    bastion_addr = env['bastion_address']
-    k8s_api_addr = env['k8s_api_server']
+    try:
+        env = get_output_vars()
+        bastion_addr = env['bastion_address']
+        k8s_api_addr = env['k8s_api_server']
+    except MissingTerraformOutput:
+        sys.exit('skip_cluster_start requested but Terraform is not set up')
 
     # Open the SSH tunnel to the K8S API Server
     with setup_k8s_api_tunnel(bastion_addr, k8s_api_addr):
@@ -1933,9 +1979,10 @@ def main() -> None:
             set_dns_for_lbs(env['zone_id'], hz_srv_lbs)
 
             if not ns.test:
-                out.announceBox(f'Your {rsaPub} public key has been installed '
-                                f'into the bastion server {bastion_addr}, so '
-                                f'you can ssh there now (user {bastionuser}).')
+                out.announceBox(f"""\
+                        Your {rsaPub} public key has been installed
+                        into the bastion server {bastion_addr}, so
+                        you can ssh there now (user {bastionuser}).""")
                 setup_summary = cloud_summary + \
                         (['Service is started on:'] +
                          [f'[{s.name}] {s.get_uri()}'
@@ -1944,10 +1991,28 @@ def main() -> None:
                 input("Press return key to quit and terminate tunnels!")
                 out.announceLoud(["Terminating all tunnels and logging"])
             else:
-                bbclient_communicate(init_stages)
-
                 for i in range(0, ns.test):
-                    csv_output = bbclient_communicate(test_stages)
+                    # NOTE: In test mode, we _must_ restart the Hazelcast
+                    # cluster every time because the cluster keeps track of
+                    # which nodes have been the unhealthiest, and over time
+                    # data gravitates *away* from those nodes. So if we keep
+                    # reusing the same cluster, our partitions won't be
+                    # balanced. Restarting the cluster gets rid of this stored
+                    # state about node health.
+
+                    kube_force_delete_all_pods_for_selector(hz_namespace,
+                                                            devpodsel)
+                    kube_force_delete_all_pods_for_selector(hz_namespace,
+                                                            bbclientpodsel)
+                    wait_for_hazelcast_pods()
+
+                    out.announceBox(f"""\
+                            Running in test mode for {ns.test} iterations. Each
+                            run will do a rolling restart of the cluster and
+                            client, and wait for the restart to complete.""")
+                    dev0_ip = get_dev0_ip()
+                    out.announce(f'Connecting to dev-0 on {dev0_ip}')
+                    csv_output = bbclient_communicate(test_stages, dev0_ip)
                     if csv_output:
                         print(f'Got back csv_output={csv_output}')
                         test_output_fh.write(csv_output + '\n')

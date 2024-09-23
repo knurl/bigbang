@@ -1,0 +1,114 @@
+---
+# Runs 1 Zookeeper, creates services for Kafka Brokers but not the brokers
+---
+############################################################################
+# Services
+############################################################################
+---
+# Kafka Broker : DNS will be "gartner-kafka-broker.default.svc.cluster.local".
+# FOR INTERNAL ACCESS: Eg. topics-create job
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-kafka-broker
+spec:
+  clusterIP: None
+  selector:
+    app: gartner-kafka-broker
+  ports:
+  - port: 19092
+---
+# FOR EXTERNAL ACCESS: ONE EACH PER KAFKA BROKER
+# "LoadBalancer" allows the ConfigMap to find all 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-kafka-broker-0
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: gartner-kafka-broker-0
+  ports:
+  - port: 9092
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-kafka-broker-1
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: gartner-kafka-broker-1
+  ports:
+  - port: 9092
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-kafka-broker-2
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: gartner-kafka-broker-2
+  ports:
+  - port: 9092
+  type: LoadBalancer
+---
+# Zookeeper : DNS will be "gartner-zookeeper.default.svc.cluster.local".
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gartner-zookeeper
+spec:
+  selector:
+    app: gartner-zookeeper
+  ports:
+  - port: 2181
+  type: ClusterIP
+---
+############################################################################
+# Deployments
+############################################################################
+---
+# Zookeeper
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: zookeeper
+  name: gartner-zookeeper
+spec:
+  selector:
+    matchLabels:
+      app: gartner-zookeeper
+      app.kubernetes.io/component: zookeeper
+  template:
+    metadata:
+      labels:
+        app: gartner-zookeeper
+        app.kubernetes.io/component: zookeeper
+    spec:
+      containers:
+        - env:
+          - name: "ALLOW_ANONYMOUS_LOGIN"
+            value: "true"
+          image: "hazelcast-platform-demos/gartner-zookeeper"
+          imagePullPolicy: Always
+          name: zookeeper-container
+          livenessProbe:
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            tcpSocket:
+              port: 2181
+          name: gartner-zookeeper-container
+          ports:
+            - containerPort: 2181
+          readinessProbe:
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            tcpSocket:
+              port: 2181
+---

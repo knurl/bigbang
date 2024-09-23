@@ -41,6 +41,7 @@ def announceLoud(lines: list[str]) -> None:
     cp('┗' + '━' * (pmaxl - 2) + '┛')
 
 def announceBox(s: str) -> None:
+    s = textwrap.dedent(s)
     boundary = 80 # maximum length to wrap to
     bl = '║ '
     br = ' ║'
@@ -50,7 +51,7 @@ def announceBox(s: str) -> None:
     ll = '╚'
     lr = '╝'
     inner = boundary - len(bl) - len(br)
-    lines = textwrap.wrap(s, width = inner, break_on_hyphens = False)
+    lines = textwrap.wrap(s, width=inner, break_on_hyphens=False)
     maxl = max(map(len, lines))
     topbord = ul + hz * (maxl + 2) + ur
     botbord = ll + hz * (maxl + 2) + lr
@@ -71,7 +72,7 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
     maxlen = 0
     f = min(len(anim1), len(anim2))
     barlength = None
-    minpctsz = len("─1%─┤")
+    minpctsz = len("─1%─▶")
     def cd(x):
         return colored(x, 'red')
     def eraseLine(flush: bool = False):
@@ -90,15 +91,15 @@ def spinWait(waitFunc: Callable[[], float]) -> None:
         if c == 0:
             arrow = ""
         elif c == 1:
-            arrow = '┤'
+            arrow = '▶'
         elif c < minpctsz:
-            arrow = (c - 1) * '─' + '┤'
+            arrow = (c - 1) * '─' + '▶'
         else:
             p100 = str(int(100 * pct)) + '%'
             rmdr = c - len(p100) - 1 # 1 for arrowhead
             left = rmdr >> 1
             right = rmdr - left
-            arrow = left * '─' + p100 + right * '─' + '┤'
+            arrow = left * '─' + p100 + right * '─' + '▶'
         s = ls + anim1[i % f] + lb + arrow + ' ' * (barlength - c) + \
                 rb + anim2[i % f]
         maxlen = max(maxlen, len(s))

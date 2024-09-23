@@ -9,6 +9,15 @@ spec:
   clusterSize: {{HzMemberCount}}
   clusterName: {{SrvNmCluster}}
   highAvailabilityMode: ZONE
+  properties:
+    "hazelcast.invocation.max.retry.count": "10"
+    "hazelcast.diagnostics.enabled": "true"
+    "hazelcast.diagnostics.stdout": "STDOUT"
+    "hazelcast.diagnostics.metric.level": "info"
+    "hazelcast.diagnostics.invocation.sample.period.seconds": "30"
+    "hazelcast.diagnostics.pending.invocations.period.seconds": "30"
+    "hazelcast.diagnostics.slowoperations.period.seconds": "30"
+    "hazelcast.diagnostics.storeLatency.period.seconds": "60"
   scheduling:
     affinity:
       podAntiAffinity:
@@ -22,5 +31,3 @@ spec:
                     values:
                       - dev
               topologyKey: kubernetes.io/hostname
-              #  properties:
-              #    "hazelcast.invocation.max.retry.count": "10"

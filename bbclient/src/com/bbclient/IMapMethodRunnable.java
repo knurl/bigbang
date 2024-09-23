@@ -21,7 +21,7 @@ abstract class IMapMethodRunnable implements Runnable {
     }
 
     public synchronized boolean hasReachedMinimumPopulation() {
-        return ma.hasReachedMinimumPopulation();
+        return ma.isWindowFull();
     }
 
     public synchronized void clearStats() {
@@ -29,7 +29,11 @@ abstract class IMapMethodRunnable implements Runnable {
     }
 
     public synchronized String toString() {
-        return ma.toString();
+        return methodName + "()";
+    }
+
+    public synchronized String toStatsString() {
+        return "%s->{%s}".formatted(this, ma);
     }
 
     public synchronized String toCSV() {

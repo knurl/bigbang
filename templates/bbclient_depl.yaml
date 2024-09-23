@@ -21,11 +21,11 @@ spec:
     spec:
       containers:
       - name: bbclient
-        image: docker.io/robhazelcast/robhz
+        image: docker.io/robhazelcast/robhz:{{LatestTag}}
         imagePullPolicy: Always
         resources:
           requests:
-            memory: "24Gi"
+            memory: "16Gi"
             cpu: "7"
       affinity:
         podAntiAffinity:

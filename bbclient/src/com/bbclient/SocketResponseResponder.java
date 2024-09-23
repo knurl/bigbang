@@ -70,7 +70,7 @@ public class SocketResponseResponder {
         return isReadyForChaosStart;
     }
 
-    private synchronized void setChaosStartTime() {
+    public synchronized void setChaosStartTime() {
         this.chaosStartTime = Instant.now();
     }
 
@@ -97,7 +97,7 @@ public class SocketResponseResponder {
         return isReadyForChaosStop;
     }
 
-    private synchronized void setIsChaosStopped() {
+    public synchronized void setIsChaosStopped() {
         this.isChaosStopped = true;
     }
 
@@ -120,7 +120,7 @@ public class SocketResponseResponder {
         return this.testResults;
     }
 
-    private synchronized void setIsTestResultReceived() {
+    public synchronized void setIsTestResultReceived() {
         this.isTestResultReceived = true;
     }
 
@@ -149,68 +149,80 @@ public class SocketResponseResponder {
     }
 
     public String handleIncomingMessage(String protocolMessage) {
-        String returnCode = respFail;
+        String returnCode;
         String retVal = "";
+        var logger = new Logger("Incoming", "==>", "<==");
 
         var atoms = protocolMessage.split(" ");
         String verb = atoms[0];
 
-        if (atoms.length == 1) {
-            returnCode = switch (verb) {
-                case "HELLO" -> respOk;
-                case "WLOAD" -> {
-                    if (awaitIsReadyForChaosStart()) {
-                        logger.log("*** READY TO MOVE TO CHAOS START ***");
-                        yield respOk;
-                    } else {
-                        yield respTimeout;
+        returnCode = switch (verb) {
+            case "HELLO" -> respOk;
+            case "MADDR" -> {
+                if (atoms.length > 1) {
+                    var address = atoms[1];
+                    if (isValidIp(address)) {
+                        if (!isMemberAddressSet()) {
+                            logger.log("Setting memberAddress to " + address);
+                            this.setMemberAddress(address);
+                            yield respOk;
+                        } else {
+                            try {
+                                Thread.sleep(2000);
+                            } catch (InterruptedException e) {
+                                logger.log("*** RECEIVED EXCEPTION [SETMEMBADDR] *** %s".formatted(e));
+                                throw new RuntimeException(e);
+                            }
+                            yield respTimeout;
+                        }
                     }
                 }
-                case "CHSTR" -> {
-                    setChaosStartTime();
-                    logger.log("*** CHAOS START ***");
-                    yield respOk;
-                }
-                case "WCSTR" -> {
-                    if (awaitIsReadyForChaosStop()) {
-                        logger.log("*** READY TO MOVE TO CHAOS STOP ***");
-                        yield respOk;
-                    } else {
-                        yield respTimeout;
-                    }
-                }
-                case "CHSTP" -> {
-                    setIsChaosStopped();
-                    logger.log("*** CHAOS STOP ***");
-                    yield respOk;
-                }
-                case "WTRES" -> {
-                    String testResults;
-                    if ((testResults = awaitTestResult()) != null) {
-                        logger.log("*** TRANSMIT TEST RESULTS ***");
-                        retVal = testResults;
-                        yield respOk;
-                    } else {
-                        yield respTimeout;
-                    }
-                }
-                case "ACKTR" -> {
-                    setIsTestResultReceived();
-                    logger.log("*** TEST RESULTS ACK FROM CLIENT ***");
-                    yield respOk;
-                }
-                default -> respFail;
-            };
-        } else if (atoms.length == 2) {
-            String object = atoms[1];
-            returnCode = respFail;
 
-            if (verb.equals("MADDR") && !isMemberAddressSet() && isValidIp(object)) {
-                logger.log("Setting memberAddress to " + object);
-                this.setMemberAddress(object);
-                returnCode = respOk;
+                yield respFail;
             }
-        }
+            case "WLOAD" -> {
+                if (awaitIsReadyForChaosStart()) {
+                    logger.log("Stats min pop -> client being told ready to start chaos");
+                    yield respOk;
+                } else {
+                    yield respTimeout;
+                }
+            }
+            case "CHSTR" -> {
+                setChaosStartTime();
+                logger.log("Client has started chaos");
+                yield respOk;
+            }
+            case "WCSTR" -> {
+                if (awaitIsReadyForChaosStop()) {
+                    logger.log("Client received signal from driver to stop chaos");
+                    yield respOk;
+                } else {
+                    yield respTimeout;
+                }
+            }
+            case "CHSTP" -> {
+                setIsChaosStopped();
+                logger.log("Client has stopped chaos");
+                yield respOk;
+            }
+            case "WTRES" -> {
+                String testResults;
+                if ((testResults = awaitTestResult()) != null) {
+                    logger.log("Transmit test results");
+                    retVal = testResults;
+                    yield respOk;
+                } else {
+                    yield respTimeout;
+                }
+            }
+            case "ACKTR" -> {
+                setIsTestResultReceived();
+                logger.log("Test results ack from client");
+                yield respOk;
+            }
+            default -> respFail;
+        };
 
         var outputString = new StringBuilder(returnCode);
         if (!retVal.isEmpty()) {

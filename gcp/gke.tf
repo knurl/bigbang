@@ -56,9 +56,12 @@ resource "google_container_cluster" "gke" {
     }
   }
 
-  logging_service = "none"
+  logging_config {
+    enable_components = []
+  }
 
   monitoring_config {
+    enable_components = []
     managed_prometheus {
       enabled = false
     }

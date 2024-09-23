@@ -1,0 +1,37 @@
+---
+# Sets up SQL mappings
+---
+############################################################################
+# Jobs
+############################################################################
+---
+# Create mappings
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: gartner-job-mapping-loader
+  name: gartner-job-mapping-loader
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: gartner-job-mapping-loader
+    spec:
+      containers:
+        - image: "hazelcast-platform-demos/gartner-mapping-loader"
+          imagePullPolicy: Never
+          name: gartner-job-mapping-loader-container
+          volumeMounts:
+            - name: configmap
+              mountPath: /customize/my-env.sh
+              subPath: my-env.sh
+      restartPolicy: Never
+      volumes:
+        - name: configmap
+          configMap:
+            name: gartner-configmap
+            defaultMode: 0755
+--- 

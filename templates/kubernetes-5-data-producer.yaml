@@ -1,0 +1,33 @@
+---
+# Writes continuously to Kafka
+---
+############################################################################
+# Deployments
+############################################################################
+---
+# Data producer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: data-producer
+  name: gartner-data-producer
+spec:
+  selector:
+    matchLabels:
+      app: gartner-data-producer
+  template:
+    metadata:
+      labels:
+        app: gartner-data-producer
+        app.kubernetes.io/component: data-producer
+    spec:
+      containers:
+        - env:
+          - name: "MY_BOOTSTRAP_SERVERS"
+            value: "gartner-kafka-broker-0.gartner-kafka-broker.default.svc.cluster.local:9092,gartner-kafka-broker-1.gartner-kafka-broker.default.svc.cluster.local:9092,gartner-kafka-broker-2.gartner-kafka-broker.default.svc.cluster.local:9092"
+          image: "hazelcast-platform-demos/gartner-data-producer"
+          imagePullPolicy: Never
+          name: gartner-data-producer-container
+--- 

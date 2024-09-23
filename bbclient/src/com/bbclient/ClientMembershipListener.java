@@ -4,7 +4,7 @@ import com.hazelcast.cluster.MembershipEvent;
 import com.hazelcast.cluster.MembershipListener;
 
 public class ClientMembershipListener implements MembershipListener {
-    private final Logger logger = new Logger("Membership");
+    Logger logger = new Logger("Membership");
 
     /*
      * Synchronized

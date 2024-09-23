@@ -1,132 +1,63 @@
 package com.bbclient;
 
-import com.hazelcast.client.HazelcastClient;
+import com.bbclient.com.bbclient.Stopwatch;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.impl.connection.tcp.RoutingMode;
-import com.hazelcast.client.util.ClientStateListener;
+import com.hazelcast.cluster.Cluster;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.map.IMap;
-import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.function.Supplier;
 
 class Main {
-    public static boolean rapidTestMode = false;
+    public static boolean localTestMode = true;
     static final int portNumber = 4000;
 
-    static final int mapValueSize = 1 << 16;
     private final static Logger logger = new Logger("Main");
-
-    static void awaitConnected(ClientStateListener listener) {
-        var backoff = 50; // ms
-
-        while (true) {
-            try {
-                listener.awaitConnected();
-                return;
-            } catch (InterruptedException ex) {
-                logger.log("*** RECEIVED EXCEPTION [AWAITCONN] *** %s"
-                        .formatted(ex.getClass().getSimpleName()));
-                backoff <<= 1;
-
-                try {
-                    Thread.sleep(backoff);
-                } catch (InterruptedException ex2) {
-                    logger.log(("*** RECEIVED EXCEPTION [SLEEPING] *** %s")
-                            .formatted(ex2.getClass().getSimpleName()));
-                    backoff <<= 1;
-                }
-            }
-        }
-    }
-
-    private static class ThreadPool implements AutoCloseable {
-        ExecutorService pool;
-
-        static final int numThreads = 7;
-        static final int numThreadsMax = 2*numThreads;
-        static final int threadQueueSize = numThreadsMax;
-        static final int keepAliveTimeSec = 60; // seconds
-
-        public ThreadPool() {
-            pool = new ThreadPoolExecutor(numThreads, numThreadsMax,
-                    keepAliveTimeSec, TimeUnit.SECONDS,
-                    new ArrayBlockingQueue<>(threadQueueSize),
-                    new ThreadPoolExecutor.AbortPolicy());
-        }
-
-        public boolean submit(Runnable runnable) {
-            boolean accepted;
-            try {
-                pool.submit(runnable);
-                accepted = true;
-            } catch (RejectedExecutionException e) {
-                accepted = false;
-            }
-            return accepted;
-        }
-
-        public void close() {
-            pool.shutdown();
-            try {
-                if (!pool.awaitTermination(60, TimeUnit.SECONDS))
-                    pool.shutdownNow();
-            } catch (InterruptedException e) {
-                pool.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
 
     record KeyBoundary(Integer firstKey, Integer lastKey) {}
 
-    private static KeyBoundary createMapAndGetLastKey(ThreadPool threadPool,
-                                                      ClientStateListener listener,
-                                                      IMap<Integer, String> map,
-                                                      long numEntries) throws InterruptedException {
+    private static KeyBoundary createMapAndGetLastKey(IMap<Integer, String> map,
+                                                      int numEntries,
+                                                      int mapValueSize) {
         logger.log("Clearing map");
-        awaitConnected(listener);
         map.clear();
         logger.log("Map is cleared");
 
-        DescriptiveStatistics opsRateStats = new DescriptiveStatistics();
-
         logger.log("+++ TARGET MAP SIZE -> %,d (approx %,.1fMB) +++".formatted(numEntries,
-                (double)numEntries*mapValueSize/1024/1024));
+                (double) numEntries * mapValueSize / 1024 / 1024));
 
         final var firstKey = Integer.MIN_VALUE;
         SetRunnable setRunnable = new SetRunnable(map, mapValueSize, firstKey);
+        var runnablesList = new RunnablesList();
+        runnablesList.add(setRunnable);
 
-        long mapSize = 0;
+        final int fullnessCheckTimeoutMillis = 1_000; // ms
+        var statsTimeoutMillis = 4_000;
+        var fullnessCheckStopwatch = new Stopwatch(fullnessCheckTimeoutMillis,
+                2*statsTimeoutMillis); // ms
 
-        final long executorSubmitBackoff = 250; // ms
-        final long fullnessCheckTimeout = 2_000; // ms
-        var fullnessCheckStopwatch = new Stopwatch(fullnessCheckTimeout); // ms
+        try (var mapLoaderDriver = new HazelcastDriver("maploader", runnablesList, statsTimeoutMillis)) {
+            mapLoaderDriver.start(); // start sending the set commands to Hazelcast as fast as allowable
 
-        while (mapSize < numEntries) {
-            awaitConnected(listener);
+            long mapSize = 0;
 
-            if (fullnessCheckStopwatch.isTimeOver()) {
-                mapSize = map.size();
-                var opsRate = fullnessCheckStopwatch.ratePerSecond();
-                opsRateStats.addValue(opsRate);
-                logger.log("MAPSIZE=%,d OPSRATE=%,.2f/s".formatted(mapSize, opsRate));
-                continue;
+            while (mapSize < numEntries) {
+                if (fullnessCheckStopwatch.isTimeOver()) {
+                    mapSize = map.size();
+                    logger.log("MAPSIZE=%,d".formatted(mapSize));
+                }
             }
 
-            if (threadPool.submit(setRunnable))
-                fullnessCheckStopwatch.addUnit();
-            else
-                Thread.sleep(executorSubmitBackoff);
+            logger.log("+++ ACTUAL MAP SIZE -> %,d +++".formatted(mapSize));
+            mapLoaderDriver.drainAndJoin();
+            return new KeyBoundary(firstKey, setRunnable.getLastKey());
         }
-
-        logger.log("+++ ACTUAL MAP SIZE -> %,d +++".formatted(mapSize));
-        return new KeyBoundary(firstKey, setRunnable.getLastKey());
     }
 
     private static long millisBetween(Instant begin, Instant end) {
@@ -137,10 +68,10 @@ class Main {
         return Duration.between(begin, end).toSeconds();
     }
 
-    protected static class MyRunnables extends ArrayList<IMapMethodRunnable> implements Supplier<String> {
-        protected String listRunnablesToString() {
+    protected static class RunnablesList extends ArrayList<IMapMethodRunnable> {
+        protected String listRunnablesToStatsString() {
             List<String> statsSummaries = new ArrayList<>();
-            this.forEach(x -> statsSummaries.add(x.toString()));
+            this.forEach(x -> statsSummaries.add(x.toStatsString()));
             return String.join("; ", statsSummaries);
         }
 
@@ -149,14 +80,184 @@ class Main {
             this.forEach(x -> statsCSVs.add(x.toCSV()));
             return String.join(",", statsCSVs);
         }
+    }
 
-        public String get() {
-            return listRunnablesToCSV();
+    private static class HazelcastDriver extends Thread implements AutoCloseable {
+        final Logger logger;
+        final ExecutorService pool;
+        final RunnablesList runnablesList;
+        final int measurementPeriod;
+
+        /*
+         * Synchronized
+         */
+        boolean drain = false;
+        public synchronized boolean isDraining() {
+            return this.drain;
+        }
+        public synchronized void setDrain() {
+            this.drain = true;
+        }
+
+        /*
+         * Constructor and non-synchronized
+         */
+
+        public HazelcastDriver(String name,
+                               RunnablesList runnablesList,
+                               int measurementPeriod) {
+            this.logger = new Logger(name);
+            this.runnablesList = runnablesList;
+            this.measurementPeriod = measurementPeriod;
+
+            final int numThreads = localTestMode ? 2 : 6;
+            final int numThreadsMax = (localTestMode ? 2 : 8) * numThreads;
+            final int threadQueueSize = numThreadsMax*2;
+            int keepAliveTimeSec = 60; // seconds
+
+            this.pool = new ThreadPoolExecutor(numThreads, numThreadsMax,
+                    keepAliveTimeSec, TimeUnit.SECONDS,
+                    new ArrayBlockingQueue<>(threadQueueSize),
+                    new ThreadPoolExecutor.AbortPolicy());
+        }
+
+        public void submit(Runnable runnable) {
+            boolean submitted = false;
+            var threadpoolSubmitBackoffMillis = 250; // ms
+            while (!isDraining() && !submitted) {
+                try {
+                    pool.submit(runnable);
+                    submitted = true;
+                } catch (RejectedExecutionException e) {
+                    try {
+                        Thread.sleep(threadpoolSubmitBackoffMillis);
+                    } catch (InterruptedException e2) {
+                        logger.log("*** RECEIVED INTERRUPTED EXCEPTION [SUBMIT] *** %s".formatted(e2));
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+
+        public void run() {
+            logger.log("Starting up operations");
+            var statsStopwatch = new Stopwatch(measurementPeriod);
+
+            while (!isDraining()) {
+                for (Runnable runnable: runnablesList) {
+                    if (isDraining())
+                        break;
+                    submit(runnable);
+                    statsStopwatch.addUnit();
+                    if (!isDraining() && statsStopwatch.isTimeOver()) {
+                        logger.log("OPSRATE => %,.2f/s / STATS => %s".formatted(statsStopwatch.ratePerSecond(),
+                                runnablesList.listRunnablesToStatsString()));
+                    }
+                }
+            }
+        }
+
+        public boolean reachedMinimumStatsPopulation() {
+            return this.runnablesList.stream().allMatch(IMapMethodRunnable::hasReachedMinimumPopulation);
+        }
+
+        private void drain() throws InterruptedException {
+            setDrain();
+            pool.shutdown();
+            if (!pool.awaitTermination(2, TimeUnit.SECONDS)) {
+                logger.log("Timed out waiting for termination in drain()");
+                pool.shutdownNow();
+            }
+        }
+
+        public void drainAndJoin() {
+            try {
+                drain();
+                this.join();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public String drainAndGetStats() {
+            try {
+                drain();
+                return runnablesList.listRunnablesToCSV();
+            } catch (InterruptedException e) {
+                logger.log("*** RECEIVED EXCEPTION [GET] *** %s".formatted(e));
+                throw new RuntimeException(e);
+            }
+        }
+
+        public void close() {
+            try {
+                drain();
+            } catch (InterruptedException e) {
+                pool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            pool.shutdownNow();
         }
     }
 
-    public static void main(String[] args) throws InterruptedException {
+    static class HazelcastClientManager {
+        private final HazelcastInstance hazelcastInstance;
+
+        HazelcastClientManager(String memberAddress) {
+            /*
+             * Client configuration. We set up a ClientStateListener here so that we can block
+             * until the client is connected to the Hazelcast cluster.
+             */
+            ClientConfig clientConfig = new ClientConfig();
+            var networkConfig = clientConfig.getNetworkConfig();
+            networkConfig.getClusterRoutingConfig().setRoutingMode(RoutingMode.SINGLE_MEMBER);
+            clientConfig.getConnectionStrategyConfig().setAsyncStart(true);
+            networkConfig.setAddresses(new ArrayList<>(Collections.singletonList(memberAddress)));
+            this.hazelcastInstance = com.hazelcast.client.HazelcastClient.newHazelcastClient(clientConfig);
+        }
+
+        HazelcastInstance getHazelcastInstance() {
+            return this.hazelcastInstance;
+        }
+    }
+
+    public static void main(String[] args) {
+        /*
+        if (localTestMode) {
+            TimeSeriesStatsTest statsTest = new TimeSeriesStatsTest();
+            statsTest.startTest();
+        }
+        */
+        final int maxEntries, mapValueSize;
+        if (!localTestMode) {
+            maxEntries = 1 << 17;
+            mapValueSize = 1 << 15;
+        } else {
+            maxEntries = 1 << 9;
+            mapValueSize = 1 << 3;
+        }
+        logger.log("Map: maxEntries=%,d mapValueSize=%,d".formatted(maxEntries, mapValueSize));
         var socketResponseResponder = new SocketResponseResponder();
+
+        enum TestStage {
+            MINPOP,
+            GOTOCHAOSSTART,
+            CHAOSSTARTED,
+            GOTOCHAOSSTOP,
+            CHAOSSTOPPED,
+            DRAIN,
+            REPORTED,
+            FINISHED
+        }
+
+        // all in microseconds, which we use as a standard
+        final int timeInChaosStarted = localTestMode ? 30000 : 70000;
+        final int timeInChaosStopped = 30000; // used only in test mode
+        final int statsReportFrequency = 4000;
+        final int stateChangeCheckFrequency = 1000;
+        final int migrationsCheckFrequency = 4000;
+        var stateChangeStopwatch = new Stopwatch(stateChangeCheckFrequency, 10000); // ms
+        var migrationsCheckStopwatch = new Stopwatch(migrationsCheckFrequency); // ms
 
         /* Spawn a thread to take input on a port */
         logger.log("Creating Socket Listener Thread");
@@ -164,79 +265,64 @@ class Main {
         logger.log("Starting Socket Listener Thread");
         socketListenerThread.start();
 
-        String memberAddress = socketResponseResponder.awaitMemberAddress();
+        HazelcastClientManager client = null;
+        EmbeddedHazelcastCluster embeddedCluster = null;
+        if (localTestMode) {
+            embeddedCluster = new EmbeddedHazelcastCluster(3);
+        } else {
+            String memberAddress = socketResponseResponder.awaitMemberAddress();
+            logger.log("*** IP ADDRESS for dev-0 is %s ***".formatted(memberAddress));
+            logger.log("Setting up client connection and client state listener");
+            client = new HazelcastClientManager(memberAddress);
+        }
 
-        /* Test mode
-        socketResponseResponder.setIsReadyForTesting();
-        socketResponseResponder.setIsTestingComplete("0,0,0,0");
+        /*
+         * Now set up listeners for migration and membership state with the cluster.
+         * We must register listeners or the events will not automatically flow through to us.
          */
+        logger.log("Registering membership and migration event listeners with cluster");
+        final HazelcastInstance instance;
+        final Cluster cluster;
+        if (client != null) {
+            instance = client.getHazelcastInstance();
+            cluster = client.getHazelcastInstance().getCluster();
+        } else {
+            assert embeddedCluster != null;
+            instance = embeddedCluster.getInstance(0);
+            cluster = embeddedCluster.getCluster();
+            assert cluster.getMembers().size() == 3;
+        }
 
-        ClientConfig clientConfig = new ClientConfig();
-        var networkConfig = clientConfig.getNetworkConfig();
-        networkConfig.addAddress(memberAddress);
-        networkConfig.getClusterRoutingConfig().setRoutingMode(RoutingMode.SINGLE_MEMBER);
-        ClientStateListener clientStateListener = new ClientStateListener(clientConfig);
-        HazelcastInstance hazelcastInstanceClient = HazelcastClient.newHazelcastClient(clientConfig);
-        var cluster = hazelcastInstanceClient.getCluster();
         var numMembers = cluster.getMembers().size();
         var clientMembershipListener = new ClientMembershipListener(numMembers);
         var clientMigrationListener = new ClientMigrationListener();
-        logger.log("Registering ClientMembershipListener with cluster %s".formatted(cluster));
         cluster.addMembershipListener(clientMembershipListener);
-        logger.log("Registering ClientMigrationListener with cluster %s".formatted(cluster));
-        hazelcastInstanceClient.getPartitionService().addMigrationListener(clientMigrationListener);
+        instance.getPartitionService().addMigrationListener(clientMigrationListener);
 
-        // all in microseconds, which we use as a standard
-        final long statsReportFrequency = 10000;
-        final long migrationsCheckFrequency = 5000;
-        final long timeInChaosStarted = 70000;
-        final int timeToWaitAfterLastMigration = 90000;
+        logger.log("Creating new map");
+        IMap<Integer, String> map = instance.getMap("map");
+        var keyBoundary = createMapAndGetLastKey(map, maxEntries, mapValueSize);
 
-        int maxEntries = 1 << 13;
-        if (rapidTestMode)
-            maxEntries = maxEntries >> 4;
+        logger.log("Setting up stats capture objects for Hz operations");
+        var runnablesList = new RunnablesList();
+        runnablesList.add(new IsEmptyRunnable(map));
+        runnablesList.add(new PutIfAbsentRunnable(map, mapValueSize, keyBoundary.firstKey(), keyBoundary.lastKey()));
+        var allHzMethodNames = String.join(", ",
+                runnablesList.stream().map(IMapMethodRunnable::toString).toList());
 
-        IMap<Integer, String> map = hazelcastInstanceClient.getMap("map");
+        String statsBeforeChaos = "", statsAfterChaos = "";
+        Instant chaosStartTime = null, timeMigrationEnded = null;
 
-        var statsReportStopwatch = new Stopwatch(statsReportFrequency); // ms
-        var migrationsCheckStopwatch = new Stopwatch(migrationsCheckFrequency); // ms
+        var logger = new Logger("Test Driver", "***");
+        logger.log("STARTING TEST DRIVER");
+        try (var hazelcastDriver = new HazelcastDriver("latencyTest", runnablesList, statsReportFrequency)) {
+            hazelcastDriver.start(); // start sending those runnables against Hazelcast on repeat
+            var testStage = TestStage.MINPOP;
 
-        enum TestStage {
-            LOAD,
-            GOTOCHAOSSTART,
-            CHAOSSTARTED,
-            GOTOCHAOSSTOP,
-            CHAOSSTOPPED,
-            REPORTED
-        }
+            logger.log("Running %s operations against hazelcast map".formatted(allHzMethodNames));
+            logger.log("Will continue until min stats population reached for each operation");
 
-        TestStage testStage = TestStage.LOAD;
-        String statsBeforeChaos = "";
-
-        KeyBoundary keyBoundary = null;
-        MyRunnables runnables = null;
-
-        try (var threadPool = new ThreadPool()) {
-            final long executorSubmitBackoff = 250; // ms
-
-            while (true) {
-                awaitConnected(clientStateListener);
-
-                if (keyBoundary == null) {
-                    keyBoundary = createMapAndGetLastKey(threadPool, clientStateListener, map, maxEntries);
-                    runnables = new MyRunnables();
-                    clientMigrationListener.setMigrationEndReportingSupplier(runnables);
-                    runnables.add(new IsEmptyRunnable(map));
-                    runnables.add(new PutIfAbsentRunnable(map, mapValueSize, keyBoundary.firstKey(), keyBoundary.lastKey()));
-                }
-
-                // Submit one of each type of operation
-                for (Runnable runnable : runnables)
-                    if (threadPool.submit(runnable))
-                        statsReportStopwatch.addUnit();
-                    else
-                        Thread.sleep(executorSubmitBackoff);
-
+            while (testStage != TestStage.DRAIN) {
                 /* If there were any migrations previously reported, or we just
                  * observed a large timeout, check on the cluster health and see
                  * if we're running any migrations currently.
@@ -246,21 +332,20 @@ class Main {
                     clientMigrationListener.logAnyActiveMigrations();
                 }
 
-                if (statsReportStopwatch.isTimeOver()) {
-                    logger.log("OPSRATE -> %,.2f/s / STATS -> %s".formatted(statsReportStopwatch.ratePerSecond(),
-                            runnables.listRunnablesToString()));
-
-                    boolean weHaveEnoughData =
-                            runnables.stream().allMatch(IMapMethodRunnable::hasReachedMinimumPopulation);
-                    var chaosStartTime = socketResponseResponder.getChaosStartTime();
+                if (stateChangeStopwatch.isTimeOver()) {
+                    chaosStartTime = socketResponseResponder.getChaosStartTime();
+                    timeMigrationEnded = clientMigrationListener.getInstantEndOfLastMigration();
 
                     // See if we're ready to start testing
                     testStage = switch (testStage) {
-                        case LOAD -> {
-                            if (rapidTestMode || weHaveEnoughData) {
-                                statsBeforeChaos = runnables.listRunnablesToCSV();
+                        case MINPOP -> {
+                            if (hazelcastDriver.reachedMinimumStatsPopulation()) {
+                                logger.log("Capturing stats with good network");
+                                statsBeforeChaos = runnablesList.listRunnablesToCSV();
                                 // Signal to client that we are ready to proceed
                                 socketResponseResponder.setIsReadyForChaosStart();
+                                if (localTestMode)
+                                    socketResponseResponder.setChaosStartTime();
                                 yield TestStage.GOTOCHAOSSTART;
                             } else {
                                 yield testStage;
@@ -271,16 +356,20 @@ class Main {
                                 // Block client from starting next iteration until we are done this test iteration
                                 socketResponseResponder.setIsNotReadyForChaosStart();
                                 // Clear stats as chaos testing has started
-                                runnables.forEach(IMapMethodRunnable::clearStats);
+                                logger.log("Resetting stats after starting chaos");
+                                runnablesList.forEach(IMapMethodRunnable::clearStats);
                                 yield TestStage.CHAOSSTARTED;
                             } else {
                                 yield testStage;
                             }
                         }
                         case CHAOSSTARTED -> {
-                            if (rapidTestMode || millisBetween(chaosStartTime, Instant.now()) >= timeInChaosStarted) {
+                            if (millisBetween(chaosStartTime, Instant.now()) >= timeInChaosStarted) {
+                                logger.log("Driver signaling chaos start period should end");
                                 socketResponseResponder.setIsNotReadyForChaosStart();
                                 socketResponseResponder.setIsReadyForChaosStop();
+                                if (localTestMode)
+                                    socketResponseResponder.setIsChaosStopped();
                                 yield TestStage.GOTOCHAOSSTOP;
                             }
                             yield testStage;
@@ -288,45 +377,60 @@ class Main {
                         case GOTOCHAOSSTOP -> {
                             if (socketResponseResponder.getIsChaosStopped()) {
                                 socketResponseResponder.setIsNotReadyForChaosStop();
+                                logger.log("Chaos stopped -> waiting for migration completion");
+                                if (localTestMode)
+                                    hazelcastDriver.submit(() ->
+                                            clientMigrationListener.setMigrationFinishedAfterDelay(timeInChaosStopped));
                                 yield TestStage.CHAOSSTOPPED;
                             }
                             yield testStage;
                         }
                         case CHAOSSTOPPED -> {
-                            var timeMigrationEnded = clientMigrationListener.getInstantEndOfLastMigration();
-                            if (rapidTestMode || (timeMigrationEnded != null &&
-                                    millisBetween(timeMigrationEnded, Instant.now()) >= timeToWaitAfterLastMigration &&
+                            if (timeMigrationEnded != null &&
                                     !clientMigrationListener.isMigrationActive() &&
-                                    !clientMembershipListener.clusterIsMissingMembers())) {
-                                if (rapidTestMode) {
-                                    logger.log("*** SENDING FAKE TEST RESULTS ***");
-                                    socketResponseResponder.setTestResult("0,0,0,0"); // fake data
-                                } else {
-                                    logger.log("*** CLEARING LAST MIGRATION AND SENDING TEST RESULTS ***");
-                                    socketResponseResponder.setTestResult(
-                                            secondsBetween(chaosStartTime, timeMigrationEnded) + "," +
-                                                    statsBeforeChaos + "," +
-                                                    clientMigrationListener.getMigrationEndInfoSupplied());
-                                    clientMigrationListener.clearLastMigration();
-                                }
-                                yield TestStage.REPORTED;
-                            } else {
-                                yield testStage;
+                                    !clientMembershipListener.clusterIsMissingMembers()) {
+                                logger.log("Draining remaining tasks");
+                                statsAfterChaos = hazelcastDriver.drainAndGetStats();
+                                yield TestStage.DRAIN;
                             }
+                            yield testStage;
                         }
-                        case REPORTED -> {
-                            if (socketResponseResponder.getIsTestResultReceived()) {
-                                runnables.forEach(IMapMethodRunnable::clearStats);
-                                socketResponseResponder.resetTest();
-                                statsBeforeChaos = null;
-                                keyBoundary = null; // Trigger a clear and reload of map!
-                                yield TestStage.LOAD;
-                            } else {
-                                yield testStage;
-                            }
-                        }
+                        default -> testStage;
                     };
                 }
+            }
+
+            while (testStage != TestStage.FINISHED) {
+                testStage = switch (testStage) {
+                    case DRAIN -> {
+                        assert chaosStartTime != null;
+                        logger.log("Clearing last migration and sending test results");
+                        var testResult = String.join(",", List.of(
+                                String.valueOf(maxEntries),
+                                String.valueOf(mapValueSize),
+                                String.valueOf(timeInChaosStarted),
+                                Long.toString(secondsBetween(chaosStartTime, timeMigrationEnded)),
+                                statsBeforeChaos,
+                                statsAfterChaos));
+                        socketResponseResponder.setTestResult(testResult);
+                        clientMigrationListener.clearLastMigration();
+                        if (localTestMode)
+                            socketResponseResponder.setIsTestResultReceived();
+                        yield TestStage.REPORTED;
+                    }
+                    case REPORTED -> {
+                        if (socketResponseResponder.getIsTestResultReceived()) {
+                            logger.log("Client received test results -> driver finished");
+                            runnablesList.forEach(IMapMethodRunnable::clearStats);
+                            socketResponseResponder.resetTest();
+                            statsBeforeChaos = null;
+                            yield TestStage.FINISHED;
+                        } else {
+                            yield testStage;
+                        }
+                    }
+                    default -> testStage;
+                };
             }
         }
     }
