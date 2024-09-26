@@ -1,36 +1,38 @@
-package com.bbclient.com.bbclient
+package com.bbclient
 
-import com.bbclient.TimeSeriesStats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.text.SimpleDateFormat
-import java.util.*
-import java.util.concurrent.ThreadLocalRandom
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.measureTime
 
 class TimeSeriesStatsTest {
-    private val stats = TimeSeriesStats(5_000)
+    private var windowSizeMillis = 3_000L
+    private val stats = TimeSeriesStats(windowSizeMillis, true)
+    private val logger = Logger("TimeSeriesTest", addTimestamp = true)
 
     fun startTest() {
-        val updatePeriodMillis = 1_000L
-        val rand = ThreadLocalRandom.current()
-        val formatter = SimpleDateFormat("HH:mm:ss.SS")
+        var averageCount = 0
+        var averageTotal = 0.seconds
 
         runBlocking {
-            stats.startAutoUpdate()
-
-            launch {
+            launch(Dispatchers.Default) {
                 while (true) {
-                    stats.add(rand.nextDouble(0.0, 100.0))
-                    delay(rand.nextLong(5, 25))
+                    averageTotal += measureTime {
+                        stats.submit(1.0)
+                    }
+                    averageCount++
+                    delay(5)
                 }
             }
 
-            repeat(100) {
-                delay(updatePeriodMillis)
-                launch {
-                    val current = formatter.format(Calendar.getInstance().time).toString()
-                    println("$current $stats")
+            launch(Dispatchers.Default) {
+                while(true) {
+                    delay(1000)
+                    logger.log(stats.toStatsString())
+                    val average = averageTotal / averageCount
+                    logger.log("Average time per add() call is ${average.inWholeMicroseconds}µs")
                 }
             }
         }

@@ -1,64 +1,145 @@
-package com.bbclient.com.bbclient
+package com.bbclient
 
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.time.Duration
-import kotlin.time.TimeSource
+import kotlin.time.Duration.Companion.milliseconds
 
-class TimeSeriesQueue(windowSize: Duration, initialCapacity: Int = 128) {
-    private val timeSource = TimeSource.Monotonic
-    data class TimeSeriesData(val timestamp: TimeSource.Monotonic.ValueTimeMark, val value: Double)
-    private val queue = ArrayDeque<TimeSeriesData>(initialCapacity)
-    private val startTime = timeSource.markNow()
-    private val endTime = startTime + windowSize
-    private var oldestTime = startTime
-    private var newestTime = startTime
-    var total: Double = 0.0
-    var count: Long = 0
-    var minValue = Double.MAX_VALUE
-    var maxValue = Double.MIN_VALUE
+class TimeSeriesQueue(
+    val startTime: TimeMark,
+    val endTime: TimeMark,
+    initialCapacity: Int = 128) {
 
-    // Returns true if item was inserted
-    fun add(value: Double): Boolean {
-        var inserted = false
-        val timeNow = timeSource.markNow()
-        if (timeNow >= startTime && timeNow < endTime) {
-            queue.add(TimeSeriesData(timeNow, value))
-            newestTime = timeNow
-            if (oldestTime == startTime)
-                oldestTime = timeNow
-            total += value
-            count += 1
-            minValue = min(minValue, value)
-            maxValue = max(maxValue, value)
-            inserted = true
-        }
-        return inserted
+    /*
+     * Synchronized through use of a single thread.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
+    private val confined: CoroutineContext = newSingleThreadContext("DequeueContext")
+    private val queue = ArrayDeque<TimeSeriesStats.TimeSeriesData>(initialCapacity)
+    private var total = 0.0
+    private var oldestTime: TimeMark? = null
+    private var newestTime: TimeMark? = null
+    private var minValue: Double? = null
+    private var maxValue: Double? = null
+    var wasCounted = false
+
+    suspend fun getTotal() = withContext(confined) { total }
+    suspend fun getCount() = withContext(confined) { queue.size }
+    private suspend fun adjustOldestNewest(timestamp: TimeMark) = withContext(confined) {
+        oldestTime = oldestTime?: timestamp
+        oldestTime = if (oldestTime!! < timestamp) oldestTime else timestamp
+
+        newestTime = newestTime?: timestamp
+        newestTime = if (newestTime!! > timestamp) newestTime else timestamp
+    }
+    suspend fun getMin() = withContext(confined) {
+        minValue?: Double.MAX_VALUE
+    }
+    suspend fun getMax() = withContext(confined) {
+        maxValue?: Double.MIN_VALUE
+    }
+    private suspend fun adjustMinMax(value: Double) = withContext(confined) {
+        minValue = min(value, getMin())
+        maxValue = max(value, getMax())
+    }
+    suspend fun getTailWindowSize() = withContext(confined) {
+        getTailNewestTime() - startTime
+    }
+    suspend fun getTailNewestTime() = withContext(confined) {
+        newestTime?: startTime
+    }
+    suspend fun getHeadWindowSize() = withContext(confined) {
+        endTime - getHeadOldestTime()
+    }
+    suspend fun getHeadOldestTime() = withContext(confined) {
+        oldestTime?: endTime
     }
 
-    fun getSumOfSquaredVariances(mean: Double): Double {
+    // Returns Duration added on successful add; otherwise returns null on failure
+    suspend fun add(tsdatum: TimeSeriesStats.TimeSeriesData): Duration {
+        assert(!wasCounted)
+        var windowAdded: Duration
+
+        withContext(confined) {
+            if (tsdatum.timestamp < startTime || tsdatum.timestamp > endTime)
+                throw IndexOutOfBoundsException()
+
+            val origNewestTime = getTailNewestTime()
+            queue.add(tsdatum)
+            total += tsdatum.value
+            adjustMinMax(tsdatum.value)
+            adjustOldestNewest(tsdatum.timestamp)
+            windowAdded = getTailNewestTime() - origNewestTime
+        }
+
+        return windowAdded
+    }
+
+    suspend fun trimOlderThan(oldestTimeAllowed: TimeMark): TimeSeriesStats.FastStatsGroup {
+        var numRemoved = 0
+        var totalValueRemoved = 0.0
+        var windowSizeRemoved = 0.milliseconds
+        var oldestTimeReturned: TimeMark
+
+        withContext(confined) {
+            val origSize = queue.size
+            val origTotal = total
+            val origHeadWindowSize = getHeadWindowSize()
+            var oldestSurvivorFound = false
+
+            while (queue.size > 0) {
+                val oldestItem = queue.first()
+                oldestTime = oldestItem.timestamp
+
+                // We found an item in the queue that is new enough to survive.
+                if (oldestTime!! >= oldestTimeAllowed) {
+                    oldestSurvivorFound = true
+                    break
+                }
+
+                // The oldItem isn't new enough to survive, so remove it
+                val toRemove = queue.removeFirst()
+                assert(toRemove == oldestItem)
+                total -= toRemove.value
+            }
+
+            if (oldestSurvivorFound) {
+                assert(queue.size > 0)
+                assert(oldestTime!! == queue.first().timestamp)
+                assert(oldestTime!! >= oldestTimeAllowed)
+                minValue = queue.minOf { it.value }
+                maxValue = queue.maxOf { it.value }
+            } else {
+                assert(queue.size == 0)
+                total = 0.0
+                oldestTime = null
+                newestTime = null
+            }
+
+            assert(origSize >= queue.size)
+            numRemoved = origSize - queue.size
+
+            totalValueRemoved = origTotal - total
+
+            windowSizeRemoved = getHeadWindowSize() - origHeadWindowSize
+            oldestTimeReturned = getHeadOldestTime()
+            assert(oldestTimeReturned >= oldestTimeAllowed)
+        }
+
+        return TimeSeriesStats.FastStatsGroup(numRemoved, totalValueRemoved, 0.0, windowSizeRemoved)
+    }
+
+    suspend fun getSumOfSquaredVariances(mean: Double): Double {
         var sumSqVar = 0.0
-        queue.forEach { sumSqVar += (it.value - mean).pow(2.0) }
-        return sumSqVar
-    }
-
-    fun trimOlderThan(oldestTimeAllowed: TimeSource.Monotonic.ValueTimeMark): TimeSource.Monotonic.ValueTimeMark {
-        val oldCount = count
-        assert(startTime < newestTime)
-        assert(newestTime < endTime)
-
-        while (queue.size > 0) {
-            val oldestItem = queue.first()
-            oldestTime = oldestItem.timestamp
-            if (oldestTime >= oldestTimeAllowed)
-                break
-            total -= oldestItem.value
-            count -= 1
-            queue.removeFirst()
+        withContext(confined) {
+            queue.forEach { sumSqVar += (it.value - mean).pow(2.0) }
         }
-
-        val numRemoved = oldCount - count
-        return oldestTime
+        return sumSqVar
     }
 }

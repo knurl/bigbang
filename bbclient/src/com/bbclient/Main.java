@@ -1,6 +1,5 @@
 package com.bbclient;
 
-import com.bbclient.com.bbclient.Stopwatch;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.impl.connection.tcp.RoutingMode;
 import com.hazelcast.cluster.Cluster;
@@ -12,9 +11,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.*;
 
 class Main {
+    public static boolean statsUnitTest = true;
     public static boolean localTestMode = true;
     static final int portNumber = 4000;
 
@@ -38,11 +37,11 @@ class Main {
         runnablesList.add(setRunnable);
 
         final int fullnessCheckTimeoutMillis = 1_000; // ms
-        var statsTimeoutMillis = 4_000;
-        var fullnessCheckStopwatch = new Stopwatch(fullnessCheckTimeoutMillis,
-                2*statsTimeoutMillis); // ms
+        var fullnessCheckStopwatch = new Stopwatch(fullnessCheckTimeoutMillis);
 
-        try (var mapLoaderDriver = new HazelcastDriver("maploader", runnablesList, statsTimeoutMillis)) {
+        var statsFrequencyMillis = 4_000;
+
+        try (var mapLoaderDriver = new HazelcastDriver("maploader", runnablesList, statsFrequencyMillis)) {
             mapLoaderDriver.start(); // start sending the set commands to Hazelcast as fast as allowable
 
             long mapSize = 0;
@@ -82,124 +81,6 @@ class Main {
         }
     }
 
-    private static class HazelcastDriver extends Thread implements AutoCloseable {
-        final Logger logger;
-        final ExecutorService pool;
-        final RunnablesList runnablesList;
-        final int measurementPeriod;
-
-        /*
-         * Synchronized
-         */
-        boolean drain = false;
-        public synchronized boolean isDraining() {
-            return this.drain;
-        }
-        public synchronized void setDrain() {
-            this.drain = true;
-        }
-
-        /*
-         * Constructor and non-synchronized
-         */
-
-        public HazelcastDriver(String name,
-                               RunnablesList runnablesList,
-                               int measurementPeriod) {
-            this.logger = new Logger(name);
-            this.runnablesList = runnablesList;
-            this.measurementPeriod = measurementPeriod;
-
-            final int numThreads = localTestMode ? 2 : 6;
-            final int numThreadsMax = (localTestMode ? 2 : 8) * numThreads;
-            final int threadQueueSize = numThreadsMax*2;
-            int keepAliveTimeSec = 60; // seconds
-
-            this.pool = new ThreadPoolExecutor(numThreads, numThreadsMax,
-                    keepAliveTimeSec, TimeUnit.SECONDS,
-                    new ArrayBlockingQueue<>(threadQueueSize),
-                    new ThreadPoolExecutor.AbortPolicy());
-        }
-
-        public void submit(Runnable runnable) {
-            boolean submitted = false;
-            var threadpoolSubmitBackoffMillis = 250; // ms
-            while (!isDraining() && !submitted) {
-                try {
-                    pool.submit(runnable);
-                    submitted = true;
-                } catch (RejectedExecutionException e) {
-                    try {
-                        Thread.sleep(threadpoolSubmitBackoffMillis);
-                    } catch (InterruptedException e2) {
-                        logger.log("*** RECEIVED INTERRUPTED EXCEPTION [SUBMIT] *** %s".formatted(e2));
-                        Thread.currentThread().interrupt();
-                    }
-                }
-            }
-        }
-
-        public void run() {
-            logger.log("Starting up operations");
-            var statsStopwatch = new Stopwatch(measurementPeriod);
-
-            while (!isDraining()) {
-                for (Runnable runnable: runnablesList) {
-                    if (isDraining())
-                        break;
-                    submit(runnable);
-                    statsStopwatch.addUnit();
-                    if (!isDraining() && statsStopwatch.isTimeOver()) {
-                        logger.log("OPSRATE => %,.2f/s / STATS => %s".formatted(statsStopwatch.ratePerSecond(),
-                                runnablesList.listRunnablesToStatsString()));
-                    }
-                }
-            }
-        }
-
-        public boolean reachedMinimumStatsPopulation() {
-            return this.runnablesList.stream().allMatch(IMapMethodRunnable::hasReachedMinimumPopulation);
-        }
-
-        private void drain() throws InterruptedException {
-            setDrain();
-            pool.shutdown();
-            if (!pool.awaitTermination(2, TimeUnit.SECONDS)) {
-                logger.log("Timed out waiting for termination in drain()");
-                pool.shutdownNow();
-            }
-        }
-
-        public void drainAndJoin() {
-            try {
-                drain();
-                this.join();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public String drainAndGetStats() {
-            try {
-                drain();
-                return runnablesList.listRunnablesToCSV();
-            } catch (InterruptedException e) {
-                logger.log("*** RECEIVED EXCEPTION [GET] *** %s".formatted(e));
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void close() {
-            try {
-                drain();
-            } catch (InterruptedException e) {
-                pool.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-            pool.shutdownNow();
-        }
-    }
-
     static class HazelcastClientManager {
         private final HazelcastInstance hazelcastInstance;
 
@@ -222,18 +103,16 @@ class Main {
     }
 
     public static void main(String[] args) {
-        /*
-        if (localTestMode) {
+        if (statsUnitTest) {
             TimeSeriesStatsTest statsTest = new TimeSeriesStatsTest();
             statsTest.startTest();
         }
-        */
         final int maxEntries, mapValueSize;
         if (!localTestMode) {
             maxEntries = 1 << 17;
             mapValueSize = 1 << 15;
         } else {
-            maxEntries = 1 << 9;
+            maxEntries = 1 << 10;
             mapValueSize = 1 << 3;
         }
         logger.log("Map: maxEntries=%,d mapValueSize=%,d".formatted(maxEntries, mapValueSize));
@@ -256,7 +135,7 @@ class Main {
         final int statsReportFrequency = 4000;
         final int stateChangeCheckFrequency = 1000;
         final int migrationsCheckFrequency = 4000;
-        var stateChangeStopwatch = new Stopwatch(stateChangeCheckFrequency, 10000); // ms
+        var stateChangeStopwatch = new Stopwatch(stateChangeCheckFrequency); // ms
         var migrationsCheckStopwatch = new Stopwatch(migrationsCheckFrequency); // ms
 
         /* Spawn a thread to take input on a port */
@@ -297,6 +176,16 @@ class Main {
         var clientMembershipListener = new ClientMembershipListener(numMembers);
         var clientMigrationListener = new ClientMigrationListener();
         cluster.addMembershipListener(clientMembershipListener);
+
+        while (clientMembershipListener.clusterIsMissingMembers()) {
+            logger.log("Cluster is missing members. Waiting for cluster to form.");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         instance.getPartitionService().addMigrationListener(clientMigrationListener);
 
         logger.log("Creating new map");
@@ -344,8 +233,10 @@ class Main {
                                 statsBeforeChaos = runnablesList.listRunnablesToCSV();
                                 // Signal to client that we are ready to proceed
                                 socketResponseResponder.setIsReadyForChaosStart();
-                                if (localTestMode)
+                                if (localTestMode) {
+                                    Thread.sleep(10000);
                                     socketResponseResponder.setChaosStartTime();
+                                }
                                 yield TestStage.GOTOCHAOSSTART;
                             } else {
                                 yield testStage;
@@ -432,6 +323,8 @@ class Main {
                     default -> testStage;
                 };
             }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 }

@@ -2,8 +2,6 @@ package com.bbclient;
 
 import com.hazelcast.map.IMap;
 
-import static com.bbclient.RandomStringBuilder.generateRandomString;
-
 class PutIfAbsentRunnable extends IMapMethodRunnable {
     private final String value;
 
@@ -28,7 +26,7 @@ class PutIfAbsentRunnable extends IMapMethodRunnable {
                         int firstKey,
                         int lastKey) {
         super(map, "putIfAbsent", false);
-        this.value = generateRandomString(mapValueSize);
+        this.value = "*".repeat(mapValueSize);
         this.firstKey = firstKey;
         this.lastKey = lastKey;
         this.nextKey = firstKey;

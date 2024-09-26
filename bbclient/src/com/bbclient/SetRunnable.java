@@ -2,8 +2,6 @@ package com.bbclient;
 
 import com.hazelcast.map.IMap;
 
-import static com.bbclient.RandomStringBuilder.generateRandomString;
-
 class SetRunnable extends IMapMethodRunnable {
     private final String value;
 
@@ -27,7 +25,7 @@ class SetRunnable extends IMapMethodRunnable {
                 int mapValueSize,
                 int firstKey) {
         super(map, "set", true);
-        this.value = generateRandomString(mapValueSize);
+        this.value = "*".repeat(mapValueSize);
         this.nextKey = firstKey;
         this.lastKey = this.nextKey;
     }
