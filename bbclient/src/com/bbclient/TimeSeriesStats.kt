@@ -33,21 +33,6 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
 
     data class TimeSeriesData(val timestamp: TimeMark, val value: Double)
 
-    private val jobs = object {
-        private var autoUpdateJob = if (updateSlowStats) { launchAutoUpdater() } else null
-        private val metricsReporterJob = launchMetricsReporter()
-        private val submitConsumerJob = launchSubmitConsumer()
-
-        fun close() {
-            runBlocking {
-                submitConsumerJob.cancelAndJoin()
-                metricsReporterJob.cancelAndJoin()
-                autoUpdateJob?.cancelAndJoin()
-                submitChannel.close()
-            }
-        }
-    }
-
     /* Protected by a mutex */
     private val statsRingBufferMutex = Mutex()
     private val statsRingBuffer = RingBuffer(
@@ -95,17 +80,62 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
     val mean get() = statsFlow.value.mean
 
     /*
-     * "Slow" statistics. All of the following protected by MutableStateFlow
+     * Collect all the jobs that need to automatically start so we can close() at end
      */
+    private val jobs = object {
+        private var autoUpdateJob = if (updateSlowStats) { launchAutoUpdater() } else null
+        private val metricsReporterJob = launchMetricsReporter()
+        private val submitConsumerJob = launchSubmitConsumer()
 
-    /* How often to update the slow statistics */
+        fun close() {
+            runBlocking {
+                submitConsumerJob.cancelAndJoin()
+                metricsReporterJob.cancelAndJoin()
+                autoUpdateJob?.cancelAndJoin()
+                submitChannel.close()
+            }
+        }
+    }
+
+    /* How often to update the high-computation statistics */
     private val updatePeriod = targetWindowSize // default
 
+    /*
+     * Internal metrics collection and reporting, to check performance.
+     */
+    object Reporters {
+        private val logger = Logger("Metrics")
+        private val reporters = mutableListOf<Reporter>()
+        class Reporter(private val name: String) {
+            private val buffersize = 64
+            private val metrics = RingBuffer<Double>(buffersize)
+            suspend fun report() =
+                "$name -> " + if (metrics.isNotEmpty()) "%.2fµs".format(metrics.average()) else "NOTREADY"
+
+            suspend fun insert(value: Duration) {
+                metrics.enqueue(value.inWholeMicroseconds.toDouble())
+            }
+        }
+
+        fun create(name: String) = run {
+            val reporter = Reporter(name)
+            reporters.add(reporter)
+            reporter
+        }
+
+
+        suspend fun reportAll() {
+            logger.log(reporters.map { it.report() }.joinToString(separator = " | "))
+        }
+    }
+
+    private val addReporter = Reporters.create("add")
+    private val updateReporter = Reporters.create("update")
+    private val submitReporter = Reporters.create("submit")
+
     suspend fun submit(value: Double) {
-        insertSubmitTime(
-            measureTime {
-                submitChannel.send(value)
-            }.inWholeMicroseconds.toDouble()
+        submitReporter.insert(
+            measureTime { submitChannel.send(value) }
         )
     }
 
@@ -118,10 +148,8 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
     private fun launchSubmitConsumer() = coroutineScope.launch{
         while (true) {
             val nextValue = submitChannel.receive()
-            insertAddTime(
-                measureTime {
-                    add(TimeSeriesData(timestamp = timeSource.markNow(), value = nextValue))
-                }.inWholeMicroseconds.toDouble()
+            addReporter.insert(
+                measureTime { add(TimeSeriesData(timestamp = timeSource.markNow(), value = nextValue)) }
             )
         }
     }
@@ -129,10 +157,8 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
     private fun launchAutoUpdater() = coroutineScope.launch {
         while (true) {
             delay(updatePeriod)
-            insertUpdateTime(
-                measureTime {
-                    updateStats()
-                }.inWholeMilliseconds.toDouble()
+            updateReporter.insert(
+                measureTime { updateStats() }
             )
         }
     }
@@ -140,31 +166,8 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
     private fun launchMetricsReporter() = coroutineScope.launch {
         while (true) {
             delay(4000)
-            report()
+            Reporters.reportAll()
         }
-    }
-    /*
-     * Internal metrics collection and reporting, to check performance.
-     */
-    companion object {
-        private const val BUFFERSIZE = 64
-        private val addTimes = RingBuffer<Double>(BUFFERSIZE)
-        private val updateTimes = RingBuffer<Double>(BUFFERSIZE)
-        private val submitTimes = RingBuffer<Double>(BUFFERSIZE)
-        private suspend fun report() { // called occasionally
-            val reportStrings = mutableListOf<String>()
-            if (addTimes.isNotEmpty())
-                reportStrings.add("add() processing => %.2fµs".format(addTimes.average()))
-            if (updateTimes.isNotEmpty())
-                reportStrings.add("update() processing => %.2fms".format(updateTimes.average()))
-            if (submitTimes.isNotEmpty())
-                reportStrings.add("submit() processing => %.2fµs".format(submitTimes.average()))
-            if (reportStrings.isNotEmpty())
-                println("Avg Proc Times: " + reportStrings.joinToString(" / "))
-        }
-        private suspend fun insertAddTime(value: Double) { addTimes.enqueue(value) }
-        private suspend fun insertUpdateTime(value: Double) { updateTimes.enqueue(value) }
-        private suspend fun insertSubmitTime(value: Double) { submitTimes.enqueue(value) }
     }
 
     override fun close() {
@@ -204,8 +207,8 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
             }
 
             assert(!newestBucket.getWasCounted())
-
             assert(tsdatum.timestamp >= newestBucket.startTime && tsdatum.timestamp <= newestBucket.endTime)
+
             totalWindowAdded += newestBucket.add(tsdatum)
 
             statsFlow.update {

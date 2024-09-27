@@ -2,64 +2,65 @@ package com.bbclient
 
 import com.hazelcast.cluster.MembershipEvent
 import com.hazelcast.cluster.MembershipListener
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-class ClientMembershipListener(originalNumMembers: Int) : MembershipListener {
-    var logger: Logger = Logger("Membership")
+class ClientMembershipListener(private var originalNumMembers: Int) : MembershipListener {
+    private var logger: Logger = Logger("Membership")
 
     /*
-     * Synchronized
+     * Thread-safe via Mutex
      */
-    private var originalNumMembers = 0
-    private var currentNumMembers = 0
+    private var mutex = Mutex()
+    private var currentNumMembers = originalNumMembers
 
     init {
         logger.log(
-            "Initializing new %s() with %d members".formatted(
+            "Initializing new %s() with %d members".format(
                 javaClass.simpleName,
                 originalNumMembers
             )
         )
-        synchronized(this) {
-            this.originalNumMembers = originalNumMembers
-            this.currentNumMembers = this.originalNumMembers
+    }
+
+    fun clusterIsMissingMembers() = runBlocking {
+        mutex.withLock {
+            currentNumMembers < originalNumMembers
         }
     }
 
-    @Synchronized
-    fun clusterIsMissingMembers(): Boolean {
-        return currentNumMembers < originalNumMembers
-    }
+    private fun getMembershipStatus() = "$currentNumMembers/$originalNumMembers"
 
-    fun logCurrentMembershipIfMissingMembers() {
-        var r: String? = null
-        synchronized(this) {
-            if (currentNumMembers < originalNumMembers) r =
-                String.format("%d/%d members remain in cluster", currentNumMembers, originalNumMembers)
+    fun logCurrentMembershipIfMissingMembers() = runBlocking {
+        mutex.withLock {
+            if (currentNumMembers < originalNumMembers)
+                logger.log(getMembershipStatus() + " members remain in cluster")
         }
-        if (r != null) logger.log(r!!)
     }
 
     override fun memberRemoved(membershipEvent: MembershipEvent) {
-        synchronized(this) {
-            currentNumMembers--
-            assert(currentNumMembers >= 0)
-            logger.log("member removed, down to %d/%d members".formatted(currentNumMembers, originalNumMembers))
+        runBlocking {
+            mutex.withLock {
+                currentNumMembers--
+                assert(currentNumMembers >= 0)
+                logger.log("member removed, down to ${getMembershipStatus()} members")
+            }
         }
     }
 
     override fun memberAdded(membershipEvent: MembershipEvent) {
-        val sb = StringBuilder("member added")
-        synchronized(this) {
-            currentNumMembers++
-            assert(currentNumMembers <= originalNumMembers)
-            if (currentNumMembers == originalNumMembers) sb.append(
-                ", %d/%d members back in cluster".formatted(
-                    currentNumMembers,
-                    originalNumMembers
-                )
-            )
-            else sb.append(", up to %d/%d members".formatted(currentNumMembers, originalNumMembers))
+        runBlocking {
+            val sb = StringBuilder("member added")
+            mutex.withLock {
+                currentNumMembers++
+                assert(currentNumMembers <= originalNumMembers)
+                if (currentNumMembers == originalNumMembers)
+                    sb.append(", ${getMembershipStatus()} members back in cluster")
+                else
+                    sb.append(", up to ${getMembershipStatus()} members")
+            }
+            logger.log(sb.toString())
         }
-        logger.log(sb.toString())
     }
 }

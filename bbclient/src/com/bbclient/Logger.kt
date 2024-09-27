@@ -3,7 +3,7 @@ package com.bbclient
 import java.text.SimpleDateFormat
 import java.util.*
 
-internal class Logger @JvmOverloads constructor(label: String, header: String = "", footer: String = "", private val addTimestamp: Boolean = false) {
+class Logger @JvmOverloads constructor(label: String, header: String = "", footer: String = "", private val addTimestamp: Boolean = false) {
     private val label: String = label.uppercase(Locale.getDefault())
     private var emphasis: Boolean = false
     private var header: String? = null
