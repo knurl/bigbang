@@ -10,6 +10,7 @@ import kotlin.math.min
 import kotlin.math.sqrt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlin.time.measureTime
 
@@ -55,41 +56,43 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
                 removed: TimeSeriesQueue ->
             coroutineScope.launch {
                 assert(statsRingBufferMutex.isLocked)
-                fastStatsMutex.withLock {
-                    fastStats.apply {
-                        this.n -= removed.getCount()
-                        this.total -= removed.getTotal()
-                        this.mean = this.total / this.n
-                        this.windowSize -= bucketDuration
-                        assert(this.windowSize < targetWindowSize)
-                    }
+                statsFlow.update {
+                    it.copy(
+                        n = it.n - removed.getCount(),
+                        total = it.total - removed.getTotal(),
+                        mean = it.total / it.n,
+                        windowSize = it.windowSize - bucketDuration
+                    )
                 }
             }
         }
     )
 
     /*
-     * "Fast" statistics. These are protected by a Mutex.
+     * Data class that collects all statistics together. These are protected by a MutableStateFlow
      */
-    private val fastStatsMutex = Mutex()
-
-    data class FastStatsGroup(
+    data class StatsGroup(
         var n: Int,
         var total: Double,
         var mean: Double,
-        var windowSize: Duration
+        var windowSize: Duration,
+        val stddev: Double,
+        val minValue: Double,
+        val maxValue: Double
     )
-
-    private val fastStats = FastStatsGroup(0, 0.0, 0.0, 0.milliseconds)
-    fun getMeanBlocking() = runBlocking {
-        fastStatsMutex.withLock {
-            fastStats.mean
-        }
-    }
-
-    private suspend fun getFastStats() = fastStatsMutex.withLock {
-        fastStats.copy()
-    }
+    private val statsFlow = MutableStateFlow(
+        StatsGroup(
+            n = 0,
+            total = 0.0,
+            mean = 0.0,
+            windowSize = 0.seconds,
+            stddev = 0.0,
+            minValue = 0.0,
+            maxValue = 0.0
+        )
+    )
+    val stddev get() = statsFlow.value.stddev
+    val mean get() = statsFlow.value.mean
 
     /*
      * "Slow" statistics. All of the following protected by MutableStateFlow
@@ -97,20 +100,6 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
 
     /* How often to update the slow statistics */
     private val updatePeriod = targetWindowSize // default
-
-    data class SlowStatsGroup(
-        val stddev: Double,
-        val minValue: Double,
-        val maxValue: Double
-    )
-
-    private val slowStats = MutableStateFlow(SlowStatsGroup(0.0, 0.0, 0.0))
-
-    private fun getSlowStats(): SlowStatsGroup {
-        return slowStats.value // protected by MutableStateFlow
-    }
-
-    fun getStddev() = getSlowStats().stddev
 
     suspend fun submit(value: Double) {
         insertSubmitTime(
@@ -218,28 +207,22 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
 
             assert(tsdatum.timestamp >= newestBucket.startTime && tsdatum.timestamp <= newestBucket.endTime)
             totalWindowAdded += newestBucket.add(tsdatum)
-        }
 
-        fastStatsMutex.withLock {
-            fastStats.apply {
-                this.n += 1
-                this.total += tsdatum.value
-                this.mean = this.total / this.n
-                this.windowSize += totalWindowAdded
+            statsFlow.update {
+                it.copy(
+                    n = it.n + 1,
+                    total = it.total + tsdatum.value,
+                    mean = it.total / it.n,
+                    windowSize = it.windowSize + totalWindowAdded
+                )
             }
         }
     }
 
     private suspend fun updateStats() {
-        val n: Int
-        val meanValue: Double
-        val removed: FastStatsGroup
         val newestTime: TimeMark
         val oldestBucket: TimeSeriesQueue
         val absoluteWindowSize: Duration
-        val stddev: Double
-        val minValue: Double
-        val maxValue: Double
 
         statsRingBufferMutex.withLock {
             /*
@@ -254,47 +237,39 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
             newestTime = statsRingBuffer.peekTail().getTailNewestTime()
             val oldestTimeAllowed = newestTime - targetWindowSize
             oldestBucket = statsRingBuffer.peekHead()
-            removed = oldestBucket.trimOlderThan(oldestTimeAllowed) // CPU intensive, potentially
+            val (removedN, removedTotal) = oldestBucket.trimOlderThan(oldestTimeAllowed) // CPU intensive, potentially
             val oldestTime = oldestBucket.getHeadOldestTime()
             absoluteWindowSize = newestTime - oldestTime
             assert(oldestTime >= oldestTimeAllowed)
             assert(newestTime - oldestTimeAllowed == targetWindowSize)
             assert(absoluteWindowSize <= targetWindowSize)
 
-            fastStatsMutex.withLock {
-                fastStats.apply {
-                    this.n -= removed.n
-                    this.total -= removed.total
-                    this.mean = this.total / this.n
-
-                    /* Don't update window size here; we remove ENTIRE buckets from the head end
-                  * of the ring buffer, not PARTS of buckets. DO check that the window size
-                  * matches our calculated "coarse" window size that counts whole buckets
-                  * after the head bucket. */
-                    assert(this.windowSize == newestTime - oldestBucket.startTime)
-                    assert(this.windowSize - (bucketDuration - oldestBucket.getHeadWindowSize()) == absoluteWindowSize)
-                }
-
-                n = fastStats.n
-                meanValue = fastStats.mean
+            statsFlow.update {
+                it.copy(
+                    n = it.n - removedN,
+                    total = it.total - removedTotal,
+                    mean = it.total / it.n
+                )
             }
 
-            /*
-             * Now we have exactly the window size, so calculate the statistics. Do fast stats 1st.
-             */
-            assert(n == statsRingBuffer.sumOf { it.getCount() })
-            stddev = sqrt(statsRingBuffer.sumOf { it.getSumOfSquaredVariances(meanValue) } / n)
-            minValue = statsRingBuffer.minOf { it.getMin() }
-            maxValue = statsRingBuffer.maxOf { it.getMax() }
+            statsFlow.value.let { new ->
+                coroutineScope {
+                    assert(new.windowSize == newestTime - oldestBucket.startTime)
+                    assert(new.windowSize - (bucketDuration - oldestBucket.getHeadWindowSize()) == absoluteWindowSize)
+                    assert(new.n == statsRingBuffer.sumOf { x -> x.getCount() })
+                    statsFlow.update {
+                        it.copy(
+                            stddev = sqrt(statsRingBuffer.sumOf { x -> x.getSumOfSquaredVariances(it.mean) } / it.n),
+                            minValue = statsRingBuffer.minOf { x -> x.getMin() },
+                            maxValue = statsRingBuffer.maxOf { x -> x.getMax() }
+                        )
+                    }
+                }
+            }
         }
 
         if (statsRingBuffer.getSize() >= numBuckets)
             hasUpdatedAfterWindowFilled = true
-
-        /*
-         * Update MutableStateFlow which protects our statsGroup
-         */
-        slowStats.update { SlowStatsGroup(stddev, minValue, maxValue) }
     }
 
     private suspend fun windowFullPercentage() = statsRingBufferMutex.withLock {
@@ -302,55 +277,46 @@ class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boole
     }
 
     fun toStatsString(): String {
-        val fastStatsCopy: FastStatsGroup
-        val windowFullPct: Int
+        val stringList = mutableListOf<String>()
         runBlocking {
-            fastStatsCopy = getFastStats()
-            windowFullPct = min(100, (windowFullPercentage() * 100.0).toInt())
-        }
+            statsFlow.value.let {
+                val windowFullPct = min(100, (windowFullPercentage() * 100.0).toInt())
+                stringList.add("N=%,d".format(it.n))
 
-        val slowStatsCopy = getSlowStats()
+                if (it.n > 0) {
+                    val rate = it.n.toDouble() * 1_000.0 / it.windowSize.inWholeMilliseconds.toDouble()
+                    stringList.add("RATE=%,.1f/s".format(rate))
+                    stringList.add("WDW=%,dms".format(it.windowSize.inWholeMilliseconds))
 
-        val stringList = mutableListOf("N=%,d".format(fastStatsCopy.n))
+                    if (!hasUpdatedAfterWindowFilled && windowFullPct < 100)
+                        stringList.add("WFP=%d%%".format(windowFullPct))
 
-        if (fastStatsCopy.n > 0) {
-            val window = fastStatsCopy.windowSize.inWholeMilliseconds.toDouble()
-            val rate = fastStatsCopy.n.toDouble() * 1_000.0 / window
-            stringList.add("RATE=%,.1f/s".format(rate))
-            stringList.add("WDW=%,.1fs".format(window / 1_000.0))
+                    if (hasUpdatedAfterWindowFilled) {
+                        stringList.add(
+                            "µ=%s σ=%s [%s⇠⇢%s]".format(
+                                millisToString(it.mean),
+                                millisToString(it.stddev),
+                                millisToString(it.minValue),
+                                millisToString(it.maxValue)
+                            )
+                        )
+                    }
+                }
 
-            if (!hasUpdatedAfterWindowFilled && windowFullPct < 100)
-                stringList.add("WFP=%d%%".format(windowFullPct))
-
-            if (hasUpdatedAfterWindowFilled) {
-                stringList.add(
-                    "µ=%s σ=%s [%s⇠⇢%s]".format(
-                        millisToString(fastStats.mean),
-                        millisToString(slowStatsCopy.stddev),
-                        millisToString(slowStatsCopy.minValue),
-                        millisToString(slowStatsCopy.maxValue)
-                    )
-                )
             }
         }
-
         return stringList.joinToString(separator = " ")
     }
 
     fun toCSV() = runBlocking {
-        val slowStatsCopy = getSlowStats() // protected by MutableStateFlow
-        val n: Int
-        val mean: Double
-        fastStatsMutex.withLock {
-            n = fastStats.n
-            mean = fastStats.mean
+        statsFlow.value.let {
+            listOf(
+                it.n,
+                it.mean,
+                it.stddev,
+                it.minValue,
+                it.maxValue
+            ).joinToString(separator=",")
         }
-        listOf(
-            n,
-            mean,
-            slowStatsCopy.stddev,
-            slowStatsCopy.minValue,
-            slowStatsCopy.maxValue
-        ).joinToString(separator=",")
     }
 }

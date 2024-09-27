@@ -44,7 +44,7 @@ abstract class IMapMethodRunnable implements Runnable, AutoCloseable {
             final var stddev = stats.getStddev();
             final int outlierNumStddev = 10; // * stddev from mean
             final int maxStddev = 20;
-            final var mean = stats.getMeanBlocking();
+            final var mean = stats.getMean();
             int numStdDev;
 
             if (stddev == 0.0)

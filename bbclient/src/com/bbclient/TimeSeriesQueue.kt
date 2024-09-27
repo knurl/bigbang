@@ -9,7 +9,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 
 class TimeSeriesQueue(
     val startTime: TimeMark,
@@ -87,16 +86,14 @@ class TimeSeriesQueue(
         return windowAdded
     }
 
-    suspend fun trimOlderThan(oldestTimeAllowed: TimeMark): TimeSeriesStats.FastStatsGroup {
+    suspend fun trimOlderThan(oldestTimeAllowed: TimeMark): Pair<Int, Double> {
         var numRemoved = 0
         var totalValueRemoved = 0.0
-        var windowSizeRemoved = 0.milliseconds
         var oldestTimeReturned: TimeMark
 
         withContext(confined) {
             val origSize = queue.size
             val origTotal = total
-            val origHeadWindowSize = getHeadWindowSize()
             var oldestSurvivorFound = false
 
             while (queue.size > 0) {
@@ -133,12 +130,11 @@ class TimeSeriesQueue(
 
             totalValueRemoved = origTotal - total
 
-            windowSizeRemoved = getHeadWindowSize() - origHeadWindowSize
             oldestTimeReturned = getHeadOldestTime()
             assert(oldestTimeReturned >= oldestTimeAllowed)
         }
 
-        return TimeSeriesStats.FastStatsGroup(numRemoved, totalValueRemoved, 0.0, windowSizeRemoved)
+        return Pair(numRemoved, totalValueRemoved)
     }
 
     suspend fun getSumOfSquaredVariances(mean: Double): Double {
