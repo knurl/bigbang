@@ -17,54 +17,56 @@ typealias TimeMark = TimeSource.Monotonic.ValueTimeMark
 
 fun millisToString(runtimeMillis: Double): String = "%,.2fms".format(runtimeMillis)
 
-class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) {
-    private val numBuckets = 20
+class TimeSeriesStats(windowSizeMillis: Long, private val updateSlowStats: Boolean = false): AutoCloseable {
+    private val numBuckets = 10
     private val targetWindowSize = windowSizeMillis.milliseconds
     private val bucketDuration = targetWindowSize.div(numBuckets)
-    private var autoUpdateJob: Job? = null
-    private val submitConsumerJob: Job
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
+    private val timeSource = TimeSource.Monotonic
+    /* Channel for new insertions */
+    private val submitChannelBuffer = 64
+    private val submitChannel = Channel<Double>(submitChannelBuffer)
+
     var hasUpdatedAfterWindowFilled = false
         private set
-    private val timeSource = TimeSource.Monotonic
-
-    companion object {
-        private var numInserts = 0
-        private val addTimes = ArrayDeque<Double>()
-        private val updateTimes = ArrayDeque<Double>()
-        private fun report() {
-            if (numInserts++ % 1000 == 0) {
-                val reportStrings = mutableListOf<String>()
-                if (addTimes.isNotEmpty())
-                    reportStrings.add("add() processing => %.2fµs".format(addTimes.average()))
-                if (updateTimes.isNotEmpty())
-                    reportStrings.add("update() processing => %.2fms".format(updateTimes.average() / 1000.0))
-                if (reportStrings.isNotEmpty())
-                    println("Avg Proc Times: " + reportStrings.joinToString(" / "))
-            }
-        }
-        private fun insertAddTime(value: Double) { addTimes.add(value); report() }
-        private fun insertUpdateTime(value: Double) { updateTimes.add(value); report() }
-    }
 
     data class TimeSeriesData(val timestamp: TimeMark, val value: Double)
 
-    /* Channel for new insertions */
-    private val submitChannelBuffer = 512
-    private val submitChannel = Channel<Double>(submitChannelBuffer)
+    private val jobs = object {
+        private var autoUpdateJob = if (updateSlowStats) { launchAutoUpdater() } else null
+        private val metricsReporterJob = launchMetricsReporter()
+        private val submitConsumerJob = launchSubmitConsumer()
+
+        fun close() {
+            runBlocking {
+                submitConsumerJob.cancelAndJoin()
+                metricsReporterJob.cancelAndJoin()
+                autoUpdateJob?.cancelAndJoin()
+                submitChannel.close()
+            }
+        }
+    }
 
     /* Protected by a mutex */
     private val statsRingBufferMutex = Mutex()
-    private val statsRingBuffer = RingBuffer<TimeSeriesQueue>(numBuckets + 1)
-
-    init {
-        submitConsumerJob = coroutineScope.launch {
-            consumeSubmissions()
+    private val statsRingBuffer = RingBuffer(
+        capacity = numBuckets + 1,
+        dequeueCallback = {
+                removed: TimeSeriesQueue ->
+            coroutineScope.launch {
+                assert(statsRingBufferMutex.isLocked)
+                fastStatsMutex.withLock {
+                    fastStats.apply {
+                        this.n -= removed.getCount()
+                        this.total -= removed.getTotal()
+                        this.mean = this.total / this.n
+                        this.windowSize -= bucketDuration
+                        assert(this.windowSize < targetWindowSize)
+                    }
+                }
+            }
         }
-
-        if (updateSlowStats)
-            this.autoUpdateJob = startAutoUpdate()
-    }
+    )
 
     /*
      * "Fast" statistics. These are protected by a Mutex.
@@ -111,7 +113,11 @@ class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) 
     fun getStddev() = getSlowStats().stddev
 
     suspend fun submit(value: Double) {
-        submitChannel.send(value)
+        insertSubmitTime(
+            measureTime {
+                submitChannel.send(value)
+            }.inWholeMicroseconds.toDouble()
+        )
     }
 
     fun submitBlocking(value: Double) {
@@ -120,7 +126,7 @@ class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) 
         }
     }
 
-    private suspend fun consumeSubmissions() {
+    private fun launchSubmitConsumer() = coroutineScope.launch{
         while (true) {
             val nextValue = submitChannel.receive()
             insertAddTime(
@@ -131,78 +137,95 @@ class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) 
         }
     }
 
-    private fun startAutoUpdate() = coroutineScope.launch {
+    private fun launchAutoUpdater() = coroutineScope.launch {
         while (true) {
             delay(updatePeriod)
             insertUpdateTime(
                 measureTime {
                     updateStats()
-                }.inWholeMicroseconds.toDouble()
+                }.inWholeMilliseconds.toDouble()
             )
         }
     }
 
-    fun close() {
-        runBlocking {
-            autoUpdateJob?.cancelAndJoin()
-            submitConsumerJob.cancelAndJoin()
-            submitChannel.close()
+    private fun launchMetricsReporter() = coroutineScope.launch {
+        while (true) {
+            delay(4000)
+            report()
         }
+    }
+    /*
+     * Internal metrics collection and reporting, to check performance.
+     */
+    companion object {
+        private const val BUFFERSIZE = 64
+        private val addTimes = RingBuffer<Double>(BUFFERSIZE)
+        private val updateTimes = RingBuffer<Double>(BUFFERSIZE)
+        private val submitTimes = RingBuffer<Double>(BUFFERSIZE)
+        private suspend fun report() { // called occasionally
+            val reportStrings = mutableListOf<String>()
+            if (addTimes.isNotEmpty())
+                reportStrings.add("add() processing => %.2fµs".format(addTimes.average()))
+            if (updateTimes.isNotEmpty())
+                reportStrings.add("update() processing => %.2fms".format(updateTimes.average()))
+            if (submitTimes.isNotEmpty())
+                reportStrings.add("submit() processing => %.2fµs".format(submitTimes.average()))
+            if (reportStrings.isNotEmpty())
+                println("Avg Proc Times: " + reportStrings.joinToString(" / "))
+        }
+        private suspend fun insertAddTime(value: Double) { addTimes.enqueue(value) }
+        private suspend fun insertUpdateTime(value: Double) { updateTimes.enqueue(value) }
+        private suspend fun insertSubmitTime(value: Double) { submitTimes.enqueue(value) }
+    }
+
+    override fun close() {
+        jobs.close()
     }
 
     private suspend fun add(tsdatum: TimeSeriesData) {
-        // MUST be called with ring buffer mutex held!
         suspend fun addNewBucket(startTime: TimeMark) {
-            assert(statsRingBufferMutex.isLocked)
-
-            if (!statsRingBuffer.hasCapacity()) {
-                val removedBucket = statsRingBuffer.dequeue()
-
-                fastStatsMutex.withLock {
-                    fastStats.apply {
-                        this.n -= removedBucket.getCount()
-                        this.total -= removedBucket.getTotal()
-                        this.mean = this.total / this.n
-                        this.windowSize -= bucketDuration
-                        assert(this.windowSize < targetWindowSize)
-                    }
-                }
-            }
             // This new bucket is empty, so it doesn't yet affect our fast stats
-            statsRingBuffer.enqueue(TimeSeriesQueue(startTime, startTime + bucketDuration))
+            statsRingBuffer.enqueue(
+                TimeSeriesQueue(
+                    startTime = startTime,
+                    endTime = startTime + bucketDuration
+                )
+            )
         }
 
         var totalWindowAdded: Duration = 0.milliseconds
+        var newestBucket: TimeSeriesQueue
 
         statsRingBufferMutex.withLock {
             // If the ring buffer is empty, create a new bucket
             if (statsRingBuffer.isEmpty())
-                addNewBucket(tsdatum.timestamp) // bucket start == timestamp of new datum
+                addNewBucket(startTime = tsdatum.timestamp)
 
             // Is our new item too new for our newest bucket? If so make a new one
-            var newestBucket: TimeSeriesQueue = statsRingBuffer.peekTail()
+            newestBucket = statsRingBuffer.peekTail()
             while (true) {
                 if (tsdatum.timestamp > newestBucket.endTime) {
                     totalWindowAdded += bucketDuration - newestBucket.getTailWindowSize()
-                    newestBucket.wasCounted = true
-                    addNewBucket(startTime = newestBucket.endTime) // starts where old one ends
+                    newestBucket.setWasCounted()
+                    addNewBucket(startTime = newestBucket.endTime)
                     newestBucket = statsRingBuffer.peekTail()
                 } else {
                     break
                 }
             }
 
-            assert(!newestBucket.wasCounted)
+            assert(!newestBucket.getWasCounted())
+
             assert(tsdatum.timestamp >= newestBucket.startTime && tsdatum.timestamp <= newestBucket.endTime)
             totalWindowAdded += newestBucket.add(tsdatum)
+        }
 
-            fastStatsMutex.withLock {
-                fastStats.apply {
-                    this.n += 1
-                    this.total += tsdatum.value
-                    this.mean = this.total / this.n
-                    this.windowSize += totalWindowAdded
-                }
+        fastStatsMutex.withLock {
+            fastStats.apply {
+                this.n += 1
+                this.total += tsdatum.value
+                this.mean = this.total / this.n
+                this.windowSize += totalWindowAdded
             }
         }
     }
@@ -210,7 +233,10 @@ class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) 
     private suspend fun updateStats() {
         val n: Int
         val meanValue: Double
-        val listCopy: List<TimeSeriesQueue>
+        val removed: FastStatsGroup
+        val newestTime: TimeMark
+        val oldestBucket: TimeSeriesQueue
+        val absoluteWindowSize: Duration
         val stddev: Double
         val minValue: Double
         val maxValue: Double
@@ -225,16 +251,15 @@ class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) 
             /*
              * Trim the oldest bucket
              */
-            val newestTime = statsRingBuffer.peekTail().getTailNewestTime()
+            newestTime = statsRingBuffer.peekTail().getTailNewestTime()
             val oldestTimeAllowed = newestTime - targetWindowSize
-            val oldestBucket = statsRingBuffer.peekHead()
-            val removed = oldestBucket.trimOlderThan(oldestTimeAllowed) // CPU intensive, potentially
+            oldestBucket = statsRingBuffer.peekHead()
+            removed = oldestBucket.trimOlderThan(oldestTimeAllowed) // CPU intensive, potentially
             val oldestTime = oldestBucket.getHeadOldestTime()
-            val absoluteWindowSize = newestTime - oldestTime
+            absoluteWindowSize = newestTime - oldestTime
             assert(oldestTime >= oldestTimeAllowed)
             assert(newestTime - oldestTimeAllowed == targetWindowSize)
             assert(absoluteWindowSize <= targetWindowSize)
-            listCopy = statsRingBuffer.asList()
 
             fastStatsMutex.withLock {
                 fastStats.apply {
@@ -243,9 +268,9 @@ class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) 
                     this.mean = this.total / this.n
 
                     /* Don't update window size here; we remove ENTIRE buckets from the head end
-                      * of the ring buffer, not PARTS of buckets. DO check that the window size
-                      * matches our calculated "coarse" window size that counts whole buckets
-                      * after the head bucket. */
+                  * of the ring buffer, not PARTS of buckets. DO check that the window size
+                  * matches our calculated "coarse" window size that counts whole buckets
+                  * after the head bucket. */
                     assert(this.windowSize == newestTime - oldestBucket.startTime)
                     assert(this.windowSize - (bucketDuration - oldestBucket.getHeadWindowSize()) == absoluteWindowSize)
                 }
@@ -257,14 +282,14 @@ class TimeSeriesStats(windowSizeMillis: Long, updateSlowStats: Boolean = false) 
             /*
              * Now we have exactly the window size, so calculate the statistics. Do fast stats 1st.
              */
-            assert(fastStats.n == listCopy.sumOf { it.getCount() })
-            stddev = sqrt(listCopy.sumOf { it.getSumOfSquaredVariances(meanValue) } / n)
-            minValue = listCopy.minOf { it.getMin() }
-            maxValue = listCopy.maxOf { it.getMax() }
-
-            if (statsRingBuffer.getSize() >= numBuckets)
-                hasUpdatedAfterWindowFilled = true
+            assert(n == statsRingBuffer.sumOf { it.getCount() })
+            stddev = sqrt(statsRingBuffer.sumOf { it.getSumOfSquaredVariances(meanValue) } / n)
+            minValue = statsRingBuffer.minOf { it.getMin() }
+            maxValue = statsRingBuffer.maxOf { it.getMax() }
         }
+
+        if (statsRingBuffer.getSize() >= numBuckets)
+            hasUpdatedAfterWindowFilled = true
 
         /*
          * Update MutableStateFlow which protects our statsGroup

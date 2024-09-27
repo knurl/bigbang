@@ -1,6 +1,8 @@
 package com.bbclient
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * RingBuffer uses a fixed length array to implement a queue, where,
@@ -8,118 +10,97 @@ import kotlinx.coroutines.*
  * - [head] Items are removed from the head
  * - [size] Keeps track of how many items are currently in the queue
  */
-@OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class) class RingBuffer<T>(private val capacity: Int = 10) {
+class RingBuffer<T>(
+    private val capacity: Int = 10,
+    private val dequeueCallback: (suspend (T) -> Job)? = null
+): Iterable<T> {
     /*
-     * We will use a single thread to enforce synchronization of all elements internally,
-     * including the contained ArrayList.
+     * We will use a mutex to enforce synchronization of all elements internally.
      */
-    private val confined = newSingleThreadContext("RingBufferContext")
+    private val mutex = Mutex()
     private val arrayList = ArrayList<T>(capacity)
     private var head = 0 // read index
     private var tail = 0 // write index; points to place where we will write _next_ item
     private var newest = 0 // points to newest item in queue
     private var size = 0 // how many items in queue
 
-    fun getSize() = runBlocking {
-        withContext(confined) {
-            size
-        }
-    }
-    fun isEmpty() = getSize() == 0
-
-    suspend fun hasCapacity() = withContext(confined) { size < capacity }
+    suspend fun getSize() = mutex.withLock { size }
+    suspend fun isEmpty() = getSize() == 0
+    suspend fun isNotEmpty() = !isEmpty()
+    suspend fun hasCapacity() = mutex.withLock { size < capacity }
 
     /* Operates at head--oldest end */
     suspend fun dequeue(): T {
-        val result: T
-        withContext(confined) {
+        val removed: T
+        mutex.withLock {
             // Check if queue is empty before attempting to remove the item
             if (size == 0) throw UnderflowException("Queue is empty, can't dequeue()")
 
-            result = arrayList[head]
+            removed = arrayList[head]
             // Loop around to the start of the array if there's a need for it
             head = (head + 1) % capacity
             size--
         }
 
-        return result
+        dequeueCallback?.invoke(removed)
+        return removed
     }
 
     /* Operates at tail--newest end */
     suspend fun enqueue(item: T) {
         // Check if there's space before attempting to add the item
-        withContext(confined) {
+        var inserted = false
+
+        while (!inserted) {
             if (!hasCapacity())
-                throw OverflowException("Queue is full, can't enqueue()")
+                dequeue() // call with mutex NOT held
 
-            if (arrayList.size <= size)
-                arrayList.add(item)
-            else
-                arrayList[tail] = item
+            mutex.withLock {
+                if (size < capacity) {
+                    if (arrayList.size <= size)
+                        arrayList.add(item)
+                    else
+                        arrayList[tail] = item
 
-            newest = tail
+                    newest = tail
 
-            /*
-             * Move the tail forward. Note that the tail points, potentially, to an
-             * empty slot ahead of the newest item, as it represents the write point
-             * for the _next_ write. The tail will loop around to the start of the
-             * array if there's a need for it.
-             */
-            tail = (tail + 1) % capacity
-            size++
+                    /*
+                     * Move the tail forward. Note that the tail points, potentially, to an
+                     * empty slot ahead of the newest item, as it represents the write point
+                     * for the _next_ write. The tail will loop around to the start of the
+                     * array if there's a need for it.
+                     */
+                    tail = (tail + 1) % capacity
+                    size++
+                    inserted = true
+                }
+            }
         }
     }
 
     /*
      * This returns the oldest item in the ring buffer.
      */
-    suspend fun peekHead(): T {
-        val headItem: T
-        withContext(confined) {
-            // only guaranteed to have an element at head end if queue size nonzero
-            if (size < 1)
-                throw NoSuchElementException()
+    suspend fun peekHead(): T = mutex.withLock {
+        // only guaranteed to have an element at head end if queue size nonzero
+        if (size < 1)
+            throw NoSuchElementException()
 
-            headItem = arrayList[head]
-        }
-        return headItem
+        arrayList[head]
     }
 
     /*
      * This returns the newest item in the ring buffer
      */
-    suspend fun peekTail(): T {
-        val tailItem: T
-        withContext(confined) {
-            // only guaranteed to have an element at tail end if queue size nonzero
-            if (size < 1)
-                throw NoSuchElementException()
+    suspend fun peekTail(): T = mutex.withLock{
+        // only guaranteed to have an element at tail end if queue size nonzero
+        if (size < 1)
+            throw NoSuchElementException()
 
-            tailItem = arrayList[newest]
-        }
-        return tailItem
+        arrayList[newest]
     }
 
-    suspend fun asList(): List<T> {
-        val listCopy = mutableListOf<T>()
-
-        withContext(confined) {
-            var itemCount = size
-            var readIndex = head
-
-            while (itemCount > 0) {
-                listCopy.add(arrayList[readIndex])
-                readIndex = (readIndex + 1) % capacity
-                itemCount--
-            }
-
-            assert(listCopy[0] == arrayList[head])
-            assert(listCopy.size == size)
-        }
-
-        return listCopy
-    }
+    override fun iterator() = arrayList.listIterator()
 }
 
-class OverflowException(msg: String) : RuntimeException(msg)
 class UnderflowException(msg: String) : RuntimeException(msg)

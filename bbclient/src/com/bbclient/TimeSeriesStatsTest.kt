@@ -8,7 +8,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 
 class TimeSeriesStatsTest {
-    private var windowSizeMillis = 3_000L
+    private var windowSizeMillis = 5_000L
     private val stats = TimeSeriesStats(windowSizeMillis, true)
     private val logger = Logger("TimeSeriesTest", addTimestamp = true)
 
@@ -23,7 +23,7 @@ class TimeSeriesStatsTest {
                         stats.submit(1.0)
                     }
                     averageCount++
-                    delay(5)
+                    delay(1)
                 }
             }
 
@@ -31,8 +31,6 @@ class TimeSeriesStatsTest {
                 while(true) {
                     delay(1000)
                     logger.log(stats.toStatsString())
-                    val average = averageTotal / averageCount
-                    logger.log("Average time per add() call is ${average.inWholeMicroseconds}µs")
                 }
             }
         }

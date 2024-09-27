@@ -27,7 +27,7 @@ class TimeSeriesQueue(
     private var newestTime: TimeMark? = null
     private var minValue: Double? = null
     private var maxValue: Double? = null
-    var wasCounted = false
+    private var wasCounted = false
 
     suspend fun getTotal() = withContext(confined) { total }
     suspend fun getCount() = withContext(confined) { queue.size }
@@ -60,13 +60,19 @@ class TimeSeriesQueue(
     suspend fun getHeadOldestTime() = withContext(confined) {
         oldestTime?: endTime
     }
+    suspend fun setWasCounted() = withContext(confined) {
+        wasCounted = true
+    }
+    suspend fun getWasCounted() = withContext(confined) {
+        wasCounted
+    }
 
     // Returns Duration added on successful add; otherwise returns null on failure
     suspend fun add(tsdatum: TimeSeriesStats.TimeSeriesData): Duration {
-        assert(!wasCounted)
         var windowAdded: Duration
 
         withContext(confined) {
+            assert(!wasCounted)
             if (tsdatum.timestamp < startTime || tsdatum.timestamp > endTime)
                 throw IndexOutOfBoundsException()
 
