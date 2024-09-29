@@ -7,7 +7,7 @@ import org.jetbrains.annotations.NotNull;
 import java.time.Duration;
 import java.time.Instant;
 
-abstract class IMapMethodRunnable implements Runnable, AutoCloseable {
+public abstract class IMapMethodRunnable implements Runnable, AutoCloseable {
     private final String methodName;
     protected final IMap<Integer, String> map;
     private final boolean quiet;

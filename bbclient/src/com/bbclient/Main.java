@@ -67,20 +67,6 @@ class Main {
         return Duration.between(begin, end).toSeconds();
     }
 
-    protected static class RunnablesList extends ArrayList<IMapMethodRunnable> {
-        protected String listRunnablesToStatsString() {
-            List<String> statsSummaries = new ArrayList<>();
-            this.forEach(x -> statsSummaries.add(x.toStatsString()));
-            return String.join("; ", statsSummaries);
-        }
-
-        protected String listRunnablesToCSV() {
-            List<String> statsCSVs = new ArrayList<>();
-            this.forEach(x -> statsCSVs.add(x.toCSV()));
-            return String.join(",", statsCSVs);
-        }
-    }
-
     static class HazelcastClientManager {
         private final HazelcastInstance hazelcastInstance;
 
