@@ -10,33 +10,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ef0e90ff-658d-44ea-84f0-0fb83152c54f" name="Changes" comment="Change TimeSeriesStats statistics to use a MutableStateFlow for all stats, rather than a Mutex for fast stats, and a MutableStateFlow for slow stats.">
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/EmbeddedHazelcastCluster.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/IsEmptyRunnable.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/PutIfAbsentRunnable.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SetRunnable.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketListenerThread.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketResponseResponder.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/ClientMigrationListener.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/EmbeddedHazelcastCluster.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/HazelcastDriver.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/HazelcastDriver.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/IMapMethodRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/IsEmptyRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Logger.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Logger.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/NotReadyException.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/PutIfAbsentRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/RingBuffer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/RingBuffer.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/SetRunnable.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketListenerThread.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/SocketResponseResponder.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/StopwatchKotlin.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/StopwatchKotlin.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/TimeSeriesQueue.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/TimeSeriesQueue.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/TimeSeriesStats.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/TimeSeriesStats.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/TimeSeriesStatsTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/TimeSeriesStatsTest.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bbclient/src/com/bbclient/Main.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/my-vars.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/my-vars.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -109,10 +86,10 @@
     "java.suggest.annotation.dependency": "false",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/Users/randerson/git/bigbang/bbclient",
-    "project.structure.last.edited": "Project",
-    "project.structure.proportion": "0.15",
+    "project.structure.last.edited": "Modules",
+    "project.structure.proportion": "0.15114422",
     "project.structure.side.proportion": "0.37197357",
-    "settings.editor.selected.configurable": "project.kotlinCompiler"
+    "settings.editor.selected.configurable": "reference.idesettings.debugger.python"
   }
 }]]></component>
   <component name="RecentsManager">
@@ -123,7 +100,7 @@
       <recent name="com.bbclient" />
     </key>
   </component>
-  <component name="RunManager" selected="Application.bbclient.Main">
+  <component name="RunManager" selected="Docker.Docker">
     <configuration name="bbclient.Main" type="Application" factoryName="Application" focusToolWindowBeforeRun="true">
       <option name="ALTERNATIVE_JRE_PATH" value="17" />
       <option name="MAIN_CLASS_NAME" value="com.bbclient.Main" />

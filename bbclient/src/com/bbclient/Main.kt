@@ -18,8 +18,7 @@ private const val portNumber: Int = 4000
 
 internal object Main {
     private var statsUnitTest: Boolean = false
-    @JvmField
-    var localTestMode: Boolean = true
+    var localTestMode: Boolean = false
 
     private val logger = Logger("Main")
 
