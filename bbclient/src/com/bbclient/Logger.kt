@@ -5,30 +5,30 @@ import java.util.*
 
 class Logger @JvmOverloads constructor(label: String, header: String = "", footer: String = "", private val addTimestamp: Boolean = false) {
     private val label: String = label.uppercase(Locale.getDefault())
-    private var emphasis: Boolean = false
+    private val emphasis: Boolean = header.isNotEmpty()
     private var header: String? = null
     private var footer: String? = null
     private val formatter = SimpleDateFormat("HH:mm:ss.SS")
 
     init {
         if (header.isNotEmpty()) {
-            this.emphasis = true
             this.header = " $header "
 
             if (footer.isNotEmpty()) this.footer = " $footer "
             else this.footer = this.header
         } else {
-            this.emphasis = false
             this.header = ""
             this.footer = ""
         }
     }
 
-    fun log(s: String) {
+    fun log(s: String, plain: Boolean) {
         val current = formatter.format(Calendar.getInstance().time).toString() + ": "
         println((if (addTimestamp) current else "")
                 + "[${label}]: $header"
-                + (if (emphasis) s.uppercase(Locale.getDefault()) else s)
+                + (if (emphasis && !plain) s.uppercase(Locale.getDefault()) else s)
                 + "$footer")
     }
+
+    fun log(s: String) = log(s, plain = false)
 }

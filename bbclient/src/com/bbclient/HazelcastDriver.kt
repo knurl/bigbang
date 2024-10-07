@@ -1,16 +1,57 @@
 package com.bbclient
 
-import java.util.concurrent.*
-import java.util.concurrent.ThreadPoolExecutor.AbortPolicy
+import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration
 
 class HazelcastDriver(
     name: String,
     private val runnablesList: RunnablesList,
-    private val statsFrequencyMillis: Long
-) : Thread(), AutoCloseable {
+    private val statsFrequency: Duration
+) : AutoCloseable {
     val logger: Logger = Logger(name)
-    private val pool: ExecutorService
+
+    private val driverScope = CoroutineScope(
+        Job() +
+                Dispatchers.Default +
+                CoroutineName("Executor"))
+
+    class DispatcherExecutor(private val maxConcurrency: Int): AutoCloseable {
+        private var concurrency = AtomicInteger(0)
+
+        private val executorScope = CoroutineScope(
+            Job() +
+                    Dispatchers.IO +
+                    CoroutineName("DispatcherExecutor")
+        )
+
+        fun submit(f: suspend () -> Unit): Boolean {
+            var submitted = false
+            if (concurrency.incrementAndGet() <= maxConcurrency) {
+                submitted = true
+                executorScope.launch {
+                    f()
+                    concurrency.decrementAndGet()
+                }
+            } else {
+                concurrency.decrementAndGet()
+            }
+            return submitted
+        }
+
+        override fun close() {
+            runBlocking {
+                executorScope.coroutineContext.job.cancelAndJoin()
+                executorScope.coroutineContext.cancelChildren()
+                executorScope.cancel()
+            }
+        }
+    }
+
+    private val maxConcurrency = if (Main.localTestMode) 16 else 32
+
+    private val pool = DispatcherExecutor(maxConcurrency)
 
     private var isDraining = AtomicBoolean(false)
 
@@ -18,52 +59,22 @@ class HazelcastDriver(
         isDraining.set(true)
     }
 
-    /*
-     * Constructor and non-synchronized
-     */
-    init {
-        val numThreads = if (Main.localTestMode) 2 else 6
-        val numThreadsMax = (if (Main.localTestMode) 2 else 8) * numThreads
-        val threadQueueSize = numThreadsMax * 2
-        val keepAliveTimeSec = 60 // seconds
-
-        this.pool = ThreadPoolExecutor(
-            numThreads, numThreadsMax,
-            keepAliveTimeSec.toLong(), TimeUnit.SECONDS,
-            ArrayBlockingQueue(threadQueueSize),
-            AbortPolicy()
-        )
-    }
-
-    fun submit(runnable: Runnable) {
-        var submitted = false
-        val threadpoolSubmitBackoffMillis = 250 // ms
-        while (!isDraining.get() && !submitted) {
-            try {
-                pool.submit(runnable)
-                submitted = true
-            } catch (e: RejectedExecutionException) {
-                try {
-                    sleep(threadpoolSubmitBackoffMillis.toLong())
-                } catch (e2: InterruptedException) {
-                    logger.log("*** RECEIVED INTERRUPTED EXCEPTION [SUBMIT] *** $e2")
-                    currentThread().interrupt()
-                }
-            }
-        }
-    }
-
-    override fun run() {
+    fun start() = driverScope.launch {
         logger.log("Starting up operations")
-        val statsStopwatch = Stopwatch(statsFrequencyMillis)
+        val statsStopwatch = Stopwatch(statsFrequency)
 
         while (!isDraining.get()) {
             for (runnable in runnablesList) {
-                if (isDraining.get()) break
-                submit(runnable)
-                if (!isDraining.get() && statsStopwatch.isTimeOver()) {
-                    logger.log("STATS => " + runnablesList.listRunnablesToStatsString())
+                var submitted = false
+                while (!submitted && !isDraining.get()) {
+                    submitted = pool.submit { runnable.run() }
+
+                    if (!submitted)
+                        delay(100)
                 }
+
+                if (statsStopwatch.isTimeOver() && !isDraining.get())
+                        logger.log("STATS => " + runnablesList.listRunnablesToStatsString())
             }
         }
     }
@@ -72,44 +83,22 @@ class HazelcastDriver(
         return runnablesList.stream().allMatch { obj: IMapMethodRunnable -> obj.hasReachedMinimumPopulation() }
     }
 
-    @Throws(InterruptedException::class)
     private fun drain() {
-        setDrain()
-        pool.shutdown()
-        if (!pool.awaitTermination(2, TimeUnit.SECONDS)) {
-            logger.log("Timed out waiting for termination in drain()")
-            pool.shutdownNow()
-        }
-    }
-
-    fun drainAndJoin() {
-        try {
-            drain()
-            this.join()
-        } catch (e: InterruptedException) {
-            throw RuntimeException(e)
+        runBlocking {
+            setDrain()
+            pool.close()
+            driverScope.coroutineContext.job.cancelAndJoin()
+            driverScope.cancel()
         }
     }
 
     fun drainAndGetStats(): String {
-        try {
-            drain()
-            return runnablesList.listRunnablesToCSV()
-        } catch (e: InterruptedException) {
-            logger.log("*** RECEIVED EXCEPTION [GET] *** $e")
-            throw RuntimeException(e)
-        }
+        drain()
+        return runnablesList.listRunnablesToCSV()
     }
 
     override fun close() {
-        try {
-            drain()
-        } catch (e: InterruptedException) {
-            pool.shutdownNow()
-            currentThread().interrupt()
-        }
-        pool.shutdownNow()
-
+        drain()
         for (runnable in runnablesList) {
             runnable.close()
         }
